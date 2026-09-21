@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -141,3 +142,30 @@ def test_unknown_entities_are_rejected(spine_dir):
     _dump(spine_dir, "assignments.yaml", doc)
     with pytest.raises(SpineError, match="person:999"):
         Spine.load(spine_dir)
+
+
+def test_exclusion_for_a_device_that_was_never_assigned_is_rejected(spine_dir):
+    """A typo'd tag number must fail loudly: flag_excluded joins on the exact string, so an
+    exclusion nobody can match silently protects nothing."""
+    doc = yaml.safe_load((spine_dir / "exclusions.yaml").read_text())
+    doc.append({"target": "beacon:999", "start": "2026-08-20 10:00:00", "reason": "typo"})
+    _dump(spine_dir, "exclusions.yaml", doc)
+    with pytest.raises(SpineError, match="beacon:999"):
+        Spine.load(spine_dir)
+
+
+def test_exclusion_with_an_unknown_target_kind_is_rejected(spine_dir):
+    """`study:…` and a stringified None are the two shapes seen in the wild. Neither can ever
+    match a device ref or an entity ref, so both must be refused rather than ignored."""
+    base = yaml.safe_load((spine_dir / "exclusions.yaml").read_text())
+    for target in ("study:test-camp", "zeitgeist:None"):
+        bad = {"target": target, "start": "2026-08-20 10:00:00", "reason": "camp-wide"}
+        _dump(spine_dir, "exclusions.yaml", [*base, bad])
+        with pytest.raises(SpineError, match=re.escape(target)):
+            Spine.load(spine_dir)
+
+
+def test_exclusions_for_assigned_devices_and_known_people_still_load(spine_dir):
+    """The guard must not reject the two legitimate shapes the fixture already uses."""
+    spine = Spine.load(spine_dir)
+    assert {e.target for e in spine.exclusions} == {"beacon:75", "person:74"}

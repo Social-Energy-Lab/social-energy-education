@@ -89,9 +89,16 @@ class Spine:
                 raise SpineError(f"assignment of {a.device} refers to unknown {a.entity}")
             if a.end is not None and a.end <= a.start:
                 raise SpineError(f"assignment of {a.device} to {a.entity} ends before it starts")
+        # ``flag_excluded`` joins on the exact target string, against a device ref or the entity
+        # resolved for it. A target that matches neither excludes nothing and says nothing, so
+        # every target has to resolve here instead.
+        assigned = {a.device for a in self.assignments}
         for e in self.exclusions:
-            if e.target.startswith(("person:", "location:")) and e.target not in known:
-                raise SpineError(f"exclusion refers to unknown {e.target}")
+            if e.target.startswith(("person:", "location:")):
+                if e.target not in known:
+                    raise SpineError(f"exclusion refers to unknown {e.target}")
+            elif e.target not in assigned:
+                raise SpineError(f"exclusion refers to unknown target {e.target}")
 
         def no_overlap(key, label):
             groups: dict[str, list[Assignment]] = {}
