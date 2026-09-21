@@ -49,8 +49,9 @@ Sundays follow a different schedule (brunch, afternoon plenum). Spontaneous, unp
 ## Consent (modular)
 
 - Consent was given per module. For leaders the final (Aug 2026) form lists QL-1 in-person interviews, QL-2 AI interviews, QL-3 questionnaire and QA-1 beacons. See [`docs/context/project.md`](../../docs/context/project.md#data-modules-as-approved).
-- Participants' module codes on the final participant form are `[unknown]`. The April drafts used QA-1 smart buttons … QA-5 body cameras, a scheme that was later dropped.
-- The local spine records each person's consent as `social_energy.spine.Module` values. Mapping from form codes to modules: QL-1 → `interview_in_person`, QL-2 → `interview_ai`, QL-3 → `survey`, QA-1 → `beacons` + `self_report`. EDA and acoustics depend on the participant form.
+- **Participants kept the April module scheme.** The team's own consent record, a roster handed over on 20 Sep 2026, has one column per module: QA-1 smart button, QA-2 EDA, QA-3 acoustics, QA-4 badges, QA-5 body cameras. So the scheme was dropped for leaders, not for participants. QA-5 was collected as a consent answer but the module never ran: there were no body cameras.
+- QA-1 and QA-4 are recorded as **two different modules with different counts**, and some people who wore a tag consented to one but not the other. Until the research team says what separates them, the spine reads QA-1 as the button (`self_report`) and QA-4 as the proximity tag (`beacons`), and a co-presence analysis must filter on `spine.consented("beacons")` rather than on "a tag exists". `[unknown: what QA-4 "badges" covers that QA-1 does not]`
+- The local spine records each person's consent as `social_energy.spine.Module` values. For leaders: QL-1 → `interview_in_person`, QL-2 → `interview_ai`, QL-3 → `survey`, QA-1 → `beacons` + `self_report` (their form has one beacon module) `[inferred]`. For participants: QL-1 → `interview_in_person`, QL-2 → `interview_ai`, QL-3 → `survey`, QA-1 → `self_report`, QA-2 → `eda`, QA-3 → `acoustics`, QA-4 → `beacons`.
 - Withdrawals and early departures are recorded only in the local spine (exclusion windows), never here.
 
 ## The self-report button
@@ -58,9 +59,10 @@ Sundays follow a different schedule (brunch, afternoon plenum). Spontaneous, unp
 - **Instruction as given at the academy:** press when a moment has *moved you, done something to you*. **It does not have to be positive**; overwhelm counts. The research lead's gloss is that the membrane became more (or less) permeable, and/or agency became possible.
 - The instruction evolved:
   - A pre-academy presentation described "shaking the name tag" for special, energising moments.
-  - At the academy participants were told to **press twice for 3 seconds**.
+  - At the academy participants were told to **press once for ~3 s, until the tag glows red**, and — if they had pressed by accident — **to press again for ~3 s to take it back**.
   - The "not necessarily positive" clarification was given in the plenum on 14 Aug (08:45) and repeated on 15 Aug (09:00).
-- Treat presses before 14 Aug 08:45 separately. A double press is probably one intended report `[inferred]`.
+- Treat presses before 14 Aug 08:45 separately.
+- **A second press shortly after a first one is a retraction, not a duplicate.** The pair cancels: drop both, flag them, and never merge them into one report. An earlier version of the field log said participants were told to press twice; the 20 Sep re-export corrects that, and the two readings imply opposite cleaning rules, so the correction matters. `[unknown: how long "directly afterwards" is — the instruction gives no window; the firmware's own repeat behaviour on a held button is a separate effect]`
 - Instrument-level caveats noted in the field log:
   - reactivity: concern that individual press counts might become visible to others;
   - accidental presses were reported;
@@ -89,12 +91,13 @@ Machine-readable in [`study.yaml`](study.yaml). In short:
 ## Identity conventions
 
 - **Study ID = the participant's first beacon ID.** After an email mix-up, the beacon ID was declared the authoritative study ID.
+- A study ID whose tag was never issued leaves that number free, so the tag numbers below the person range that appear in the logs are location tags or spares, never people. The local spine is the only place that says which.
 - Replacement tags map to the same study ID over time (spine `assignments.yaml`).
 - Location tags: IDs 114–170, plus a few low IDs and movable outdoor tags. See [`locations.yaml`](locations.yaml).
 
 ## Open questions for the research team
 
-Consent is not among them: wherever data carries a study ID, consent for that module exists (Mahdi, 2026-09-20). See `docs/context/project.md`.
+Consent is now recorded per person and module in the team's roster (20 Sep 2026), which the local spine follows. The one consent question left is what separates QA-1 from QA-4 (above); the rest of the open items live with the data, in the spine's `open_questions.md`.
 
 - `[unknown: firmware commit + settings flashed at arrival; exact list of setting changes]`
 - `[unknown: were location tags read out, and do they hold contact data?]`

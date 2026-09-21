@@ -10,7 +10,7 @@ The self-report button is the most direct 1st-person signal in the sensor data (
 
 ## Design / approach
 
-- Filters, stated at the top of the script: `ok` records, no exclusion windows, `self_report` consent. Presses before 14 Aug 08:45 are analysed separately; double presses within ~10 s are collapsed `[inferred]`.
+- Filters, stated at the top of the script: `ok` records, no exclusion windows, `self_report` consent. Presses before 14 Aug 08:45 are analysed separately. **A close pair of presses is a retraction, not a duplicate:** participants were told to press again for ~3 s if they had pressed by accident, so both presses are dropped and flagged, never collapsed into one report. The cancelling window is `[unknown: the instruction gives none]`; report how sensitive the result is to it.
 - Per press: location zone, programme event (spine events), number of co-present people, their courses (mixing), and whether it happened in an eco-mode window.
 - Rates: presses per person-hour by zone and event type, against exposure (time spent there).
 - Cascades: presses by ≥ k co-present people within Δt, compared with a time-shuffled null model.

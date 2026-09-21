@@ -4,7 +4,7 @@ A working table linking the theory to concrete, computable measures. Status colu
 
 | Construct | Measure | Definition sketch | Data | Status |
 |---|---|---|---|---|
-| Membrane opening (moment) | self-report event | a press (double press = one report) by a consenting participant, outside exclusion windows | beacons | proposed |
+| Membrane opening (moment) | self-report event | a press by a consenting participant, outside exclusion windows (a close second press retracts the first; both are dropped) | beacons | proposed |
 | Co-presence | dyadic co-presence minutes (`presence.copresence`) | minutes in which A heard B **or** B heard A at ≥ threshold, per time bin | beacons | proposed |
 | Close contact | strong-signal co-presence | co-presence with RSSI ≥ a stricter threshold (calibration needed) | beacons | proposed |
 | Place | person's zone per time bin (`presence.room_per_bin`) | strongest location tag heard in the bin, with a minimum-evidence rule | beacons + locations.yaml | proposed |

@@ -35,7 +35,9 @@ beacons:
   self_report:
     instruction_given: "2026-08-14 08:45"
     clarified_not_necessarily_positive: ["2026-08-14 08:45", "2026-08-15 09:00"]
-    gesture: two long presses of ~3 s
+    gesture: one long press of ~3 s, until the tag glows red
+    # A second long press directly afterwards takes an accidental report back; the pair cancels.
+    retraction: second long press directly afterwards
 
 eda:
   device_ids: [SH01, SH02, SH03, SH04, SH05, SH06, SH07, SH08, SH09, SH10, SH11, SH12, SH13, SH14, SH15]

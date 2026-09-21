@@ -4,6 +4,17 @@
 
 **Goal:** a validated local spine for DSA 2026 (`$SOCIAL_ENERGY_DATA/dsa-2026/spine/`), so that every sensor record resolves to a person or location and the known bad windows are excluded.
 
+## Status
+
+- **Updated:** 2026-09-21
+- **Priority:** high
+- **Stage:** first pass done from the team's study-ID roster; the field-log transcription (exclusions in detail, events, EDA sessions) is next
+- **Branch:** `main` (local only, no remote yet)
+- **Done:** the roster arrived on 2026-09-21 and is converted into the private library (**P**, `context/personal/`). `init-spine` seeded meta, 67 locations and their tag assignments. `people.yaml` holds every participant and staff member with consent per module, `assignments.yaml` the person tags including the five documented replacements and the location tags that arrived late, failed or moved, `exclusions.yaml` the windows the roster documents. `Spine.load()` validates. Every beacon ID in the delivered contact tables was checked against the spine: all resolve except seven, listed in `spine/open_questions.md`
+- **Next:** transcribe the rest of the beacon field log (battery changes, tags taken off, the further broken tags) and build `events.yaml` from the programme
+- **Blockers:** what separates consent modules QA-1 and QA-4 (a co-presence analysis cannot be filtered correctly until this is answered); the EDA distribution plan; the interview mapping table. All open items are in `$SOCIAL_ENERGY_DATA/dsa-2026/spine/open_questions.md`
+- **Handoff:** the roster → spine step is a one-off script, not repo code; rerunning it overwrites `people.yaml`, `assignments.yaml` and `exclusions.yaml`, so from here on the spine is edited by hand. Consent now comes from the roster, not from "data exists ⇒ consent" — see Design.
+
 ## Context
 
 Nothing about people can be interpreted until the spine exists. Who wore which tag when, replacements, lost tags, battery changes, early departures and the programme are all recorded in prose in the field logs. Those logs are in the private context library (the beacon and EDA logs under `context/personal/`, the acoustics log under `context/sources/`). This can start **before** the sensor data arrives.
@@ -14,7 +25,7 @@ All output is local. The repo only receives tooling improvements and instrument-
 
 - Run `uv run social-energy init-spine studies/dsa-2026/study.yaml`. It seeds `meta`, `locations` and location-tag `assignments`.
 - Build `people.yaml` from the study-ID list. Roles: participant / course_leader / academy_leader / musician / researcher / guest.
-- **Consent is assumed, not reconstructed** (2026-09-20, Mahdi): wherever data exists together with a study ID, that person consented to that module. Without consent there is no labelled data — usually no data at all. So `people.yaml` gets the consent set implied by the data that exists per person, and the signed forms are not needed to build the spine. The `consented()` check stays in the code as a guard, not as a filter that is expected to fire.
+- **Consent comes from the team's roster** (handed over 2026-09-21), which records it per person and module. This replaces the earlier working rule that consent could be assumed wherever data exists (2026-09-20): the roster disagrees with that rule for one module, so `consented()` is a filter that does fire, not only a guard. The unresolved part is what separates QA-1 from QA-4; until it is answered, `beacons` consent follows QA-4 and `self_report` follows QA-1.
 - Build `assignments.yaml`: each person's beacon from arrival (default: study ID = beacon ID), replacement tags from the swap time, EDA devices per session day.
 - Build `exclusions.yaml`: every window in which a tag was not on the person it was assigned to — lost or not worn, battery swaps, tags taken off during an activity, spare and defective tags, departures and withdrawals. The individual cases are listed in the field logs; transcribe them there, not here.
 - Build `events.yaml`: the daily programme (plenum, course blocks, meals, choirs), KüAs with rooms and times, special days (excursion, Rotation, concerts, parties) and notable spontaneous gatherings.
@@ -27,10 +38,10 @@ All output is local. The repo only receives tooling improvements and instrument-
 
 ## Tasks
 
-- [ ] Get the study-ID list from Mahdi (local, never committed) — pending, no date yet. Consent per module follows from the data that exists (see Design)
-- [ ] `init-spine`; review the seeded location assignments against moves and damage in the field log (give location tags `end` dates or reassign them)
-- [ ] Transcribe tag assignments and replacements (ledger at the end of the beacon log, plus swaps during the camp)
-- [ ] Transcribe exclusions (lost/found, battery changes, tags taken off, departures, withdrawals)
+- [x] Get the study-ID list from Mahdi (local, never committed) — arrived 2026-09-21 with consent per module, the location-tag roster, staff and sleeping rooms
+- [x] `init-spine`; review the seeded location assignments against moves and damage in the field log (give location tags `end` dates or reassign them)
+- [x] Transcribe tag assignments and replacements — the five the roster documents are in; the field log may hold more
+- [ ] Transcribe exclusions (lost/found, battery changes, tags taken off, departures, withdrawals) — the roster's are in, the field log's are not
 - [ ] Transcribe EDA device ↔ person per session day (needs the distribution plan; Mahdi will supply it later, no date yet)
 - [ ] Transcribe the programme and KüA events with locations
 - [ ] Get the interview mapping table (study ID ↔ interview) from Mahdi into `context/personal/`; add it to `context/README.md` as **P** — pending, no date yet

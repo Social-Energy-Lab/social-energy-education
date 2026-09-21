@@ -1,7 +1,11 @@
 # Location tags deployed at DSA 2026 (instrument setup, not personal data).
 # Source: the team's beacon overview sheet plus the collection log at departure.
 # Several low IDs (1, 12, 18, 30, 63, 67, 86, 87, 93, 94) are location tags even though
-# that range is otherwise used by person tags; the spine assigns them to locations.
+# that range is otherwise used by person tags; the spine assigns them to locations. They are
+# numbers that were never issued as person tags, so the team reused them for rooms.
+# Ten further never-issued numbers (2, 7, 14, 38, 55, 69, 98, 99, 101, 112) were kept as
+# person-tag spares (ERSATZ), flashed as person tags. They are not locations and are not listed
+# here; the spine records which person carried a spare from when.
 # kind: room | hall | corridor | lounge | music | outdoor
 # Entries marked [inferred] or [unknown] need confirmation.
 
@@ -14,7 +18,7 @@
 - { tag: 120, room: "1.06", label: "course room", zone: courses, kind: room }
 - { tag: 121, room: "1.07", label: "course 1.1 side room", zone: courses, kind: room }
 - { tag: 122, room: "1.08", label: "course 1.1 main room", zone: courses, kind: room }
-- { tag: 123, room: "1.09", label: "computer room (no course)", zone: courses, kind: room }
+- { tag: 123, room: "1.09", label: "computer room, linguistics course from 24 Aug", zone: courses, kind: room }
 - { tag: 124, room: "2.07", label: "course 1.4 room", zone: courses, kind: room }  # sheet says 2.04; departure log says 2.07 [inferred]
 - { tag: 125, room: "2.04", label: "large art room", zone: art, kind: room }
 - { tag: 126, room: "2.05", label: "small art room", zone: art, kind: room }
@@ -60,15 +64,15 @@
 - { tag: 166, room: FUN, label: "fun room, near casino", zone: fun, kind: lounge }
 - { tag: 167, room: FUN, label: "fun room, above table-tennis table", zone: fun, kind: lounge }
 - { tag: 168, room: FUN, label: "fun room, between 2", zone: fun, kind: lounge }
-- { tag: 169, room: FUN, label: "fun room, far from casino", zone: fun, kind: lounge }
+- { tag: 169, room: FUN, label: "fun room, far from casino", zone: fun, kind: lounge }  # lost on day one during testing, found later `[unknown: when]`
 - { tag: 170, room: FUN_SUB, label: "fun side room (cards)", zone: fun, kind: music }
 - { tag: 1, room: FUN_SUB, label: "fun side room next to music room", zone: fun, kind: music }
 - { tag: 12, room: FUN_SUB, label: "late-night music room", zone: fun, kind: music }
 - { tag: 18, room: FUN_SUB, label: "fun side room (lounge)", zone: fun, kind: lounge }
-- { tag: 30, room: DYNAMIC, label: "courtyard near school", zone: outdoor, kind: outdoor }  # failed from water ingress ~18-20 Aug
+- { tag: 30, room: DYNAMIC, label: "courtyard near school", zone: outdoor, kind: outdoor }  # inactive after 2026-08-16 19:38 (last seen); tag 87 took over this spot 2026-08-20 12:20
 - { tag: 63, room: DYNAMIC, label: "courtyard near dining hall", zone: outdoor, kind: outdoor }
 - { tag: 67, room: DYNAMIC, label: "benches by the outdoor table-tennis/volleyball area", zone: outdoor, kind: outdoor }
-- { tag: 86, room: DYNAMIC, label: "volleyball court", zone: outdoor, kind: outdoor }
-- { tag: 87, room: DYNAMIC, label: "tennis/basketball courts, later campfire meadow near school", zone: outdoor, kind: outdoor }  # moved ~20 Aug
+- { tag: 86, room: DYNAMIC, label: "volleyball court", zone: outdoor, kind: outdoor }  # water inside the case noticed 2026-08-19 16:35, presumed destroyed
+- { tag: 87, room: DYNAMIC, label: "tennis/basketball courts, later campfire meadow near school", zone: outdoor, kind: outdoor }  # missing 2026-08-19 15:30 (found in a bin), reinstalled at the campfire meadow 2026-08-20 12:20
 - { tag: 93, room: "2.01", label: "course 1.6 room", zone: courses, kind: room }  # active from 2026-08-18 16:10
 - { tag: 94, room: DYNAMIC, label: "basketball/tennis courts", zone: outdoor, kind: outdoor }  # active from 2026-08-20 12:02
