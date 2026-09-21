@@ -7,9 +7,9 @@
 - **Updated:** 2026-09-21
 - **Priority:** high
 - **Stage:** all implementation tasks done; the only remaining task is review and publishing
-- **Branch:** `main` (local only, no remote yet)
+- **Branch:** `main`, published at `Social-Energy-Lab/social-energy-education`
 - **Done:** see Tasks
-- **Next:** Álvaro reviews the first commit. Then `gh repo create alvaro-francisco-gil/social-energy --public`, and CI goes green on GitHub.
+- **Next:** confirm CI is green on GitHub, then the EDA ingest (`ideas/eda-shimmer-ingest.md`).
 - **Blockers:** Shimmer EDA exports are still being collected by Mahdi. **Beacons are no longer a blocker:** the full delivery (105 logs, 13–29 Aug, plus upstream-derived tables) was imported on 2026-09-20; follow-up in `ideas/beacon-differential-check.md` and `ideas/beacon-device-reuse.md`. The AI interviews and the survey are downloadable (`fetch-zeitgeist`, see `docs/context/data-layout.md`); linking them to study IDs is in `ongoing/dsa-2026-spine.md`
 - **Handoff:** `uv sync && uv run pytest` runs the whole suite on synthetic data. Run `git config core.hooksPath .githooks` once per clone to enable the data-perimeter pre-commit hook. The private context library for DSA 2026 is at `$SOCIAL_ENERGY_DATA/dsa-2026/context/` (Álvaro's machine: `~/research-data/social-energy`). Follow-up work is planned in `ongoing/dsa-2026-spine.md` and `ideas/*`. Survey ingest continues in `ongoing/survey-scoring.md`.
 
