@@ -16,7 +16,7 @@ Three consequences, in increasing order of how quietly they corrupt a result:
 
 The default that study IDs equal beacon IDs makes this worse, not better: it is true for most people, so code that conflates the two passes casual inspection and breaks only on the handful of reassigned tags.
 
-This is not a gap in the spine's model. `Assignment` is already a closed interval of `(device, entity, start, end)`, `Spine.validate` already refuses two overlapping assignments for one device and two devices of one kind for one person, and `Spine.resolve` already does a time-windowed join. Transcribing the actual swaps from the field log is `ready/dsa-2026-spine.md`, tasks 2 and 3. **The gap is that nothing forces an analysis to use any of it, and nothing reports what failed to resolve.**
+This is not a gap in the spine's model. `Assignment` is already a closed interval of `(device, entity, start, end)`, `Spine.validate` already refuses two overlapping assignments for one device and two devices of one kind for one person, and `Spine.resolve` already does a time-windowed join. Transcribing the actual swaps from the field log is `ongoing/dsa-2026-spine.md`, tasks 2 and 3. **The gap is that nothing forces an analysis to use any of it, and nothing reports what failed to resolve.**
 
 ## This is downstream of both implementations
 
@@ -58,4 +58,4 @@ An exclusion window says "this person's data is not usable here". An unassigned 
 
 ## Depends on
 
-`ready/dsa-2026-spine.md` — the actual assignment intervals have to be transcribed from the field log before any of this can be tested against real data. The design work here does not have to wait for that, and the synthetic camp can generate a reused tag to test against.
+`ongoing/dsa-2026-spine.md` — the actual assignment intervals have to be transcribed from the field log before any of this can be tested against real data. The design work here does not have to wait for that, and the synthetic camp can generate a reused tag to test against.

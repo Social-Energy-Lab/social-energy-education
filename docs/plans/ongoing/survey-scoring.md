@@ -11,7 +11,7 @@
 - **Done:** `social_energy.survey.ingest_zeitgeist` + `social-energy ingest-survey` (golden fixture, synthetic oracle, CLI test). The real DSA 2026 export ingests cleanly across three form versions, with no empty, out-of-range or mismatched rows; the counts are in the private study notes.
 - **Next:** write `studies/dsa-2026/survey_codebook.yaml` from `docs/context/instruments/survey.md` (codes and scales only, no own-item wording), including how old-version codes map to current ones (`GRADIENT_variable_C11` → `ZGL_C11_GRAD`, `SWE_0n_resonance` → ?).
 - **Blockers:** confirmed reverse-keying list; B19/B20 slider range (the export shows 1–10 in use)
-- **Handoff:** raw export via `fetch-zeitgeist` (see `docs/context/data-layout.md`); `ingest-survey` writes `derived/survey/{items,respondents}.parquet` + `qa.json`. Rows are keyed by platform user UUID; joining to people waits on the ID linking in `ready/dsa-2026-spine.md`.
+- **Handoff:** raw export via `fetch-zeitgeist` (see `docs/context/data-layout.md`); `ingest-survey` writes `derived/survey/{items,respondents}.parquet` + `qa.json`. Rows are keyed by platform user UUID; joining to people waits on the ID linking in `ongoing/dsa-2026-spine.md`.
 
 ## Context
 

@@ -10,8 +10,8 @@
 - **Branch:** `main` (local only, no remote yet)
 - **Done:** see Tasks
 - **Next:** Álvaro reviews the first commit. Then `gh repo create alvaro-francisco-gil/social-energy --public`, and CI goes green on GitHub.
-- **Blockers:** Shimmer EDA exports are still being collected by Mahdi. **Beacons are no longer a blocker:** the full delivery (105 logs, 13–29 Aug, plus upstream-derived tables) was imported on 2026-09-20; follow-up in `ideas/beacon-differential-check.md` and `ideas/beacon-device-reuse.md`. The AI interviews and the survey are downloadable (`fetch-zeitgeist`, see `docs/context/data-layout.md`); linking them to study IDs is in `ready/dsa-2026-spine.md`
-- **Handoff:** `uv sync && uv run pytest` runs the whole suite on synthetic data. Run `git config core.hooksPath .githooks` once per clone to enable the data-perimeter pre-commit hook. The private context library for DSA 2026 is at `$SOCIAL_ENERGY_DATA/dsa-2026/context/` (Álvaro's machine: `~/research-data/social-energy`). Follow-up work is planned in `ready/dsa-2026-spine.md` and `ideas/*`. Survey ingest continues in `ongoing/survey-scoring.md`.
+- **Blockers:** Shimmer EDA exports are still being collected by Mahdi. **Beacons are no longer a blocker:** the full delivery (105 logs, 13–29 Aug, plus upstream-derived tables) was imported on 2026-09-20; follow-up in `ideas/beacon-differential-check.md` and `ideas/beacon-device-reuse.md`. The AI interviews and the survey are downloadable (`fetch-zeitgeist`, see `docs/context/data-layout.md`); linking them to study IDs is in `ongoing/dsa-2026-spine.md`
+- **Handoff:** `uv sync && uv run pytest` runs the whole suite on synthetic data. Run `git config core.hooksPath .githooks` once per clone to enable the data-perimeter pre-commit hook. The private context library for DSA 2026 is at `$SOCIAL_ENERGY_DATA/dsa-2026/context/` (Álvaro's machine: `~/research-data/social-energy`). Follow-up work is planned in `ongoing/dsa-2026-spine.md` and `ideas/*`. Survey ingest continues in `ongoing/survey-scoring.md`.
 
 ## Context
 
@@ -59,6 +59,6 @@ These choices were agreed in conversation on 2026-09-17/18:
 
 ## Follow-ups
 
-Tracked as their own plans: `ready/dsa-2026-spine.md`, `ongoing/survey-scoring.md`, and in `ideas/`: `questions-for-research-team`, `eda-shimmer-ingest`, `self-report-context-analysis`, `copresence-networks-by-phase`, `structured-field-log`, `rssi-calibration`.
+Tracked as their own plans: `ongoing/dsa-2026-spine.md`, `ongoing/survey-scoring.md`, and in `ideas/`: `questions-for-research-team`, `eda-shimmer-ingest`, `self-report-context-analysis`, `copresence-networks-by-phase`, `structured-field-log`, `rssi-calibration`.
 
 Retire this plan once the repo is public and CI is green. Candidate decision to extract then: "one repo, toolkit vs study split, data perimeter enforced by hook + CI".
