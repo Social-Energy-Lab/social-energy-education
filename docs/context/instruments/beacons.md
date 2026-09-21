@@ -61,6 +61,14 @@ One line per decoded record: `<PC local time>,ID: <beacon>,<record>`
 | **Tag swaps** | A replacement tag carries a different ID for the same person. | Spine assignments over time. |
 | **Logger gaps** | Logger failed to write for some minutes; records that stayed on the tag appear in a later readout. | Covered by the clock reference. Records deleted before a later readout are lost silently. |
 
+## Excluding a tag excludes half of it
+
+Proximity is recorded from both sides, so a tag's own records are only half the data about whoever wore it. Every contact it made is mirrored in the partner tag's records, and those rows sit in the partner's data, not in its own. In one DSA 2026 day, a single tag was the observer in about 26,000 rows and the observed party in about the same number, logged by more than a hundred other tags.
+
+So an exclusion window on a tag does **not** remove that person from the dataset. Their whereabouts and their company stay reconstructible from everyone else's records. This matters most in exactly the case where exclusion is not a matter of data quality but of consent — a tag worn by someone who never agreed to take part, a withdrawal, a window in which someone asked not to be recorded.
+
+`Spine.flag_excluded` must therefore be called **once per side** for contacts, with `device_col="beacon"` and again with `device_col="observed"`, writing to different output columns. Its docstring says so, and an analysis that filters only the observer side will look correct and silently keep the person in. When the reason for an exclusion is consent rather than quality, treat dropping both sides as the requirement, not as good practice.
+
 ## Canonical tables (`ingest_logs`)
 
 - `readouts`: one row per connection: `beacon`, `header_id`, `id_status`, `pc_time`, `current_timer`, `anchor`, `reboot_before`, voltage, status byte, provenance.
