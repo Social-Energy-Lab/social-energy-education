@@ -169,3 +169,19 @@ def test_exclusions_for_assigned_devices_and_known_people_still_load(spine_dir):
     """The guard must not reject the two legitimate shapes the fixture already uses."""
     spine = Spine.load(spine_dir)
     assert {e.target for e in spine.exclusions} == {"beacon:75", "person:74"}
+
+
+def test_event_notes_carry_uncertainty_markers(spine_dir):
+    """Events need a home for [inferred] / [unknown: …]. The field log hedges constantly
+    ("gegen 23 Uhr", "Vermutlich"), and a tag cannot carry the question that needs asking."""
+    doc = yaml.safe_load((spine_dir / "events.yaml").read_text())
+    doc.append({
+        "id": "kuea-0814-tabletennis", "label": "Table tennis", "kind": "kuea",
+        "start": "2026-08-14 23:00:00", "end": "2026-08-15 00:00:00",
+        "notes": 'start [inferred] from "Vermutlich 23 Uhr-0 Uhr"',
+    })  # fmt: skip
+    _dump(spine_dir, "events.yaml", doc)
+    spine = Spine.load(spine_dir)
+    by_id = {e.id: e for e in spine.events}
+    assert by_id["kuea-0814-tabletennis"].notes.startswith("start [inferred]")
+    assert by_id["plenum-0814"].notes == ""

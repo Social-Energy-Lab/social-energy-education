@@ -96,6 +96,9 @@ class Event(Interval):
     kind: str
     locations: tuple[str, ...] = ()
     tags: tuple[str, ...] = ()
+    #: Free text for the uncertainty markers the field logs are full of: ``[inferred]`` where a
+    #: time was derived, ``[unknown: …]`` where it has to be asked. Tags cannot carry a question.
+    notes: str = ""
 
 
 class Exclusion(Interval):
