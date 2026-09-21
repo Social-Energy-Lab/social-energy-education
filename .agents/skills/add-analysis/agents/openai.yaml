@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add analysis"
+  short_description: "Study analysis with spine, consent and synthetic-first testing"
+  default_prompt: "Use $add-analysis to write this analysis for the study."

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Data perimeter: block commits that contain research data (AGENTS.md, invariant 1).
+# Enable once per clone:  git config core.hooksPath .githooks
+exec python3 scripts/check_perimeter.py --staged

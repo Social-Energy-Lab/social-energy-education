@@ -1,0 +1,47 @@
+# DSA 2026 spine: transcribe the field logs into the local spine
+
+**Priority:** high
+
+**Goal:** a validated local spine for DSA 2026 (`$SOCIAL_ENERGY_DATA/dsa-2026/spine/`), so that every sensor record resolves to a person or location and the known bad windows are excluded.
+
+## Context
+
+Nothing about people can be interpreted until the spine exists. Who wore which tag when, replacements, lost tags, battery changes, early departures and the programme are all recorded in prose in the field logs. Those logs are in the private context library (the beacon and EDA logs under `context/personal/`, the acoustics log under `context/sources/`). This can start **before** the sensor data arrives.
+
+All output is local. The repo only receives tooling improvements and instrument-level facts (for `studies/dsa-2026/study.yaml`).
+
+## Design
+
+- Run `uv run social-energy init-spine studies/dsa-2026/study.yaml`. It seeds `meta`, `locations` and location-tag `assignments`.
+- Build `people.yaml` from the study-ID list. Roles: participant / course_leader / academy_leader / musician / researcher / guest.
+- **Consent is assumed, not reconstructed** (2026-09-20, Mahdi): wherever data exists together with a study ID, that person consented to that module. Without consent there is no labelled data — usually no data at all. So `people.yaml` gets the consent set implied by the data that exists per person, and the signed forms are not needed to build the spine. The `consented()` check stays in the code as a guard, not as a filter that is expected to fire.
+- Build `assignments.yaml`: each person's beacon from arrival (default: study ID = beacon ID), replacement tags from the swap time, EDA devices per session day.
+- Build `exclusions.yaml`: every window in which a tag was not on the person it was assigned to — lost or not worn, battery swaps, tags taken off during an activity, spare and defective tags, departures and withdrawals. The individual cases are listed in the field logs; transcribe them there, not here.
+- Build `events.yaml`: the daily programme (plenum, course blocks, meals, choirs), KüAs with rooms and times, special days (excursion, Rotation, concerts, parties) and notable spontaneous gatherings.
+- Put instrument-level changes in `study.yaml`: location tags added, moved or damaged (e.g. tag 93 active from 18 Aug 16:10; tag 94 from 20 Aug 12:02; tag 30 failed), and whether location assignments need `end` dates for moved tags.
+- **Link the AI-interview and survey platform IDs to study IDs.** The zeitgeist export (`raw/ai-interviews/zeitgeist/<agent>/`, `raw/survey/zeitgeist/<agent>/`) is keyed by the platform's user UUID. Record each link in `assignments.yaml` as a device of kind `zeitgeist`, e.g. `{device: "zeitgeist:<uuid>", entity: "person:<id>", start: <arrival>}` with no end. `Spine.resolve(..., kind="zeitgeist")` then works as it does for beacons, and consent is checked with `spine.consented("interview_ai")` / `("survey")`. Sources for the link, in order of trust:
+  1. The team's interview mapping table (study ID ↔ interview). Mahdi will hand it over later (2026-09-20); it is not a field log but a purpose-made table. Until it arrives, the linking step cannot be finished. Store it in `context/personal/` (sensitivity **P**), never in a repo.
+  2. The answer typed before the interview (`participants.jsonl` → `pre_interview_answers`, also `derived/survey/respondents.parquet` → `study_id_raw`), probably the study ID `[inferred]`. Expect typos, and expect IDs from an earlier numbering scheme. Where one typed ID occurs on several respondents, the rule is: **keep the most complete submission** per study ID, flag the others as `duplicate_submission`, drop nothing silently (2026-09-20, Mahdi).
+  3. Call start times (`interviews.jsonl` → `started_at`) against the log's times, for the rest.
+- Where the log says "check" or leaves a blank ("ADD TIME"), write `[unknown: …]` in a local `open_questions.md` for Mahdi. Never guess a time.
+
+## Tasks
+
+- [ ] Get the study-ID list from Mahdi (local, never committed) — pending, no date yet. Consent per module follows from the data that exists (see Design)
+- [ ] `init-spine`; review the seeded location assignments against moves and damage in the field log (give location tags `end` dates or reassign them)
+- [ ] Transcribe tag assignments and replacements (ledger at the end of the beacon log, plus swaps during the camp)
+- [ ] Transcribe exclusions (lost/found, battery changes, tags taken off, departures, withdrawals)
+- [ ] Transcribe EDA device ↔ person per session day (needs the distribution plan; Mahdi will supply it later, no date yet)
+- [ ] Transcribe the programme and KüA events with locations
+- [ ] Get the interview mapping table (study ID ↔ interview) from Mahdi into `context/personal/`; add it to `context/README.md` as **P** — pending, no date yet
+- [ ] Link every platform UUID in `participants.jsonl` to a study ID (`zeitgeist:<uuid>` assignments); cross-check the pre-interview answers and call times; list conflicts in `open_questions.md`
+- [ ] Resolve the calls that have no user row on the platform, and users with more than one call (only the mapping table and call times can place them); the counts are in the private study notes
+- [x] Calls deleted on the platform are **out of scope** (2026-09-20, Mahdi): deleted means not used. Do not ingest them and do not chase them.
+- [ ] Check linkage: every platform row resolves to a study ID; unlinked rows are excluded from any analysis
+- [ ] `Spine.load()` validates; resolve the synthetic sanity checks; write the open questions for Mahdi
+- [ ] Commit only instrument-level additions to `studies/dsa-2026/study.yaml` and any tooling fixes
+
+## Out of scope
+
+- Interpreting any data (see the analysis plans).
+- A tool that parses the prose log automatically. The log is too irregular; this is a one-off, careful transcription. Future camps should use a structured log instead (see `ideas/structured-field-log.md`).

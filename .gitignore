@@ -1,0 +1,35 @@
+# ---- Data perimeter -------------------------------------------------------
+# Research data NEVER enters this repo. It lives under $SOCIAL_ENERGY_DATA.
+# These patterns are a second line of defence; scripts/check_perimeter.py is
+# the first (pre-commit + CI). See AGENTS.md "Invariant 1".
+data/
+*.log
+*.wav
+*.WAV
+*.csv
+*.tsv
+*.parquet
+*.xlsx
+*.xls
+*.sav
+*.feather
+*.h5
+*.mat
+*.zip
+# Synthetic fixtures are the only allowed exception.
+!tests/fixtures/**
+
+# ---- Python / tooling -----------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.ipynb_checkpoints/
+
+# ---- Agent harness ----------------------------------------------------------
+.claude/*
+!.claude/settings.json

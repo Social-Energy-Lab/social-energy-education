@@ -1,0 +1,74 @@
+# Location tags deployed at DSA 2026 (instrument setup, not personal data).
+# Source: the team's beacon overview sheet plus the collection log at departure.
+# Several low IDs (1, 12, 18, 30, 63, 67, 86, 87, 93, 94) are location tags even though
+# that range is otherwise used by person tags; the spine assigns them to locations.
+# kind: room | hall | corridor | lounge | music | outdoor
+# Entries marked [inferred] or [unknown] need confirmation.
+
+- { tag: 114, room: "0.06", label: "course-leader room", zone: staff, kind: room }
+- { tag: 115, room: "0.08", label: "[unknown]", zone: staff, kind: room }
+- { tag: 116, room: "0.09", label: "academy-leadership office", zone: staff, kind: room }
+- { tag: 117, room: "0.11", label: "small music room", zone: music, kind: music }
+- { tag: 118, room: "0.12", label: "large music room (rarely used)", zone: music, kind: music }
+- { tag: 119, room: "1.04", label: "course 1.5 room", zone: courses, kind: room }
+- { tag: 120, room: "1.06", label: "course room", zone: courses, kind: room }
+- { tag: 121, room: "1.07", label: "course 1.1 side room", zone: courses, kind: room }
+- { tag: 122, room: "1.08", label: "course 1.1 main room", zone: courses, kind: room }
+- { tag: 123, room: "1.09", label: "computer room (no course)", zone: courses, kind: room }
+- { tag: 124, room: "2.07", label: "course 1.4 room", zone: courses, kind: room }  # sheet says 2.04; departure log says 2.07 [inferred]
+- { tag: 125, room: "2.04", label: "large art room", zone: art, kind: room }
+- { tag: 126, room: "2.05", label: "small art room", zone: art, kind: room }
+- { tag: 127, room: "2.06", label: "course 1.2 room", zone: courses, kind: room }
+- { tag: 128, room: "2.08", label: "course room", zone: courses, kind: room }
+- { tag: 129, room: "2.09", label: "course 1.3 room", zone: courses, kind: room }
+- { tag: 130, room: "D.03", label: "practice room", zone: music, kind: music }
+- { tag: 131, room: "D.04", label: "practice room", zone: music, kind: music }
+- { tag: 132, room: "D.05", label: "practice room", zone: music, kind: music }
+- { tag: 133, room: "D.06", label: "practice room", zone: music, kind: music }
+- { tag: 134, room: AULA, label: "main hall, near stage", zone: aula, kind: hall }
+- { tag: 135, room: AULA, label: "main hall, between 1", zone: aula, kind: hall }
+- { tag: 136, room: AULA, label: "main hall, between 2", zone: aula, kind: hall }
+- { tag: 137, room: AULA, label: "main hall, between 3", zone: aula, kind: hall }
+- { tag: 138, room: AULA, label: "main hall, between 4", zone: aula, kind: hall }
+- { tag: 139, room: AULA, label: "main hall, far from stage", zone: aula, kind: hall }
+- { tag: 140, room: MENSA_AULA, label: "hall-dining corridor 1", zone: corridor, kind: corridor }
+- { tag: 141, room: MENSA_AULA, label: "hall-dining corridor 2", zone: corridor, kind: corridor }
+- { tag: 142, room: MENSA_AULA, label: "hall-dining corridor 3", zone: corridor, kind: corridor }
+- { tag: 143, room: MENSA, label: "dining hall, near corridor", zone: mensa, kind: hall }
+- { tag: 144, room: MENSA, label: "dining hall, between 1", zone: mensa, kind: hall }
+- { tag: 145, room: MENSA, label: "dining hall, between 2", zone: mensa, kind: hall }
+- { tag: 146, room: MENSA, label: "dining hall, between 3", zone: mensa, kind: hall }
+- { tag: 147, room: MENSA, label: "dining hall, between 4", zone: mensa, kind: hall }
+- { tag: 148, room: MENSA, label: "dining hall, far from corridor", zone: mensa, kind: hall }
+- { tag: 149, room: HK1_OG_AULA, label: "upper-floor lounge 1", zone: lounges-upper, kind: lounge }
+- { tag: 150, room: HK2_OG_AULA, label: "upper-floor lounge 2", zone: lounges-upper, kind: lounge }
+- { tag: 151, room: HK3_OG_AULA, label: "upper-floor lounge 3", zone: lounges-upper, kind: lounge }
+- { tag: 152, room: HK4_OG_AULA, label: "upper-floor lounge 4", zone: lounges-upper, kind: lounge }
+- { tag: 153, room: HK5_OG_AULA, label: "upper-floor lounge 5", zone: lounges-upper, kind: lounge }
+- { tag: 154, room: HK6_OG_AULA, label: "upper-floor music lounge", zone: lounges-upper, kind: lounge }
+- { tag: 155, room: PHYSIK, label: "physics room (course 1.2 at times)", zone: courses, kind: room }
+- { tag: 156, room: CASINO, label: "casino, near kitchen", zone: casino, kind: lounge }
+- { tag: 157, room: CASINO, label: "casino, between 1", zone: casino, kind: lounge }
+- { tag: 158, room: CASINO, label: "casino, between 2", zone: casino, kind: lounge }
+- { tag: 159, room: CASINO, label: "casino, far from kitchen", zone: casino, kind: lounge }
+- { tag: 160, room: CHILL, label: "chill room, near casino", zone: chill, kind: lounge }
+- { tag: 161, room: CHILL, label: "chill room, between 1", zone: chill, kind: lounge }
+- { tag: 162, room: CHILL, label: "chill room, between 2", zone: chill, kind: lounge }
+- { tag: 163, room: CHILL, label: "chill room, far from casino", zone: chill, kind: lounge }
+- { tag: 164, room: CHILL_SUB, label: "chill side room 1", zone: chill, kind: lounge }
+- { tag: 165, room: CHILL_SUB, label: "chill side room 2", zone: chill, kind: lounge }
+- { tag: 166, room: FUN, label: "fun room, near casino", zone: fun, kind: lounge }
+- { tag: 167, room: FUN, label: "fun room, above table-tennis table", zone: fun, kind: lounge }
+- { tag: 168, room: FUN, label: "fun room, between 2", zone: fun, kind: lounge }
+- { tag: 169, room: FUN, label: "fun room, far from casino", zone: fun, kind: lounge }
+- { tag: 170, room: FUN_SUB, label: "fun side room (cards)", zone: fun, kind: music }
+- { tag: 1, room: FUN_SUB, label: "fun side room next to music room", zone: fun, kind: music }
+- { tag: 12, room: FUN_SUB, label: "late-night music room", zone: fun, kind: music }
+- { tag: 18, room: FUN_SUB, label: "fun side room (lounge)", zone: fun, kind: lounge }
+- { tag: 30, room: DYNAMIC, label: "courtyard near school", zone: outdoor, kind: outdoor }  # failed from water ingress ~18-20 Aug
+- { tag: 63, room: DYNAMIC, label: "courtyard near dining hall", zone: outdoor, kind: outdoor }
+- { tag: 67, room: DYNAMIC, label: "benches by the outdoor table-tennis/volleyball area", zone: outdoor, kind: outdoor }
+- { tag: 86, room: DYNAMIC, label: "volleyball court", zone: outdoor, kind: outdoor }
+- { tag: 87, room: DYNAMIC, label: "tennis/basketball courts, later campfire meadow near school", zone: outdoor, kind: outdoor }  # moved ~20 Aug
+- { tag: 93, room: "2.01", label: "course 1.6 room", zone: courses, kind: room }  # active from 2026-08-18 16:10
+- { tag: 94, room: DYNAMIC, label: "basketball/tennis courts", zone: outdoor, kind: outdoor }  # active from 2026-08-20 12:02

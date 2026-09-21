@@ -1,0 +1,73 @@
+# Non-personal configuration for the DSA 2026 field phase.
+# Instrument-level facts only. Person-level data (who wore what, exclusions) lives
+# in the local spine under $SOCIAL_ENERGY_DATA/dsa-2026/spine/.
+# Times are local wall-clock (Europe/Berlin) unless stated otherwise.
+
+study_id: dsa-2026
+timezone: Europe/Berlin
+site: Schwäbisch Gmünd
+dates:
+  arrival: 2026-08-13
+  departure: 2026-08-29
+
+beacons:
+  upstream_repo: https://github.com/thofbaur/network-beacon_NRF54L15
+  firmware_commit: null   # [unknown: commit flashed at arrival]
+  valid_from: 2026-08-12  # plausibility window for record timestamps
+  valid_to: 2026-08-29
+  # Logger printed beacon IDs 48-57 as "0"-"9" before upstream commit 2e1f52d.
+  ambiguous_id_cutoff: "2026-08-15 20:17:48"
+  rssi_threshold_dbm:
+    person_tag: -80
+    location_tag: -100
+  scan: { window_ms: 120, interval_ms: 7000 }
+  eco_scan: { window_ms: 100, period_s: 300, inactivity_timeout_s: 1800 }
+  settings_changes:
+    - at: "2026-08-14 21:00"
+      what: all tags reflashed with eco mode enabled (was missing before)
+    - at: "2026-08-15 17:45"
+      what: main-hall and hall-dining corridor location tags (134-142) reflashed with eco mode off and accelerometer off
+  logger_incidents:
+    - at: "2026-08-14 10:20"
+      what: logger did not write to file for a few minutes; data remained on tags
+    - at: "2026-08-15 14:30"
+      what: corrupted logger output noticed; logger script updated before the midnight readout
+  self_report:
+    instruction_given: "2026-08-14 08:45"
+    clarified_not_necessarily_positive: ["2026-08-14 08:45", "2026-08-15 09:00"]
+    gesture: two long presses of ~3 s
+
+eda:
+  device_ids: [SH01, SH02, SH03, SH04, SH05, SH06, SH07, SH08, SH09, SH10, SH11, SH12, SH13, SH14, SH15]
+  session_days: [2026-08-15, 2026-08-16, 2026-08-17, 2026-08-19, 2026-08-20, 2026-08-21,
+                 2026-08-22, 2026-08-23, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-28]
+  note: no sensors on the excursion day (2026-08-18)
+
+acoustics:
+  devices:
+    - id: audiomoth:mensa
+      location: dining hall
+      schedule_from_2026-08-14:   # before: 07:30-09:00, 11:30-14:00, 18:30-20:30
+        - "07:25-08:35"
+        - "10:25-11:05"
+        - "12:00-13:45"
+        - "15:55-19:10"
+    - id: audiomoth:plenum
+      location: main hall
+      schedule_from_2026-08-14:   # before: 08:00-09:30, 18:30-21:30
+        - "08:20-09:20"
+        - "14:00-16:30"
+        - "19:10-22:30"
+  incidents:
+    - at: "2026-08-14 10:00"
+      what: possibly wrong settings between 10:00 and 10:30 while schedules were changed
+    - note: afternoon plenums on 2026-08-16 and 2026-08-23 (13:30-14:00) were not recorded
+  wav_retention: delete after feature extraction (ethics requirement)
+
+# The survey and AI interviews were delivered by a private platform deployment. Which agent to
+# fetch, and which question carries the typed study ID, name that deployment, so they live with
+# the data in $SOCIAL_ENERGY_DATA/dsa-2026/local.yaml and never in this repo. The wave itself is
+# not a secret: a voice interview followed by the baseline survey, 4-15 Aug 2026, before arrival.
+#
+# Download: ZEITGEIST_DATABASE_URL=... uv run --extra zeitgeist \
+#     social-energy fetch-zeitgeist studies/dsa-2026/study.yaml

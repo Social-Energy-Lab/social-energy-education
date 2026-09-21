@@ -1,0 +1,45 @@
+[project]
+name = "social-energy"
+version = "0.1.0"
+description = "Methods for studying social energy with wearable sensors, self-reports and surveys. Methods only — never data."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [{ name = "Álvaro Francisco Gil" }]
+dependencies = [
+  "numpy>=2.5.3",
+  "polars>=1.0",
+  "pydantic>=2.6",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Download AI interviews and survey from zeitgeist-platform (social-energy fetch-zeitgeist).
+zeitgeist = ["psycopg[binary]>=3.2"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/social_energy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[project.scripts]
+social-energy = "social_energy.cli:main"

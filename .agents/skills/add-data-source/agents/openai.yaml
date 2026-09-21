@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add data source"
+  short_description: "Document, fixture, ingest, synth, oracle-test a new instrument"
+  default_prompt: "Use $add-data-source to add ingest for this instrument."

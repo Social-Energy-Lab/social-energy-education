@@ -1,0 +1,4 @@
+interface:
+  display_name: "Data perimeter"
+  short_description: "Keep research data out of the public repo"
+  default_prompt: "Use $data-perimeter to check this change keeps all research data out of the repo."

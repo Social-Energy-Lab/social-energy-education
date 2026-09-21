@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv sync:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(uv run python:*)",
+      "Bash(python3 scripts/check_perimeter.py:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git restore:*)",
+      "Bash(git stash:*)",
+      "Bash(git switch:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)"
+    ],
+    "deny": [
+      "Bash(git commit --no-verify:*)",
+      "Bash(git commit -n:*)"
+    ]
+  },
+  "extraKnownMarketplaces": {
+    "agent-plans": {
+      "source": {
+        "source": "github",
+        "repo": "alvaro-francisco-gil/agent-plans"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "plans-lifecycle@agent-plans": true
+  }
+}
