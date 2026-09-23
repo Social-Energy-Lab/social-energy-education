@@ -7,10 +7,10 @@
 # person-tag spares (ERSATZ), flashed as person tags. They are not locations and are not listed
 # here; the spine records which person carried a spare from when.
 # kind: room | hall | corridor | lounge | music | outdoor
-# Entries marked [inferred] or [unknown] need confirmation.
+# Entries marked `[inferred]` or `[unknown]` need confirmation.
 
 - { tag: 114, room: "0.06", label: "course-leader room", zone: staff, kind: room }
-- { tag: 115, room: "0.08", label: "[unknown]", zone: staff, kind: room }
+- { tag: 115, room: "0.08", label: "[unknown: what is room 0.08 used for?]", zone: staff, kind: room }
 - { tag: 116, room: "0.09", label: "academy-leadership office", zone: staff, kind: room }
 - { tag: 117, room: "0.11", label: "small music room", zone: music, kind: music }
 - { tag: 118, room: "0.12", label: "large music room (rarely used)", zone: music, kind: music }

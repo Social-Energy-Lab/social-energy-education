@@ -37,6 +37,9 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Vendored verbatim from the agent-record marketplace. Reformatting it would
+# fork the asset and drift from upstream on the next update.
+extend-exclude = ["scripts/record-check.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]

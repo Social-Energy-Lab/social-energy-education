@@ -46,6 +46,8 @@ $SOCIAL_ENERGY_DATA/         private repo + data root
 - What belongs *here*: methods, instrument behaviour, formats, non-personal study config, and the **rule** a finding produced ("keep the most complete submission per study ID"). What stays *there*: the finding itself, counts from the real data, anything about a person, and any reconstruction of unpublished work.
 - If the environment variable is not set, ask the human where the library is. Don't search the disk for it.
 
+<!-- record:perimeter -->
+
 ## Invariant 1: the data perimeter
 
 **No research data ever enters this repository.** Not raw, not derived, not "just a sample", not in a notebook output, not in a commit message or plan.
@@ -60,6 +62,36 @@ $SOCIAL_ENERGY_DATA/         private repo + data root
 - **Git history is permanent and this repo is public.** Treat every commit as publication.
 
 Use the [`data-perimeter`](.agents/skills/data-perimeter/SKILL.md) skill whenever you touch ingest code, fixtures, notebooks or docs about a study.
+
+<!-- record:routing -->
+
+## Where a fact goes
+
+The record layer here is `docs/context/` and `studies/<id>/` — the facts about the real field phases and the real instruments, which would still be true if every line of `src/` were rewritten in another language. `src/` is code and holds no facts. Add a row the first time something arrives with nowhere to go.
+
+| Fact | Goes to |
+|---|---|
+| What an instrument does, its export format, its known traps | `docs/context/instruments/<instrument>.md` |
+| What "social energy" means here, and the open tensions | `docs/context/theory.md` |
+| The project's hypotheses, design and ethics constraints | `docs/context/project.md` |
+| A fact true of one field phase — dates, rooms, programme, cutoffs | `studies/<id>/study.yaml` |
+| A study's design and its research questions | `studies/<id>/README.md`, `studies/<id>/research/` |
+| The **rule** a finding produced | the toolkit, or the instrument doc if it is about the instrument |
+| The finding itself, any count from real data, anything about a person | `$SOCIAL_ENERGY_DATA/<study-id>/notes/` — never this repo |
+| How data is organised on a researcher's machine | `docs/context/data-layout.md` |
+| Setting up a machine, or publishing this repo | `docs/context/onboarding.md` |
+| Durable rationale for a decision taken | `docs/decisions/<slug>.md` |
+| Work in flight, with a priority | `docs/plans/{ideas,ready,ongoing}/<slug>.md` |
+| A repeatable procedure | `.agents/skills/<slug>/SKILL.md` |
+| A rule about how this repo works | this file |
+
+This repo follows the `system-of-record` convention, installed from the [agent-record](https://github.com/alvaro-francisco-gil/agent-record) marketplace. The two `<!-- record:* -->` comments are anchors that `scripts/record-check.py` finds by exact string; leave them where they are. Run it over the docs and the study configs, since markers live in both:
+
+```sh
+uv run python scripts/record-check.py --list --glob '*.md' --glob '*.yaml'
+```
+
+It checks marker *syntax* and the two anchors, and nothing else — it cannot see data, and it is not part of the perimeter check. `scripts/check_perimeter.py` remains the only thing standing between this repo and Invariant 1.
 
 ## Invariant 2: toolkit vs study
 
@@ -96,7 +128,7 @@ scripts/             check_perimeter.py
 - **Stack:** Python 3.12, `uv`, `polars`, `pydantic`, `pytest`, `ruff` (line length 100). Datetimes are timezone-aware UTC internally. Naive wall-clock times in spine files and logs are interpreted in the study's timezone.
 - **Tests before code** for anything that parses or transforms data. The pattern is a hand-written golden fixture with hand-derived expectations, plus an oracle test against `social_energy.synth`. A test that passes on first run gets a deliberate mutation to prove it can fail.
 - **Before claiming done:** `uv run ruff check . && uv run ruff format --check . && uv run pytest`.
-- **Uncertainty markers,** used literally so they stay greppable: `[inferred]` means derived from documents but not confirmed by the research team. `[unknown: <question>]` means not determinable, and the text is the question to ask. Never silently drop one.
+- **Uncertainty markers,** used literally so they stay greppable: `[inferred]` means derived from documents but not confirmed by the research team. `[unknown: <question>]` means not determinable, and the text is the question to ask. Never silently drop one, and never guess past one. Unresolved markers are the normal state; a malformed one — a bare `[unknown]` with no question — is the defect, and `scripts/record-check.py` is what catches it. When writing *about* a marker rather than using one, put it in backticks.
 - **Commits:** Conventional Commits (`feat(beacons): …`, `docs(context): …`, `test: …`). Commit small.
 - **Plans:** follow [`managing-plans-lifecycle`](https://github.com/alvaro-francisco-gil/agent-plans), installed as a plugin. Brainstorming and planning output goes in `docs/plans/ideas/` without date prefixes. There is no `docs/superpowers/`. A priority label is required. There is no `soak/`, `incidents/` or `ops/`.
 
