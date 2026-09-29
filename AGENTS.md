@@ -130,7 +130,7 @@ scripts/             check_perimeter.py
 - **Before claiming done:** `uv run ruff check . && uv run ruff format --check . && uv run pytest`.
 - **Uncertainty markers,** used literally so they stay greppable: `[inferred]` means derived from documents but not confirmed by the research team. `[unknown: <question>]` means not determinable, and the text is the question to ask. Never silently drop one, and never guess past one. Unresolved markers are the normal state; a malformed one — a bare `[unknown]` with no question — is the defect, and `scripts/record-check.py` is what catches it. When writing *about* a marker rather than using one, put it in backticks.
 - **Commits:** Conventional Commits (`feat(beacons): …`, `docs(context): …`, `test: …`). Commit small.
-- **Plans:** follow [`managing-plans-lifecycle`](https://github.com/alvaro-francisco-gil/agent-plans), installed as a plugin. Brainstorming and planning output goes in `docs/plans/ideas/` without date prefixes. There is no `docs/superpowers/`. A priority label is required. There is no `soak/`, `incidents/` or `ops/`.
+- **Plans:** follow [`managing-plans-lifecycle`](https://github.com/alvaro-francisco-gil/agent-plans), vendored in `.agents/skills/` (pin: `.agents/README.md`). Brainstorming and planning output goes in `docs/plans/ideas/` without date prefixes. There is no `docs/superpowers/`. A priority label is required. There is no `soak/`, `incidents/` or `ops/`.
 
 ## Skills
 
@@ -144,3 +144,9 @@ scripts/             check_perimeter.py
 ## Repo health beats every rule above
 
 If a rule here makes the repo worse for a specific change, break the rule and update this file in the same commit. **Invariant 1 is the exception.** It is an ethics obligation, not a convention.
+
+## Shared agent setup
+
+`AGENTS.md` is the shared instruction entry point. Project skills live in
+`.agents/skills/`; `.claude/skills` points to that directory. See
+[`.agents/README.md`](.agents/README.md) for discovery requirements and dependencies.

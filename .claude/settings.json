@@ -24,16 +24,5 @@
       "Bash(git commit --no-verify:*)",
       "Bash(git commit -n:*)"
     ]
-  },
-  "extraKnownMarketplaces": {
-    "agent-plans": {
-      "source": {
-        "source": "github",
-        "repo": "alvaro-francisco-gil/agent-plans"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "plans-lifecycle@agent-plans": true
   }
 }

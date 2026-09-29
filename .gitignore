@@ -32,4 +32,5 @@ dist/
 
 # ---- Agent harness ----------------------------------------------------------
 .claude/*
+!.claude/skills
 !.claude/settings.json
