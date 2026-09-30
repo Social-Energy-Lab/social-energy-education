@@ -16,6 +16,10 @@ dependencies = [
 [project.optional-dependencies]
 # Download AI interviews and survey from zeitgeist-platform (social-energy fetch-zeitgeist).
 zeitgeist = ["psycopg[binary]>=3.2"]
+analysis = [
+    "matplotlib>=3.11.2",
+    "networkx>=3.7",
+]
 
 [dependency-groups]
 dev = [
