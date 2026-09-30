@@ -1,18 +1,16 @@
 # DSA 2026 spine: transcribe the field logs into the local spine
 
 **Priority:** high
+**Gate:** none
+**Next:** transcribe the rest of the beacon field log (battery changes, tags taken off, the further broken tags) and build `events.yaml` from the programme
 
 **Goal:** a validated local spine for DSA 2026 (`$SOCIAL_ENERGY_DATA/dsa-2026/spine/`), so that every sensor record resolves to a person or location and the known bad windows are excluded.
 
-## Status
+## Handoff
 
-- **Updated:** 2026-09-22
-- **Priority:** high
-- **Stage:** roster pass and the zeitgeist linking done; the field-log transcription (exclusions in detail, events, EDA sessions) is next
 - **Branch:** `main` (local only, no remote yet)
 - **Done:** the roster arrived on 2026-09-21 and is converted into the private library (**P**, `context/personal/`). `init-spine` seeded meta, 67 locations and their tag assignments. `people.yaml` holds every participant and staff member with consent per module, `assignments.yaml` the person tags including the five documented replacements and the location tags that arrived late, failed or moved, `exclusions.yaml` the windows the roster documents. `Spine.load()` validates. Every beacon ID in the delivered contact tables was checked against the spine: all resolve except seven, listed in `spine/open_questions.md`
-- **Next:** transcribe the rest of the beacon field log (battery changes, tags taken off, the further broken tags) and build `events.yaml` from the programme
-- **Blockers:** the EDA distribution plan (that module is wholly unattributable without it), and the in-person interview log's ambiguous times. The consent conflict on the platform modules was settled on 2026-09-22 — see Design. All open items are in `$SOCIAL_ENERGY_DATA/dsa-2026/spine/open_questions.md`
+- **Waiting elsewhere (not on Next):** the EDA distribution plan (that module is wholly unattributable without it), and the in-person interview log's ambiguous times. The consent conflict on the platform modules was settled on 2026-09-22 — see Design. All open items are in `$SOCIAL_ENERGY_DATA/dsa-2026/spine/open_questions.md`
 - **Handoff:** the roster → spine and zeitgeist-linking steps are one-off scripts kept beside the spine, not repo code. The roster script overwrites `people.yaml`, `assignments.yaml` and `exclusions.yaml`; the linking script appends and refuses to run twice. From here on the spine is edited by hand. Consent now comes from the roster, not from "data exists ⇒ consent" — see Design.
 
 ## Context

@@ -23,7 +23,7 @@ The repo holds **methods only**. It is public. The data describes minors and sta
 4. [`docs/context/instruments/`](docs/context/instruments/): one file per data source. Covers its format, how it was collected, and its known traps.
 5. The study you are working on: [`studies/<id>/README.md`](studies/).
 6. [`docs/context/onboarding.md`](docs/context/onboarding.md): setting up a machine, and publishing this repo.
-7. [`docs/plans/ongoing/`](docs/plans/ongoing/): what is in flight. Read the Status section first. Then `ready/` and `ideas/`.
+7. [`docs/plans/ongoing/`](docs/plans/ongoing/): what is in flight. Read each plan's `Priority` / `Gate` / `Next` block first. Then `ready/` and `ideas/`.
 
 ## The private half
 

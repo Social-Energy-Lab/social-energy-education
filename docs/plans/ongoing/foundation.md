@@ -1,16 +1,16 @@
 # Foundation: repo skeleton, data perimeter, spine, beacon ingest, synthetic camp
 
+**Priority:** high
+**Gate:** none
+**Next:** confirm CI is green on GitHub, then retire this plan (see Follow-ups); the EDA ingest continues in `ideas/eda-shimmer-ingest.md`
+
 **Goal:** a public methods repo that is useful before any real data arrives. It covers the agent context, the privacy guardrails, the study spine, and a beacon ingest tool tested against a synthetic camp.
 
-## Status
+## Handoff
 
-- **Updated:** 2026-09-21
-- **Priority:** high
-- **Stage:** all implementation tasks done; the only remaining task is review and publishing
 - **Branch:** `main`, published at `Social-Energy-Lab/social-energy-education`
 - **Done:** see Tasks
-- **Next:** confirm CI is green on GitHub, then the EDA ingest (`ideas/eda-shimmer-ingest.md`).
-- **Blockers:** Shimmer EDA exports are still being collected by Mahdi. **Beacons are no longer a blocker:** the full delivery (105 logs, 13–29 Aug, plus upstream-derived tables) was imported on 2026-09-20; follow-up in `ideas/beacon-differential-check.md` and `ideas/beacon-device-reuse.md`. The AI interviews and the survey are downloadable (`fetch-zeitgeist`, see `docs/context/data-layout.md`); linking them to study IDs is in `ongoing/dsa-2026-spine.md`
+- **Waiting elsewhere (not on Next):** Shimmer EDA exports are still being collected by Mahdi. **Beacons are no longer a blocker:** the full delivery (105 logs, 13–29 Aug, plus upstream-derived tables) was imported on 2026-09-20; follow-up in `ideas/beacon-differential-check.md` and `ideas/beacon-device-reuse.md`. The AI interviews and the survey are downloadable (`fetch-zeitgeist`, see `docs/context/data-layout.md`); linking them to study IDs is in `ongoing/dsa-2026-spine.md`
 - **Handoff:** `uv sync && uv run pytest` runs the whole suite on synthetic data. Run `git config core.hooksPath .githooks` once per clone to enable the data-perimeter pre-commit hook. The private context library for DSA 2026 is at `$SOCIAL_ENERGY_DATA/dsa-2026/context/` (Álvaro's machine: `~/research-data/social-energy`). Follow-up work is planned in `ongoing/dsa-2026-spine.md` and `ideas/*`. Survey ingest continues in `ongoing/survey-scoring.md`.
 
 ## Context

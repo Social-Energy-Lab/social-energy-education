@@ -1,16 +1,15 @@
 # Survey ingest and scoring (SurveyJS → scale scores)
 
+**Priority:** high
+**Gate:** blocked:confirmed reverse-keying list and the live B19/B20 slider range (recheck 2026-10-07)
+**Next:** write `studies/dsa-2026/survey_codebook.yaml` from `docs/context/instruments/survey.md` (codes and scales only, no own-item wording), including how old-version codes map to current ones (`GRADIENT_variable_C11` → `ZGL_C11_GRAD`, `SWE_0n_resonance` → ?).
+
 **Goal:** `social_energy.survey` flattens a SurveyJS export into one row per respondent and computes validated scale scores from a public codebook.
 
-## Status
+## Handoff
 
-- **Updated:** 2026-09-20
-- **Priority:** high
-- **Stage:** ingest done; next is the codebook, then scoring
 - **Branch:** `main`
 - **Done:** `social_energy.survey.ingest_zeitgeist` + `social-energy ingest-survey` (golden fixture, synthetic oracle, CLI test). The real DSA 2026 export ingests cleanly across three form versions, with no empty, out-of-range or mismatched rows; the counts are in the private study notes.
-- **Next:** write `studies/dsa-2026/survey_codebook.yaml` from `docs/context/instruments/survey.md` (codes and scales only, no own-item wording), including how old-version codes map to current ones (`GRADIENT_variable_C11` → `ZGL_C11_GRAD`, `SWE_0n_resonance` → ?).
-- **Blockers:** confirmed reverse-keying list; B19/B20 slider range (the export shows 1–10 in use)
 - **Handoff:** raw export via `fetch-zeitgeist` (see `docs/context/data-layout.md`); `ingest-survey` writes `derived/survey/{items,respondents}.parquet` + `qa.json`. Rows are keyed by platform user UUID; joining to people waits on the ID linking in `ongoing/dsa-2026-spine.md`.
 
 ## Context
