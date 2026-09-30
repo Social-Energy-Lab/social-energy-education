@@ -32,6 +32,7 @@ def _write(root: Path, rel: str, content: str | bytes = "x") -> str:
         "export/survey.json",
         "data/anything.txt",
         "studies/dsa-2026/data/spine.yaml",
+        "bundle/pairs.bin",
     ],
 )
 def test_data_like_files_are_rejected(tmp_path, rel):

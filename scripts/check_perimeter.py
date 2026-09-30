@@ -34,7 +34,7 @@ DATA_SUFFIXES = frozenset(
         ".json", ".jsonl", ".ndjson", ".h5", ".hdf5", ".mat", ".npz", ".npy",
         ".wav", ".flac", ".mp3", ".m4a", ".mp4", ".mov",
         ".zip", ".gz", ".tar", ".7z", ".db", ".sqlite",
-        ".docx", ".pptx", ".pdf",
+        ".docx", ".pptx", ".pdf", ".bin",
     }
 )  # fmt: skip
 
