@@ -87,3 +87,32 @@ def test_init_spine_seeds_locations_and_templates(tmp_path, monkeypatch):
 
     # never overwrites local work
     assert cli.main(["init-spine", str(study_yaml)]) == 1
+
+
+def test_dsa_explorer_config_names_six_courses_and_defaults():
+    ex = StudyConfig.load(REPO / "studies" / "dsa-2026" / "study.yaml").explorer_config()
+    assert list(ex.courses) == ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6"]
+    assert ex.defaults == {"close_rssi": -65, "min_minutes": 15, "window_minutes": 120}
+    assert ex.day_start == "07:30"
+    assert [name for name, _ in ex.phases][:2] == ["morning", "midday"]
+
+
+def test_explorer_config_defaults_when_section_missing(tmp_path):
+    study = tmp_path / "study.yaml"
+    study.write_text("study_id: x\ntimezone: UTC\n", encoding="utf-8")
+    ex = StudyConfig.load(study).explorer_config()
+    assert (ex.courses, ex.phases, ex.notes, ex.shade) == ({}, [], [], [])
+    assert ex.defaults == {"close_rssi": -65, "min_minutes": 15, "window_minutes": 120}
+    assert ex.min_group == 5
+
+
+def test_explorer_phase_wraps_past_midnight():
+    from datetime import time
+
+    ex = StudyConfig.load(REPO / "studies" / "dsa-2026" / "study.yaml").explorer_config()
+    names = [name for name, _ in ex.phases]
+    assert names[ex.phase_of(time(1, 0))] == "late"
+    assert names[ex.phase_of(time(3, 0))] == "night"
+    assert names[ex.phase_of(time(7, 29))] == "night"
+    assert names[ex.phase_of(time(7, 30))] == "morning"
+    assert names[ex.phase_of(time(23, 0))] == "late"

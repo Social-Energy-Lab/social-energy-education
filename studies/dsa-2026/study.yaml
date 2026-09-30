@@ -73,3 +73,26 @@ acoustics:
 #
 # Download: ZEITGEIST_DATABASE_URL=... uv run --extra zeitgeist \
 #     social-energy fetch-zeitgeist studies/dsa-2026/study.yaml
+
+# How the explorer (social_energy.explorer) presents this study.
+explorer:
+  # Display names. The official titles are not in the repo yet:
+  # [unknown: what are the official course titles for DSA 2026?]
+  courses: {"1.1": course 1.1, "1.2": course 1.2, "1.3": course 1.3,
+            "1.4": course 1.4, "1.5": course 1.5, "1.6": course 1.6}
+  day_start: "07:30"  # a camp day runs 07:30-07:30, so the night belongs to the evening before
+  phases:  # clock blocks of the academy's usual weekday rhythm [inferred]
+    - [morning, "07:30"]
+    - [midday, "12:30"]
+    - [afternoon, "14:00"]
+    - [dinner, "18:30"]
+    - [evening, "19:30"]
+    - [late, "22:30"]
+    - [night, "02:00"]
+  notes:
+    - {start: "2026-08-13 07:30", end: "2026-08-14 07:30", text: arrival day}
+    - {start: "2026-08-18 07:30", end: "2026-08-19 07:30", text: excursion day}
+    - {start: "2026-08-22 07:30", end: "2026-08-23 07:30", text: "rotation day: courses present to each other"}
+  shade:
+    - {start: "2026-08-24 07:30", end: "2026-08-28 07:30", label: "tag batteries failing: fewer scans, not fewer encounters"}
+  defaults: {close_rssi: -65, min_minutes: 15, window_minutes: 120}
