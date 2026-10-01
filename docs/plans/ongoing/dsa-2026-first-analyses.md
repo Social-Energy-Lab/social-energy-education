@@ -1,0 +1,60 @@
+# DSA 2026: first analyses of co-presence, self-reports and beacon health
+
+**Priority:** high
+**Gate:** none
+**Next:** date records against each power cycle's earliest anchor in `social_energy.beacons`, add the previous-boot rule, and rerun the differential check against `Output/`
+
+**Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
+
+## Handoff
+
+- **Branch:** `main`
+- **Done:** three analyses under `studies/dsa-2026/analyses/` (`copresence_by_phase.py`, `self_report_context.py`, `beacon_diagnostics.py`); firmware answers from the beacon team written into [`../../context/instruments/beacons.md`](../../context/instruments/beacons.md); a meeting deck and two question docs built from the outputs (kept outside the repo). Numbers are in the private half: `dsa-2026/notes/beacon-analyses-2026-10-01.md`.
+- **Waiting elsewhere (not on Next):** the beacon-consent ruling of 2026-09-22 is not yet in the spine (see `spine/open_questions.md`), so the network covers fewer participants than it should; sign-off on the analysis choices below by the research team.
+- **Handoff:** run `copresence_by_phase.py build` once, then `report`, `self_report_context.py` and `beacon_diagnostics.py` in any order (`uv run --extra analysis python …`). All read through the spine and write only under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/`.
+
+## Settings in use
+
+Each is a choice, not a fact, until the research team signs it off. They are named constants at the top of the scripts.
+
+| Setting | Current value | Why | Status |
+|---|---|---|---|
+| Contact source | upstream `Output/` tables | our ingest and theirs disagree around restarts; theirs handles the previous boot | until the differential check is settled |
+| Window | tag deployment on 13 Aug to the handover on 29 Aug 09:00 | after the handover tags lay together on benches | the handover window is not yet a spine exclusion |
+| Comparison days | 14–23 Aug | arrival day is atypical; restarts and battery fade weigh more late | `[inferred]` |
+| Exclusions | applied to both sides of every contact | a tag's partners hold half the data about its wearer | rule |
+| Who | participants with the module's consent; staff later, separately | asked by the research team: separate first, then relate | agreed 2026-10-01 |
+| Close | strongest reading in a 5-minute bin at −65 dBm or stronger | the firmware threshold (−80) ties nearly everyone every day | `[inferred]`, uncalibrated |
+| Tie | close for at least one hour in one camp day (07:30–07:30) | a plausible size of a day's circle; results hold at −60/30 min and −70/60 min | `[inferred]` |
+| Parts of the day | clock blocks from 07:30, 12:30, 14:00, 18:30, 19:30, 22:30, 02:00 | most programme events have no end time | `[inferred]` |
+| Cross-course baseline | share expected if people mixed at random, from course sizes among those present | a raw share means nothing without it | rule |
+| Accidental presses | a chain of presses each under 20 s apart, lasting 60 s or holding 8 presses | the firmware makes an event per 3 s held, with no cooldown; a long run is a tag pressed in a bag | thresholds `[inferred]` |
+| One press | presses under 60 s apart are one episode | a deliberate press held a little long gives two or three events | `[inferred]` |
+| Cancel press | not applied | participants were told a second press cancels a mistaken one; the firmware has no such notion | research-team decision |
+| Room placement | the room tag heard most often in the bin, at least two hits | room tags barely pass walls | a stronger cut is open with the beacon team |
+
+## What the data showed (no numbers here)
+
+- **Courses form the day's circles; the programme breaks them.** Ties cross courses far less than random mixing would give; the excursion and rotation day push cross-course and brand-new ties up sharply. Evening and late time mixes courses more than course time.
+- **Presses happen in company**, with more people close and less time alone than ordinarily, in every part of the day, and a hint that companions press together.
+- **Tags restart often, mostly while worn.** A restart loses what was held in RAM since the last readout (part of the data is already in flash). Readouts came roughly twice a day per tag, so a lost window often spans hours. Detection and the lost window come from the clock anchors (see the instrument doc).
+- **Redundancy recovers most co-presence.** While one tag is wiped its partners still log it, so co-presence counted from either side survives; only pair-time with both tags wiped is gone. Presses and two-sided measures cannot be recovered.
+- **Readout timestamps run late; tag clocks do not.** The PC stamp on a readout is minutes late, more after long transfers; dating each record from its power cycle's earliest anchor halves the typical mirrored offset. Per-tag clock bias against partners is seconds. Apparent offsets of minutes between mirrored records come from sparse sampling in eco mode, not from clocks.
+- **Battery voltage fades slowly** and matters less than restarts.
+
+## Next steps
+
+- [ ] Ingest: date records as (power cycle's earliest implied start + uptime); add the previous-boot rule with a visible flag; then rerun the self-report and contact comparison against `Output/` (`ideas/beacon-differential-check.md`).
+- [ ] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
+- [ ] Flag lost windows per tag in a table the analyses can join, so one-sided measures can be restricted to unaffected time.
+- [ ] Rerun everything once the beacon-consent ruling is in the spine.
+- [ ] Check whether ties first made on the excursion or rotation day persist on later days.
+- [ ] Synthetic-data test for the three analyses (`add-analysis` skill).
+
+## Open questions
+
+- `[unknown: what restarts a worn tag during the day, and can the reset reason be logged?]`
+- `[unknown: is the PC time on a readout stamped after the transfer rather than when the timer was read?]`
+- `[unknown: why held-button repeats come 4–9 s apart rather than every 3 s]`
+- `[unknown: which RSSI from a room tag means "inside this room"?]`
+- `[unknown: does eco mode scan every 5 or every 10 minutes at DSA 2026?]`

@@ -103,6 +103,121 @@ def resets(work: Path) -> pl.DataFrame:
     ).with_columns(pl.max_horizontal("prev_ts", pl.min_horizontal("boot", "ts")).alias("boot"))
 
 
+def anchors(work: Path) -> pl.DataFrame:
+    """Every clock anchor in the logs, with its power cycle and that cycle's earliest start.
+
+    ``implied`` = readout PC time minus uptime. Within a power cycle it should be constant; it only
+    ever sits above the cycle's minimum (the PC stamps late), so ``cycle_start`` = that minimum is
+    the best estimate of when the cycle began, and ``delay_s`` how late each stamp was.
+    """
+    rows = []
+    for log in sorted(work.glob("*.log")):
+        for line in log.open(encoding="utf-8", errors="replace"):
+            if ",Current Timer: " not in line:
+                continue
+            ts, tag, rest = line.strip().split(",", 2)
+            try:
+                rows.append((ts, int(tag.split(":")[1]), int(rest.split(":")[1])))
+            except ValueError:
+                continue
+    elapsed = (pl.col("ts") - pl.col("ts").shift().over("beacon")).dt.total_seconds()
+    restart = pl.col("timer") < pl.col("timer").shift().over("beacon") + elapsed - 3600
+    return (
+        pl.DataFrame(rows, schema=["ts", "beacon", "timer"], orient="row")
+        .with_columns(
+            pl.col("ts")
+            .str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S")
+            .dt.replace_time_zone(cp.TZ)
+            .dt.convert_time_zone("UTC")
+        )
+        .unique()
+        .sort("beacon", "ts", "timer")
+        .with_columns((pl.col("ts") - pl.duration(seconds=pl.col("timer"))).alias("implied"))
+        .with_columns(restart.fill_null(True).cum_sum().over("beacon").alias("cycle"))
+        .with_columns(pl.col("implied").min().over("beacon", "cycle").alias("cycle_start"))
+        .with_columns(
+            (pl.col("implied") - pl.col("cycle_start")).dt.total_seconds().alias("delay_s")
+        )
+    )
+
+
+def timing_check(log_names: list[str]) -> dict:
+    """Do mirrored contacts line up better after dating from each cycle's earliest anchor?
+
+    For a tag pair, A hearing B and B hearing A should happen within seconds. For each pair, the
+    median gap to the nearest mirrored record is compared as dated by our ingest and as
+    (cycle start + uptime). Runs our full ingest on the given logs only, because the whole camp
+    does not fit in memory; the cycles come from the anchors of every log.
+    """
+    layout = paths.study(cp.STUDY)
+    study = StudyConfig.load(cp.STUDY_YAML)
+    files = [layout.raw / "beacons" / "Logs" / n for n in log_names]
+    contacts = ingest_logs(files, study.beacon_config()).contacts.filter(pl.col("ok"))
+    c = contacts.select(
+        pl.col("beacon").cast(pl.Int64), pl.col("observed").cast(pl.Int64), "t", "uptime_s"
+    )
+    an = anchors(out_dir() / "nocontacts")
+    cycles = an.group_by("beacon", "cycle").agg(pl.col("cycle_start").first()).sort("cycle_start")
+    c = (
+        c.sort("t")
+        .join_asof(
+            cycles.select("beacon", "cycle_start"),
+            left_on="t",
+            right_on="cycle_start",
+            by="beacon",
+            strategy="backward",
+            check_sortedness=False,
+        )
+        .with_columns((pl.col("cycle_start") + pl.duration(seconds=pl.col("uptime_s"))).alias("t2"))
+        .filter(((pl.col("t2") - pl.col("t")).dt.total_seconds()).abs() < 7200)
+    )
+
+    def pair_offsets(col: str):
+        ab = c.select(
+            pl.col("beacon").alias("x"), pl.col("observed").alias("y"), pl.col(col).alias("t")
+        )
+        ba = ab.rename({"x": "y", "y": "x", "t": "tb"})
+        j = (
+            ab.unique()
+            .sort("t")
+            .join_asof(
+                ba.unique().sort("tb"),
+                left_on="t",
+                right_on="tb",
+                by=["x", "y"],
+                strategy="nearest",
+                check_sortedness=False,
+            )
+            .with_columns((pl.col("tb") - pl.col("t")).dt.total_seconds().alias("d"))
+            .filter(pl.col("d").abs() < 3600)
+        )
+        per = j.group_by("x", "y").agg(pl.col("d").median().alias("md"), pl.len().alias("n"))
+        return per.filter(pl.col("n") >= 20)
+
+    result = {
+        "files": log_names,
+        "anchor_delay_s_median": float(an["delay_s"].median()),
+        "anchor_delay_s_p90": float(an["delay_s"].quantile(0.9)),
+    }
+    for col, name in (("t", "as_dated"), ("t2", "cycle_start_corrected")):
+        per = pair_offsets(col)
+        md = per["md"].abs()
+        result[name] = {
+            "pairs": per.height,
+            "median_s": float(md.median()),
+            "share_over_60s": float((md > 60).mean()),
+            "share_over_300s": float((md > 300).mean()),
+        }
+        if col == "t":
+            bias = per.group_by("x").agg(pl.col("md").median().alias("b"), pl.len().alias("k"))
+            bias = bias.filter(pl.col("k") >= 5)["b"].abs()
+            result["per_tag_bias_s"] = {
+                "median": float(bias.median()),
+                "p90": float(bias.quantile(0.9)),
+            }
+    return result
+
+
 def style(plt) -> None:
     plt.rcParams.update(
         {
@@ -590,4 +705,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if "--timing" in sys.argv:
+        # Two log files of one mid-camp day: enough pairs, and it fits in memory.
+        res = timing_check(["dsa_20260820_0828.log", "dsa_20260820_1227.log"])
+        (out_dir() / "timing_check.json").write_text(json.dumps(res, indent=2))
+        print(json.dumps(res, indent=2))
+    else:
+        main()
