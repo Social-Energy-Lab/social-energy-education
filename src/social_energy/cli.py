@@ -18,6 +18,11 @@ social-energy fetch-zeitgeist studies/<id>/study.yaml
     $SOCIAL_ENERGY_DATA/<id>/raw/{ai-interviews,survey}/zeitgeist/<agent_name>/.
     Needs ZEITGEIST_DATABASE_URL (read-only login) and `uv sync --extra zeitgeist`.
 
+social-energy explore studies/<id>/study.yaml [--port N] [--no-browser]
+    Serve the explorer on http://127.0.0.1:<port> for the bundle in
+    $SOCIAL_ENERGY_DATA/<id>/derived/explorer/bundle/ (made by the study's
+    analyses/explorer_export.py). Local only; the bundle is pseudonymised data.
+
 social-energy ingest-survey studies/<id>/study.yaml
     Parse raw/survey/zeitgeist/*/responses.jsonl into
     derived/survey/{items,respondents}.parquet plus qa.json.
@@ -181,6 +186,38 @@ COMMANDS = {
 }
 
 
+def explore(study: StudyConfig, port: int = 8765, open_browser: bool = True) -> int:
+    from .explorer import make_server
+
+    bundle = paths.study(study.study_id).derived / "explorer" / "bundle"
+    if not (bundle / "meta.json").is_file():
+        print(
+            f"No explorer bundle at {bundle}. Make one first with\n"
+            "    uv run --extra analysis python "
+            f"studies/{study.study_id}/analyses/explorer_export.py"
+        )
+        return 2
+    server = make_server(bundle, port=port)
+    url = f"http://127.0.0.1:{server.server_address[1]}/"
+    print(
+        f"Explorer on {url} (Ctrl+C to stop). Pseudonymised data: do not share the screen widely."
+    )
+    if open_browser:
+        import webbrowser
+
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
+COMMANDS["explore"] = explore
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="social-energy", description=__doc__)
     parser.add_argument("command", choices=sorted(COMMANDS))
@@ -188,11 +225,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--delete-wavs", action="store_true", help="extract-acoustics: delete verified WAVs"
     )
+    parser.add_argument("--port", type=int, default=8765, help="explore: port on 127.0.0.1")
+    parser.add_argument("--no-browser", action="store_true", help="explore: do not open a browser")
     args = parser.parse_args(argv)
     try:
         study = StudyConfig.load(args.study_yaml)
         if args.command == "extract-acoustics":
             return extract_acoustics(study, delete_wavs=args.delete_wavs)
+        if args.command == "explore":
+            return explore(study, port=args.port, open_browser=not args.no_browser)
         return COMMANDS[args.command](study)
     except paths.DataRootError as err:
         print(err)

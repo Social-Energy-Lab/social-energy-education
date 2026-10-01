@@ -114,7 +114,7 @@ Raw tables speak in device IDs (`beacon:7`, `eda:SH07`). Only the **spine** (`so
 ## Layout
 
 ```
-src/social_energy/   paths · study · cli · presence · zeitgeist · spine/ · beacons/ · acoustics/ · survey/ · synth/  (next: eda/)
+src/social_energy/   paths · study · cli · presence · zeitgeist · spine/ · beacons/ · acoustics/ · survey/ · synth/ · explorer/  (next: eda/)
 studies/<id>/        README.md · study.yaml · research/ · analyses/
 docs/context/        theory.md · instruments/*.md
 docs/plans/          ideas/ → ready/ → ongoing/   (managing-plans-lifecycle skill)

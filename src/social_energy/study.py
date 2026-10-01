@@ -7,7 +7,7 @@ module turns that description into instrument configs.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,30 @@ def _as_datetime(value: Any) -> datetime | None:
     if value is None:
         return None
     return value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+
+
+DEFAULT_EXPLORER = {"close_rssi": -65, "min_minutes": 15, "window_minutes": 120}
+
+
+@dataclass(frozen=True)
+class ExplorerConfig:
+    """How the explorer presents one study: display names, day rhythm, notes, defaults."""
+
+    courses: dict[str, str] = field(default_factory=dict)
+    day_start: str = "00:00"
+    phases: list[tuple[str, str]] = field(default_factory=list)
+    notes: list[dict[str, str]] = field(default_factory=list)
+    shade: list[dict[str, str]] = field(default_factory=list)
+    defaults: dict[str, int] = field(default_factory=lambda: dict(DEFAULT_EXPLORER))
+    min_group: int = 5
+
+    def phase_of(self, clock: time) -> int:
+        """Index of the last phase starting at or before ``clock``, wrapping past midnight."""
+        starts = [time.fromisoformat(start) for _, start in self.phases]
+        earlier = [i for i, s in enumerate(starts) if s <= clock]
+        if earlier:
+            return max(earlier, key=lambda i: starts[i])
+        return max(range(len(starts)), key=lambda i: starts[i])
 
 
 @dataclass(frozen=True)
@@ -79,6 +103,18 @@ class StudyConfig:
     def arrival(self) -> date | None:
         dates = self.raw.get("dates") or {}
         return _as_date(dates["arrival"]) if "arrival" in dates else None
+
+    def explorer_config(self) -> ExplorerConfig:
+        section = self.raw.get("explorer") or {}
+        return ExplorerConfig(
+            courses={str(k): str(v) for k, v in (section.get("courses") or {}).items()},
+            day_start=str(section.get("day_start", "00:00")),
+            phases=[(str(n), str(s)) for n, s in section.get("phases") or []],
+            notes=list(section.get("notes") or []),
+            shade=list(section.get("shade") or []),
+            defaults={**DEFAULT_EXPLORER, **(section.get("defaults") or {})},
+            min_group=int(section.get("min_group", 5)),
+        )
 
     def beacon_config(self) -> BeaconConfig:
         section = self.raw["beacons"]

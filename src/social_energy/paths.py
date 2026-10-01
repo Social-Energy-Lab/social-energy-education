@@ -32,6 +32,16 @@ def data_root() -> Path:
     return root
 
 
+def refuse_inside_repo(path: Path) -> Path:
+    """Return ``path`` resolved, or raise if it lies inside this repository."""
+    resolved = Path(path).expanduser().resolve()
+    if resolved == REPO_ROOT or REPO_ROOT in resolved.parents:
+        raise DataRootError(
+            f"{resolved} is inside the repository; research data must live outside it."
+        )
+    return resolved
+
+
 @dataclass(frozen=True)
 class StudyLayout:
     root: Path
