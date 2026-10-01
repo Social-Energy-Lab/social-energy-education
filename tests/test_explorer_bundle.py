@@ -155,3 +155,9 @@ def test_synthetic_camp_pairs_match_truth(tmp_path):
     truth_per_bin = Counter(int((b - t0).total_seconds() // BIN) for b in truth["bin"])
     assert Counter(int(k) for k in cols["pairs"]["bin"]) == truth_per_bin
     assert meta["qa"]["pairs_no_node"] == 0
+
+
+def test_synthetic_inputs_cover_a_camp_longer_than_a_day(tmp_path):
+    spec = CampSpec(hours=36, lost=None, reboot=None, swap=None, id_bug_until_h=None)
+    inp = synthetic_inputs(generate(spec, tmp_path / "camp"))
+    assert inp.n_bins >= 36 * 12 - 1

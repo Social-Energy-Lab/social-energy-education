@@ -25,7 +25,7 @@ def synthetic_inputs(camp: SyntheticCamp) -> BundleInput:
     config = BeaconConfig(
         timezone=spec.timezone,
         valid_from=spec.start.date(),
-        valid_to=spec.start.date(),
+        valid_to=(spec.start + timedelta(hours=spec.hours)).date(),
         ambiguous_id_cutoff=camp.id_bug_cutoff,
     )
     tables = ingest_logs(camp.log_paths, config)
