@@ -5,5 +5,6 @@ root; ``make_server`` serves it with the browser app on ``127.0.0.1`` only.
 """
 
 from .bundle import BundleInput, read_bundle, write_bundle
+from .server import make_server
 
-__all__ = ["BundleInput", "read_bundle", "write_bundle"]
+__all__ = ["BundleInput", "make_server", "read_bundle", "write_bundle"]
