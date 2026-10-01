@@ -161,3 +161,4 @@ def test_synthetic_inputs_cover_a_camp_longer_than_a_day(tmp_path):
     spec = CampSpec(hours=36, lost=None, reboot=None, swap=None, id_bug_until_h=None)
     inp = synthetic_inputs(generate(spec, tmp_path / "camp"))
     assert inp.n_bins >= 36 * 12 - 1
+    assert inp.rooms.height > 0  # people are placed in rooms

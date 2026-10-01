@@ -67,7 +67,10 @@ def synthetic_inputs(camp: SyntheticCamp) -> BundleInput:
         locations=rooms,
         pairs=pairs.select("a", "b", "bin", "max_rssi"),
         seen=seen,
-        rooms=room_per_bin(contacts, every=f"{BIN_SECONDS}s").select("entity", "bin", "location"),
+        # One scan per bin in the synthetic camp, so one hit must be enough to place someone.
+        rooms=room_per_bin(contacts, every=f"{BIN_SECONDS}s", min_hits=1).select(
+            "entity", "bin", "location"
+        ),
         presses=reports.select("entity", "t"),
         rssi_floor=int(pairs["max_rssi"].min()) if pairs.height else -128,
     )
