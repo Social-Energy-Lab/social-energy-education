@@ -18,13 +18,13 @@ tags (worn / fixed in rooms) ──BLE──► base station (nRF54L15 DK) ─�
 | Parameter | Value | Consequence |
 |---|---|---|
 | RSSI threshold, person tags | −80 dBm | only "close" contacts stored, roughly a few metres; weaker signals never recorded |
-| RSSI threshold, location tags | −100 dBm | room presence is permissive; neighbouring rooms may be heard |
+| RSSI threshold, location tags | −100 dBm | room presence is permissive, but the signal passes walls very poorly (firmware team, 2026-10-01): several room tags heard at once points to an open space, a corridor or outdoors rather than to a neighbouring room |
 | Scan window / interval (normal) | 120 ms every 7 s | each nearby tag sampled at most once per ~7 s; one advertisement per window, occasionally two |
 | Advertising interval | 90–120 ms | |
-| Eco mode (after 30 min without motion, if enabled) | 100 ms scan burst every 300 s | **far fewer contacts while still**: missingness correlates with inactivity (sleep, sitting) |
+| Eco mode (after 30 min without motion, if enabled) | 100 ms scan burst every 300 s (the firmware team describes it as every 5–10 min) | the tag **still advertises normally**, so others keep hearing it; only its own scanning drops. A still tag's contacts become one-sided: it is heard but barely hears (firmware team, 2026-10-01) |
 | TX power | 0 dBm | |
 | Time resolution | 1 s (uptime seconds, 24-bit in records; wraps after ~194 days) | |
-| Self-report | button long-press (3 s) → one timestamp | holding repeats reports |
+| Self-report | an event once the button has been held for 3 s | no cooldown: holding on keeps creating events. A deliberate press held a little long gives two or three; a long dense run means something else held the button (a tag in a bag) and is accidental (firmware team, 2026-10-01). There is no firmware notion of a cancelling second press |
 
 Per-study deviations (e.g. when eco mode was switched on or off) belong in `studies/<id>/study.yaml`.
 
@@ -55,11 +55,13 @@ One line per decoded record: `<PC local time>,ID: <beacon>,<record>`
 | **Reboots** | Uptime restarts at 0. A readout after a reboot can carry records from the previous boot, which must be dated against the previous boot's anchor. | Uptime drops inside a readout mark boot segments. The previous boot is resolved with the previous readout's anchor (`pre_reboot`); older boots get `t = null`. |
 | **Resends** | An interrupted transfer can re-export already acknowledged records (checkpointing is deferred to save flash writes). | `duplicate`: same record already seen in an earlier readout. |
 | **Corrupt trailing records** | Occasional garbage records with absurd timers or IDs. | `implausible_time` (outside the study window or after the readout); out-of-roster IDs don't resolve in the spine. |
-| **Direction** | A→B and B→A are separate observations; asymmetry is informative (body shadowing, eco mode, dead tag). The upstream postprocessing sorts the pair and loses this. | We keep `beacon` (observer) and `observed`. |
+| **Direction** | A→B and B→A are separate observations; asymmetry is informative (body shadowing, eco mode, a wiped or dead tag). | We keep `beacon` (observer) and `observed`; the upstream tables keep it as `ID1`/`ID2`. |
 | **Eco-mode missingness** | Stillness → sparse sampling. | `eco_sessions` table; analyses must model it. |
 | **Tags not worn** | Lost, lying in a box, taken off for sport, battery out. The tag keeps recording where it lies. | Spine exclusion windows (from field notes). |
 | **Tag swaps** | A replacement tag carries a different ID for the same person. | Spine assignments over time. |
 | **Logger gaps** | Logger failed to write for some minutes; records that stayed on the tag appear in a later readout. | Covered by the clock reference. Records deleted before a later readout are lost silently. |
+| **Restarts wipe unread data** | Records live in RAM until read out. A reset (battery swap, battery contact, anything else) clears up to about 20,000 stored contacts and restarts uptime (firmware team, 2026-10-01). At DSA 2026 restarts were frequent and mostly happened while tags were worn. Nothing in `Output/` shows the loss. | Detect a restart from the `Current Timer` anchors: uptime falls behind elapsed wall time. The lost window runs from the previous readout to the restart. The partners' records still hold the wiped tag's contacts, so co-presence should count a contact heard from either side. `[unknown: what causes the daytime restarts]` |
+| **Anchor jitter** | Within one power cycle, readout PC time minus uptime should be constant, but it moves by up to tens of minutes between readouts. | Dating error of that size is possible for any record. `[unknown: is the PC time on the Current Timer line taken after the transfer rather than when the timer was read?]` |
 
 ## Excluding a tag excludes half of it
 
@@ -86,7 +88,7 @@ How it resolves uptime to wall clock, in our words:
 - Each readout's `Current Timer` line is an anchor. An event is dated by offsetting from the nearest anchor for that tag, preferring a preceding one and falling back to a following one (counted, not dropped).
 - If that lands implausibly in the future (tolerance 600 s past the log line), it **retries against the previous boot's anchor**, but only when the record's timer exceeds every timer already seen in that older boot. This is its reboot-backlog path: records stored before a reboot and exported after it.
 - Records it still cannot place, or whose ID/RSSI falls outside the fielded ranges (IDs 1–170 plus 252–254, RSSI −110..−10), are **skipped** and counted in `sanity_findings.csv`.
-- It sorts each contact pair, so direction is lost; there is no readout table, no boot context, no per-record flags and no `Status` byte, so storage-full loss is invisible in it.
+- Direction survives in the contact tables: `ID1` is the tag that heard, `ID2` the tag it heard (checked on DSA 2026: a tag whose memory was wiped stops appearing as `ID1` while others keep logging it as `ID2`). There is no readout table, no boot context, no per-record flags and no `Status` byte, so storage-full loss is invisible in it.
 
 Treat it as an independent implementation to check ours against, not as ground truth. `[unknown: at which commit was the delivered Output/ produced?]`
 
