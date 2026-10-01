@@ -10,7 +10,8 @@
 
 - **Branch:** `main`
 - **Done:** three analyses under `studies/dsa-2026/analyses/` (`copresence_by_phase.py`, `self_report_context.py`, `beacon_diagnostics.py`); firmware answers from the beacon team written into [`../../context/instruments/beacons.md`](../../context/instruments/beacons.md); a meeting deck and two question docs built from the outputs (kept outside the repo). Numbers are in the private half: `dsa-2026/notes/beacon-analyses-2026-10-01.md`.
-- **Waiting elsewhere (not on Next):** the beacon-consent ruling of 2026-09-22 is not yet in the spine (see `spine/open_questions.md`), so the network covers fewer participants than it should; sign-off on the analysis choices below by the research team.
+- **Waiting elsewhere (not on Next):** sign-off on the analysis choices below by the research team; firmware documentation from the beacon team, which decides the previous-boot rule.
+- **Consent:** the beacon-consent ruling of 2026-09-22 was applied to the spine on 2026-10-01, and every analysis was rerun with it.
 - **Handoff:** run `copresence_by_phase.py build` once, then `report`, `self_report_context.py` and `beacon_diagnostics.py` in any order (`uv run --extra analysis python …`). All read through the spine and write only under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/`.
 
 ## Settings in use
@@ -31,6 +32,8 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 | Accidental presses | a chain of presses each under 20 s apart, lasting 60 s or holding 8 presses | the firmware makes an event per 3 s held, with no cooldown; a long run is a tag pressed in a bag | thresholds `[inferred]` |
 | One press | presses under 60 s apart are one episode | a deliberate press held a little long gives two or three events | `[inferred]` |
 | Cancel press | not applied | participants were told a second press cancels a mistaken one; the firmware has no such notion | research-team decision |
+| Lost presses | presses held in RAM at a restart are accepted as lost; press exposure leaves each tag's lost windows out | they cannot be recovered from any other tag | agreed 2026-10-01 |
+| A tie lasts | the pair is tied again on any of the next three days | separates a one-off encounter from repeated time together | `[inferred]` |
 | Room placement | the room tag heard most often in the bin, at least two hits | room tags barely pass walls | a stronger cut is open with the beacon team |
 
 ## What the data showed (no numbers here)
@@ -41,14 +44,16 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 - **Redundancy recovers most co-presence.** While one tag is wiped its partners still log it, so co-presence counted from either side survives; only pair-time with both tags wiped is gone. Presses and two-sided measures cannot be recovered.
 - **Readout timestamps run late; tag clocks do not.** The PC stamp on a readout is minutes late, more after long transfers; dating each record from its power cycle's earliest anchor halves the typical mirrored offset. Per-tag clock bias against partners is seconds. Apparent offsets of minutes between mirrored records come from sparse sampling in eco mode, not from clocks.
 - **Battery voltage fades slowly** and matters less than restarts.
+- **The mixing on special days rarely sticks.** Ties first made on the excursion or rotation day come back on the following days far less often than ties made on ordinary days. This measures repeated time together, not acquaintance.
 
 ## Next steps
 
 - [ ] Ingest: date records as (power cycle's earliest implied start + uptime); add the previous-boot rule with a visible flag; then rerun the self-report and contact comparison against `Output/` (`ideas/beacon-differential-check.md`).
-- [ ] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
-- [ ] Flag lost windows per tag in a table the analyses can join, so one-sided measures can be restricted to unaffected time.
-- [ ] Rerun everything once the beacon-consent ruling is in the spine.
-- [ ] Check whether ties first made on the excursion or rotation day persist on later days.
+- [x] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
+- [x] Flag lost windows per tag in a table the analyses can join (`lost_windows.parquet`), so one-sided measures can be restricted to unaffected time.
+- [x] Rerun everything once the beacon-consent ruling is in the spine.
+- [x] Check whether ties first made on the excursion or rotation day persist on later days.
+- [ ] Persistence with shorter contacts, and self-reports between people who first met on a special day.
 - [ ] Synthetic-data test for the three analyses (`add-analysis` skill).
 
 ## Open questions
