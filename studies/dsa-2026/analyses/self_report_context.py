@@ -26,6 +26,9 @@ Filters, each counted in ``qa.json``:
    so retractions cannot be removed
    `[unknown: can a retraction be told apart from a held press in the export?]`.
 
+Exposure for press rates leaves out each tag's lost windows (``lost_windows.parquet`` from
+``beacon_diagnostics.py``): a restart wipes presses held in RAM, so that time cannot count.
+
 Company at a press uses the close co-presence bins built by ``copresence_by_phase.py build``, which
 must have run first; it only covers participants who also consented to ``beacons``.
 
@@ -62,6 +65,26 @@ def local(s: str) -> pl.Expr:
         .str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S")
         .dt.replace_time_zone(cp.TZ)
         .dt.convert_time_zone("UTC")
+    )
+
+
+def lost_bins(layout: paths.StudyLayout, spine: Spine) -> pl.DataFrame | None:
+    """Person and 5-minute bin inside a tag's lost window, or None if none were computed."""
+    path = layout.derived / "analyses" / "beacon-diagnostics" / "lost_windows.parquet"
+    if not path.exists():
+        return None
+    w = spine.resolve(
+        pl.read_parquet(path), device_col="beacon", time_col="start", kind="beacon", out="entity"
+    ).filter(pl.col("entity").is_not_null())
+    return (
+        w.with_columns(
+            pl.datetime_ranges(
+                pl.col("start").dt.truncate(cp.BIN), pl.col("end"), interval=cp.BIN
+            ).alias("bin")
+        )
+        .explode("bin")
+        .select("entity", "bin")
+        .unique()
     )
 
 
@@ -146,8 +169,16 @@ def main() -> None:
 
     presses, qa = press_episodes(layout, spine, participants, consented)
 
-    # Rate per person-hour seen, by phase, for participants whose tag was read at all.
+    # Rate per person-hour seen, by phase, for participants whose tag was read at all. Time inside
+    # a lost window (a restart wiped what the tag held) is not exposure: a press there could not
+    # have been recorded, though others still saw the tag. Windows come from beacon_diagnostics.
     seen = cp.load_all("seen").filter(pl.col("entity").is_in(consented & participants))
+    lost = lost_bins(layout, spine)
+    if lost is not None:
+        qa["seen_bins"] = seen.height
+        seen = seen.join(lost, on=["entity", "bin"], how="anti")
+        qa["seen_bins_outside_lost_windows"] = seen.height
+        qa["presses_inside_lost_windows"] = presses.join(lost, on=["entity", "bin"]).height
     hours = seen.group_by("phase").agg((pl.len() / 12).alias("person_hours"))
     rate = (
         presses.group_by("phase")

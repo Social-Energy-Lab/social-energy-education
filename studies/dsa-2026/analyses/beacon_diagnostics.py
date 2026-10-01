@@ -657,7 +657,15 @@ def main() -> None:
     }
 
     # ---- 9. Restarts: how often tags reset, and how much unread data each reset wiped -----------
-    rs = resets(out / "nocontacts").filter(pl.col("beacon").is_in(list(person_tags)))
+    all_resets = resets(out / "nocontacts")
+    # The lost windows, for every tag, in a table other analyses join: a press or a one-sided
+    # measure inside one cannot be observed, so it belongs outside the exposure.
+    all_resets.select(
+        "beacon",
+        pl.col("prev_ts").dt.convert_time_zone("UTC").alias("start"),
+        pl.col("boot").dt.convert_time_zone("UTC").alias("end"),
+    ).filter(pl.col("end") > pl.col("start")).write_parquet(out / "lost_windows.parquet")
+    rs = all_resets.filter(pl.col("beacon").is_in(list(person_tags)))
     days9 = [cp.FIRST_DAY + timedelta(d) for d in range(16)]
     lost = np.zeros(len(days9))
     for a, b in rs.select("prev_ts", "boot").iter_rows():

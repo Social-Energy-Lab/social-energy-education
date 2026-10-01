@@ -211,6 +211,8 @@ def build() -> None:
 CLOSE_RSSI = -65
 #: A tie on a camp day: close for at least this many 5-minute bins (one hour) `[inferred]`.
 TIE_MIN_BINS = 12
+#: A new tie "lasts" if the pair is tied again within this many following days.
+PERSIST_DAYS = 3
 #: Neighbouring definitions, reported as a sensitivity check.
 SENSITIVITY = [(-60, 6), (-65, 12), (-70, 12)]
 #: A person counts as present on a camp day once seen for at least this many bins (1 h).
@@ -328,7 +330,7 @@ def report() -> None:
             .filter(pl.col("bins") >= min_bins)
             .pipe(with_course)
         )
-        rows, ever, degree_rows = [], set(), []
+        rows, ever, degree_rows, by_day, new_by_day = [], set(), [], {}, {}
         for d in days:
             t = ties.filter(pl.col("day") == d)
             nodes = present.filter(pl.col("day") == d)["entity"].to_list()
@@ -338,6 +340,7 @@ def report() -> None:
             edges = {tuple(e) for e in t.select("a", "b").iter_rows()}
             new = edges - ever
             ever |= edges
+            by_day[d], new_by_day[d] = edges, new
             comms = nx.community.louvain_communities(g, weight="weight", seed=0) if g.edges else []
             cc = max(nx.connected_components(g), key=len) if g.number_of_nodes() else set()
             counts = cmap.filter(pl.col("p").is_in(nodes))["course"].value_counts()["count"]
@@ -363,6 +366,19 @@ def report() -> None:
                 }
             )
             degree_rows += [{"day": d, "entity": v, "degree": g.degree(v)} for v in g.nodes]
+        # Do ties made on a day last? Of the day's new ties, the share that is a tie again on any of
+        # the next PERSIST_DAYS days, overall and for ties across courses.
+        cross = set(ties.filter(pl.col("cross_course")).select("a", "b").iter_rows())
+        for row in rows:
+            d, new = row["day"], new_by_day[row["day"]]
+            later = set().union(
+                *(by_day.get(d + timedelta(k), set()) for k in range(1, 1 + PERSIST_DAYS))
+            )
+            new_cross = {e for e in new if e in cross}
+            row["new_ties_seen_again"] = len(new & later) / len(new) if new else None
+            row["new_cross_course_ties_seen_again"] = (
+                len(new_cross & later) / len(new_cross) if new_cross else None
+            )
         return pl.DataFrame(rows), pl.DataFrame(degree_rows)
 
     daily, deg = daily_networks(CLOSE_RSSI, TIE_MIN_BINS)
@@ -475,6 +491,43 @@ def report() -> None:
     fig.suptitle("DSA 2026 participant co-presence network, day by day", x=0.01, ha="left")
     fig.tight_layout()
     fig.savefig(out / "fig_daily_network.png", dpi=160)
+
+    # Do the day's new ties last? The last PERSIST_DAYS days have no full follow-up and are left
+    # out; days whose follow-up reaches into the restart-heavy, battery-faded end are shaded.
+    fig, ax = plt.subplots(figsize=(11, 4))
+    keep = daily.head(len(days) - PERSIST_DAYS)
+    lab_p = [d.strftime("%d") for d in keep["day"].to_list()]
+    vals = keep["new_ties_seen_again"].to_list()
+    special = {"18", "22"}
+    ax.bar(lab_p, vals, color=[ORANGE if x in special else BLUE for x in lab_p], width=0.7)
+    ax.axvspan(lab_p.index("21") - 0.5, len(lab_p) - 0.5, color="#f1f0ec", zorder=0)
+    ax.annotate(
+        "follow-up days hit by restarts and fading batteries",
+        (lab_p.index("21") - 0.4, 0.97),
+        xycoords=("data", "axes fraction"),
+        fontsize=8,
+        color="#52514e",
+        va="top",
+    )
+    for x, name in (("18", "excursion"), ("22", "rotation")):
+        i = lab_p.index(x)
+        ax.annotate(
+            name,
+            (i, vals[i] or 0),
+            xytext=(0, 4),
+            textcoords="offset points",
+            ha="center",
+            fontsize=8,
+            color="#52514e",
+        )
+    ax.set_title(
+        f"Share of a day's new ties that are ties again within {PERSIST_DAYS} days",
+        loc="left",
+        fontsize=10,
+    )
+    ax.set_xlabel("August (day the tie was first seen)")
+    fig.tight_layout()
+    fig.savefig(out / "fig_new_ties_last.png", dpi=160)
 
     hm = heat.pivot(on="day", index="phase", values="others")
     hm = hm.sort(pl.col("phase").replace_strict(PHASE_ORDER, list(range(len(PHASE_ORDER)))))
