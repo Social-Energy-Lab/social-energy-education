@@ -15,10 +15,15 @@ Filters, each counted in ``qa.json``:
 3. Resolved through the spine to a participant; presses on location tags are handling artefacts
    and fall out here (``spine/open_questions.md`` Q3).
 4. Not in an exclusion window; the wearer in ``spine.consented("self_report")``.
-5. Episodes: presses by the same wearer less than ``EPISODE_S`` apart are one episode, timed at
-   its first press. Holding the button repeats the report (``docs/context/instruments/beacons.md``),
-   so a burst seconds apart is one gesture `[inferred: the window length]`. A press followed by its
-   retraction looks the same in the data, so retractions cannot be removed
+5. Accidental chains: a run of presses each less than ``CHAIN_S`` apart that lasts at least
+   ``ACCIDENTAL_S`` or holds at least ``ACCIDENTAL_N`` presses is a button held down by something
+   else (a tag in a bag), and is dropped. The firmware creates an event per 3 s of holding with no
+   cooldown, so continuous pressing shows up as a dense run (see the beacons instrument doc)
+   `[inferred: both thresholds]`.
+6. Episodes: presses by the same wearer less than ``EPISODE_S`` apart are one episode, timed at
+   its first press, since a deliberate press held a little long yields two or three events
+   `[inferred: the window length]`. A press followed by its retraction looks the same in the data,
+   so retractions cannot be removed
    `[unknown: can a retraction be told apart from a held press in the export?]`.
 
 Company at a press uses the close co-presence bins built by ``copresence_by_phase.py build``, which
@@ -43,6 +48,9 @@ from social_energy.spine import Spine
 
 INSTRUCTION = "2026-08-14 08:45:00"
 EPISODE_S = 60
+CHAIN_S = 20
+ACCIDENTAL_S = 60
+ACCIDENTAL_N = 8
 #: Presses by another close participant within this many minutes count as a shared moment.
 SHARED_MIN = 5
 LAST_GOOD_DAY = "2026-08-23"  # battery decay after this; see copresence_by_phase notes
@@ -82,6 +90,25 @@ def press_episodes(
     df = spine.flag_excluded(df, device_col="beacon", time_col="t", kind="beacon")
     df = df.filter(~pl.col("excluded") & pl.col("entity").is_in(consented))
     qa["not_excluded_consented"] = df.height
+    gap = pl.col("t").diff().over("entity").dt.total_seconds()
+    df = (
+        df.sort("entity", "t")
+        .with_columns(
+            (gap.fill_null(CHAIN_S + 1) > CHAIN_S).cum_sum().over("entity").alias("_chain")
+        )
+        .with_columns(
+            (
+                ((pl.col("t").max() - pl.col("t").min()).dt.total_seconds() >= ACCIDENTAL_S)
+                | (pl.len() >= ACCIDENTAL_N)
+            )
+            .over("entity", "_chain")
+            .alias("accidental")
+        )
+    )
+    qa["accidental_chains"] = df.filter(pl.col("accidental"))
+    qa["accidental_chains"] = qa["accidental_chains"].select("entity", "_chain").n_unique()
+    qa["accidental_presses"] = int(df["accidental"].sum())
+    df = df.filter(~pl.col("accidental")).drop("_chain", "accidental")
     presses = (
         df.sort("entity", "t")
         .with_columns(

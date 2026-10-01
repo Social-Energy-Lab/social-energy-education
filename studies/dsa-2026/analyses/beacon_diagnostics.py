@@ -63,6 +63,46 @@ def ingest_without_contacts() -> None:
     (out_dir() / "qa_ingest.json").write_text(json.dumps(tables.qa, indent=2))
 
 
+def resets(work: Path) -> pl.DataFrame:
+    """Tag restarts, read straight off the logs' clock anchors.
+
+    Within one power cycle, readout time minus uptime is constant up to the logger's timestamp
+    jitter (minutes). A restart shows as uptime falling behind elapsed wall time by more than an
+    hour. Everything the tag stored since its previous readout was in RAM and is gone, so the lost
+    window runs from that readout to the restart `[inferred: the 1 h margin]`.
+    """
+    rows = []
+    for log in sorted(work.glob("*.log")):
+        for line in log.open(encoding="utf-8", errors="replace"):
+            if ",Current Timer: " not in line:
+                continue
+            ts, tag, rest = line.strip().split(",", 2)
+            try:
+                rows.append((ts, int(tag.split(":")[1]), int(rest.split(":")[1])))
+            except ValueError:
+                continue
+    r = (
+        pl.DataFrame(rows, schema=["ts", "beacon", "timer"], orient="row")
+        .with_columns(
+            pl.col("ts")
+            .str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S")
+            .dt.replace_time_zone(cp.TZ)
+        )
+        .unique()
+        .sort("beacon", "ts", "timer")
+        .with_columns(
+            (pl.col("ts") - pl.duration(seconds=pl.col("timer"))).alias("boot"),
+            pl.col("ts").shift().over("beacon").alias("prev_ts"),
+            pl.col("timer").shift().over("beacon").alias("prev_timer"),
+        )
+    )
+    elapsed = (pl.col("ts") - pl.col("prev_ts")).dt.total_seconds()
+    return r.filter(
+        pl.col("prev_timer").is_not_null()
+        & (pl.col("timer") < pl.col("prev_timer") + elapsed - 3600)
+    ).with_columns(pl.max_horizontal("prev_ts", pl.min_horizontal("boot", "ts")).alias("boot"))
+
+
 def style(plt) -> None:
     plt.rcParams.update(
         {
@@ -499,6 +539,50 @@ def main() -> None:
     summary["threshold_grid"] = {
         f"{m}min": dict(zip(map(str, thresholds), grid[i].round(1).tolist(), strict=True))
         for i, m in enumerate(minutes)
+    }
+
+    # ---- 9. Restarts: how often tags reset, and how much unread data each reset wiped -----------
+    rs = resets(out / "nocontacts").filter(pl.col("beacon").is_in(list(person_tags)))
+    days9 = [cp.FIRST_DAY + timedelta(d) for d in range(16)]
+    lost = np.zeros(len(days9))
+    for a, b in rs.select("prev_ts", "boot").iter_rows():
+        t = a
+        while t < b:
+            nxt = min(b, (t + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0))
+            i = (t.date() - cp.FIRST_DAY).days
+            if 0 <= i < len(days9):
+                lost[i] += (nxt - t).total_seconds() / 3600
+            t = nxt
+    lost_share = lost / (len(person_tags) * 24)
+    per_day = rs.group_by(pl.col("boot").dt.date().alias("d")).len()
+    n_by_day = dict(zip(per_day["d"].to_list(), per_day["len"].to_list(), strict=True))
+    lab9 = [d.strftime("%d") for d in days9]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2), gridspec_kw={"width_ratios": [1.2, 1.2, 1]})
+    axes[0].bar(lab9, [n_by_day.get(d, 0) for d in days9], color=cp.BLUE, width=0.75)
+    axes[0].set_title("Person-tag restarts per day")
+    axes[0].set_xlabel("August")
+    axes[1].bar(lab9, lost_share, color=cp.ORANGE, width=0.75)
+    axes[1].set_title("Share of person-tag time wiped by a restart")
+    axes[1].set_xlabel("August")
+    axes[1].set_ylim(0, max(0.3, float(lost_share.max()) * 1.15))
+    hours_rs = rs["boot"].dt.hour().value_counts().rename({"boot": "hour"})
+    hm = dict(zip(hours_rs["hour"].to_list(), hours_rs["count"].to_list(), strict=True))
+    axes[2].bar(range(24), [hm.get(h, 0) for h in range(24)], color=cp.BLUE, width=0.8)
+    axes[2].set_title("Restarts by hour of day")
+    axes[2].set_xlabel("hour (local)")
+    axes[2].set_xticks(range(0, 24, 3))
+    fig.tight_layout()
+    fig.savefig(out / "q_resets.png", dpi=160)
+    plt.close(fig)
+    lost_h = ((pl.col("boot") - pl.col("prev_ts")).dt.total_seconds() / 3600).alias("h")
+    summary["resets"] = {
+        "person_tag_resets": rs.height,
+        "tags_with_reset": rs["beacon"].n_unique(),
+        "person_tags": len(person_tags),
+        "lost_window_hours_quartiles": [
+            float(x) for x in np.percentile(rs.select(lost_h)["h"].to_numpy(), [25, 50, 75])
+        ],
+        "lost_share_by_day": dict(zip(lab9, lost_share.round(3).tolist(), strict=True)),
     }
 
     (out / "summary.json").write_text(json.dumps(summary, indent=2, default=str))
