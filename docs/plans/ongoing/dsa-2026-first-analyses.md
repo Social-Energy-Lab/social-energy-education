@@ -54,7 +54,8 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 - [x] Rerun everything once the beacon-consent ruling is in the spine.
 - [x] Check whether ties first made on the excursion or rotation day persist on later days.
 - [ ] Persistence with shorter contacts, and self-reports between people who first met on a special day.
-- [ ] Synthetic-data test for the three analyses (`add-analysis` skill).
+- [x] Move the instrument rules into the toolkit with hand-derived tests: power cycles, restarts and lost windows (`social_energy.beacons.cycles`), press episodes and accidental runs (`social_energy.beacons.presses`). The analyses call them; outputs unchanged on the real data.
+- [ ] End-to-end run of the three analyses on `social_energy.synth` in CI (`add-analysis` skill). Blocked on shape: they read the upstream `Output/` tables, which the generator does not write; either the generator writes them or the analyses switch to our ingest after the dating fix.
 
 ## Open questions
 

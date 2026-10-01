@@ -28,11 +28,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 import copresence_by_phase as cp
 
 from social_energy import paths
-from social_energy.beacons.ingest import ingest_logs
+from social_energy.beacons import ingest_logs, lost_windows, power_cycles, read_clock_anchors
 from social_energy.spine import Spine
 from social_energy.study import StudyConfig
 
 SLUG = "beacon-diagnostics"
+#: Uptime this far behind the elapsed wall time means the tag restarted `[inferred]`.
+RESTART_MARGIN_S = 3600
 #: Days whose tags were healthy, used wherever a "typical day" is needed.
 TYPICAL = [date(2026, 8, d) for d in range(14, 24)]
 INK, INK2 = "#0b0b0b", "#52514e"
@@ -63,80 +65,25 @@ def ingest_without_contacts() -> None:
     (out_dir() / "qa_ingest.json").write_text(json.dumps(tables.qa, indent=2))
 
 
-def resets(work: Path) -> pl.DataFrame:
-    """Tag restarts, read straight off the logs' clock anchors.
-
-    Within one power cycle, readout time minus uptime is constant up to the logger's timestamp
-    jitter (minutes). A restart shows as uptime falling behind elapsed wall time by more than an
-    hour. Everything the tag stored since its previous readout was in RAM and is gone, so the lost
-    window runs from that readout to the restart `[inferred: the 1 h margin]`.
-    """
-    rows = []
-    for log in sorted(work.glob("*.log")):
-        for line in log.open(encoding="utf-8", errors="replace"):
-            if ",Current Timer: " not in line:
-                continue
-            ts, tag, rest = line.strip().split(",", 2)
-            try:
-                rows.append((ts, int(tag.split(":")[1]), int(rest.split(":")[1])))
-            except ValueError:
-                continue
-    r = (
-        pl.DataFrame(rows, schema=["ts", "beacon", "timer"], orient="row")
-        .with_columns(
-            pl.col("ts")
-            .str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S")
-            .dt.replace_time_zone(cp.TZ)
-        )
-        .unique()
-        .sort("beacon", "ts", "timer")
-        .with_columns(
-            (pl.col("ts") - pl.duration(seconds=pl.col("timer"))).alias("boot"),
-            pl.col("ts").shift().over("beacon").alias("prev_ts"),
-            pl.col("timer").shift().over("beacon").alias("prev_timer"),
-        )
-    )
-    elapsed = (pl.col("ts") - pl.col("prev_ts")).dt.total_seconds()
-    return r.filter(
-        pl.col("prev_timer").is_not_null()
-        & (pl.col("timer") < pl.col("prev_timer") + elapsed - 3600)
-    ).with_columns(pl.max_horizontal("prev_ts", pl.min_horizontal("boot", "ts")).alias("boot"))
-
-
 def anchors(work: Path) -> pl.DataFrame:
-    """Every clock anchor in the logs, with its power cycle and that cycle's earliest start.
+    """Every clock anchor in the logs, with its power cycle, ``cycle_start`` and ``delay_s``."""
+    found = read_clock_anchors(sorted(work.glob("*.log")), cp.TZ)
+    return power_cycles(found, restart_margin_s=RESTART_MARGIN_S)
 
-    ``implied`` = readout PC time minus uptime. Within a power cycle it should be constant; it only
-    ever sits above the cycle's minimum (the PC stamps late), so ``cycle_start`` = that minimum is
-    the best estimate of when the cycle began, and ``delay_s`` how late each stamp was.
+
+def resets(cycles: pl.DataFrame) -> pl.DataFrame:
+    """One row per restart, in local time: the previous readout and the restart (``boot``).
+
+    ``boot`` is clamped to the previous readout, so a restart implied before it counts as a restart
+    with nothing lost.
     """
-    rows = []
-    for log in sorted(work.glob("*.log")):
-        for line in log.open(encoding="utf-8", errors="replace"):
-            if ",Current Timer: " not in line:
-                continue
-            ts, tag, rest = line.strip().split(",", 2)
-            try:
-                rows.append((ts, int(tag.split(":")[1]), int(rest.split(":")[1])))
-            except ValueError:
-                continue
-    elapsed = (pl.col("ts") - pl.col("ts").shift().over("beacon")).dt.total_seconds()
-    restart = pl.col("timer") < pl.col("timer").shift().over("beacon") + elapsed - 3600
     return (
-        pl.DataFrame(rows, schema=["ts", "beacon", "timer"], orient="row")
-        .with_columns(
-            pl.col("ts")
-            .str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S")
-            .dt.replace_time_zone(cp.TZ)
-            .dt.convert_time_zone("UTC")
-        )
-        .unique()
-        .sort("beacon", "ts", "timer")
-        .with_columns((pl.col("ts") - pl.duration(seconds=pl.col("timer"))).alias("implied"))
-        .with_columns(restart.fill_null(True).cum_sum().over("beacon").alias("cycle"))
-        .with_columns(pl.col("implied").min().over("beacon", "cycle").alias("cycle_start"))
-        .with_columns(
-            (pl.col("implied") - pl.col("cycle_start")).dt.total_seconds().alias("delay_s")
+        cycles.with_columns(pl.col("ts").shift().over("beacon").alias("prev_ts"))
+        .filter(pl.col("restart"))
+        .select(
+            "beacon",
+            pl.col("prev_ts").dt.convert_time_zone(cp.TZ),
+            pl.max_horizontal("prev_ts", "implied").dt.convert_time_zone(cp.TZ).alias("boot"),
         )
     )
 
@@ -657,14 +604,11 @@ def main() -> None:
     }
 
     # ---- 9. Restarts: how often tags reset, and how much unread data each reset wiped -----------
-    all_resets = resets(out / "nocontacts")
+    cycles = anchors(out / "nocontacts")
+    all_resets = resets(cycles)
     # The lost windows, for every tag, in a table other analyses join: a press or a one-sided
     # measure inside one cannot be observed, so it belongs outside the exposure.
-    all_resets.select(
-        "beacon",
-        pl.col("prev_ts").dt.convert_time_zone("UTC").alias("start"),
-        pl.col("boot").dt.convert_time_zone("UTC").alias("end"),
-    ).filter(pl.col("end") > pl.col("start")).write_parquet(out / "lost_windows.parquet")
+    lost_windows(cycles).write_parquet(out / "lost_windows.parquet")
     rs = all_resets.filter(pl.col("beacon").is_in(list(person_tags)))
     days9 = [cp.FIRST_DAY + timedelta(d) for d in range(16)]
     lost = np.zeros(len(days9))

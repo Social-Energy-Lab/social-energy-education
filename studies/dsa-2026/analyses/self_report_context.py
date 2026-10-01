@@ -46,7 +46,7 @@ import polars as pl
 sys.path.insert(0, str(Path(__file__).parent))
 import copresence_by_phase as cp
 
-from social_energy import paths
+from social_energy import beacons, paths
 from social_energy.spine import Spine
 
 INSTRUCTION = "2026-08-14 08:45:00"
@@ -113,39 +113,14 @@ def press_episodes(
     df = spine.flag_excluded(df, device_col="beacon", time_col="t", kind="beacon")
     df = df.filter(~pl.col("excluded") & pl.col("entity").is_in(consented))
     qa["not_excluded_consented"] = df.height
-    gap = pl.col("t").diff().over("entity").dt.total_seconds()
-    df = (
-        df.sort("entity", "t")
-        .with_columns(
-            (gap.fill_null(CHAIN_S + 1) > CHAIN_S).cum_sum().over("entity").alias("_chain")
-        )
-        .with_columns(
-            (
-                ((pl.col("t").max() - pl.col("t").min()).dt.total_seconds() >= ACCIDENTAL_S)
-                | (pl.len() >= ACCIDENTAL_N)
-            )
-            .over("entity", "_chain")
-            .alias("accidental")
-        )
+    presses, merged = beacons.press_episodes(
+        df.select("entity", "t"),
+        chain_s=CHAIN_S,
+        accidental_s=ACCIDENTAL_S,
+        accidental_n=ACCIDENTAL_N,
+        episode_s=EPISODE_S,
     )
-    qa["accidental_chains"] = df.filter(pl.col("accidental"))
-    qa["accidental_chains"] = qa["accidental_chains"].select("entity", "_chain").n_unique()
-    qa["accidental_presses"] = int(df["accidental"].sum())
-    df = df.filter(~pl.col("accidental")).drop("_chain", "accidental")
-    presses = (
-        df.sort("entity", "t")
-        .with_columns(
-            (pl.col("t").diff().over("entity").dt.total_seconds().fill_null(EPISODE_S) >= EPISODE_S)
-            .cum_sum()
-            .over("entity")
-            .alias("_episode")
-        )
-        .group_by("entity", "_episode")
-        .agg(pl.col("t").min(), pl.len().alias("raw_presses"))
-        .drop("_episode")
-    )
-    qa["episodes"] = presses.height
-    qa["pressers"] = presses["entity"].n_unique()
+    qa |= merged
     presses = presses.with_columns(
         pl.col("t").dt.truncate(cp.BIN).alias("bin"),
         cp.camp_day_expr(pl.col("t")).alias("day"),
