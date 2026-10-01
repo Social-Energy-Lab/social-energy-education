@@ -185,3 +185,54 @@ def test_event_notes_carry_uncertainty_markers(spine_dir):
     by_id = {e.id: e for e in spine.events}
     assert by_id["kuea-0814-tabletennis"].notes.startswith("start [inferred]")
     assert by_id["plenum-0814"].notes == ""
+
+
+def test_unassigned_flag_admits_an_exclusion_for_a_device_nobody_ever_wore(spine_dir):
+    """A spare tag that was never issued has no assignment, so the guard above would refuse
+    the one exclusion it most needs — the tag logged contacts from a box all camp and can be
+    attributed to nobody. ``unassigned: true`` is the analyst saying so deliberately, which is
+    what separates it from the typo in the test above.
+    """
+    doc = yaml.safe_load((spine_dir / "exclusions.yaml").read_text())
+    doc.append({
+        "target": "beacon:200", "start": "2026-08-13 00:00:00",
+        "reason": "spare, never handed out", "unassigned": True,
+    })  # fmt: skip
+    _dump(spine_dir, "exclusions.yaml", doc)
+
+    spine = Spine.load(spine_dir)
+    excl = next(e for e in spine.exclusions if e.target == "beacon:200")
+    assert excl.unassigned is True
+
+    # and it actually flags rows for that device, which is the whole point
+    df = pl.DataFrame({"id": [200, 75], "t": [berlin("2026-08-14 12:00:00")] * 2})
+    flagged = spine.flag_excluded(df, device_col="id", time_col="t", kind="beacon")
+    assert flagged["excluded"].to_list() == [True, False]
+
+
+def test_unassigned_flag_does_not_excuse_an_unknown_kind(spine_dir):
+    """The flag says "no assignment exists", not "skip validation". A target whose kind the
+    spine has never seen still cannot match anything, so it must fail with or without it.
+    """
+    doc = yaml.safe_load((spine_dir / "exclusions.yaml").read_text())
+    doc.append({
+        "target": "zeitgeist:None", "start": "2026-08-13 00:00:00",
+        "reason": "stringified null", "unassigned": True,
+    })  # fmt: skip
+    _dump(spine_dir, "exclusions.yaml", doc)
+    with pytest.raises(SpineError, match=re.escape("zeitgeist:None")):
+        Spine.load(spine_dir)
+
+
+def test_unassigned_flag_does_not_excuse_a_stringified_null(spine_dir):
+    """A known kind is not enough: ``beacon:None`` is a null that went through ``str()``, not
+    a spare tag, and the flag must not let it through.
+    """
+    doc = yaml.safe_load((spine_dir / "exclusions.yaml").read_text())
+    doc.append({
+        "target": "beacon:None", "start": "2026-08-13 00:00:00",
+        "reason": "stringified null", "unassigned": True,
+    })  # fmt: skip
+    _dump(spine_dir, "exclusions.yaml", doc)
+    with pytest.raises(SpineError, match=re.escape("beacon:None")):
+        Spine.load(spine_dir)

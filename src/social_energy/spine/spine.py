@@ -42,6 +42,24 @@ def _read_list(directory: Path, name: str) -> list[dict]:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or []
 
 
+#: Keys a stringified null produces. ``zeitgeist:None`` reached a real spine this way and
+#: excluded nothing, which is what the target checks in ``validate()`` exist to catch.
+_NULLISH_KEYS = frozenset({"", "none", "null", "nan"})
+
+
+def _is_known_unassigned(exclusion: Exclusion, kinds: set[str]) -> bool:
+    """Whether an exclusion may name a device that no assignment mentions.
+
+    Only when it says so with ``unassigned``, and only for a device kind the spine actually
+    handles with a key that is not a stringified null — so a spare tag nobody ever wore can be
+    excluded, while a typo'd tag number and a ``None`` still fail loudly.
+    """
+    if not exclusion.unassigned:
+        return False
+    kind, _, key = exclusion.target.partition(":")
+    return kind in kinds and key.strip().lower() not in _NULLISH_KEYS
+
+
 @dataclass(frozen=True)
 class Spine:
     study_id: str
@@ -93,11 +111,12 @@ class Spine:
         # resolved for it. A target that matches neither excludes nothing and says nothing, so
         # every target has to resolve here instead.
         assigned = {a.device for a in self.assignments}
+        kinds = {a.device_kind for a in self.assignments}
         for e in self.exclusions:
             if e.target.startswith(("person:", "location:")):
                 if e.target not in known:
                     raise SpineError(f"exclusion refers to unknown {e.target}")
-            elif e.target not in assigned:
+            elif e.target not in assigned and not _is_known_unassigned(e, kinds):
                 raise SpineError(f"exclusion refers to unknown target {e.target}")
 
         def no_overlap(key, label):

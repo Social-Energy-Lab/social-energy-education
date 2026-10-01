@@ -33,8 +33,10 @@ $SOCIAL_ENERGY_DATA/              the data root, and the private repo
     context/                      private context library (see below)
       README.md                   index: document, sensitivity (P/U/I/R), how far read
       sources/                    source documents converted to markdown (U/I/R)
-      personal/                   field logs, rosters, anything naming or tracking people (P);
-                                  git-ignored, handed over only as an encrypted archive
+      personal/                   field logs, rosters (study IDs only), anything tracking
+                                  people (P); git-ignored, handed over only as an encrypted
+                                  archive. The name <-> study-ID code list never goes here:
+                                  it stays with the project lead (see Rules below)
     raw/                          instrument data exactly as delivered, one folder per instrument
       beacons/                    logger files
       eda/                        wearable exports

@@ -106,3 +106,9 @@ class Exclusion(Interval):
 
     target: str
     reason: str
+    #: Set on a device target that has no entry in ``assignments.yaml`` at all — a spare tag
+    #: that was never issued, or one worn by somebody who cannot be identified. Such a device
+    #: is exactly the case that most needs excluding and the one ``validate()`` would otherwise
+    #: refuse, because it cannot tell it apart from a typo'd tag number. Saying so deliberately
+    #: is what makes the difference; it does not waive the other checks.
+    unassigned: bool = False
