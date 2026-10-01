@@ -1,5 +1,92 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><title>Explorer</title></head>
-<body><p>Loading the explorer…</p></body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Social Energy Explorer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="title">
+      <h1>Social Energy Explorer</h1>
+      <span id="badge" class="badge"></span>
+    </div>
+    <div class="when">
+      <div id="when-day" class="when-day">…</div>
+      <div id="when-clock" class="when-clock"></div>
+      <div id="when-note" class="when-note"></div>
+    </div>
+  </header>
+
+  <nav class="controls" aria-label="Controls">
+    <div class="group">
+      <button id="play" type="button" aria-label="Play">▶</button>
+      <label>speed
+        <select id="speed">
+          <option value="12">1 h / s</option>
+          <option value="36" selected>3 h / s</option>
+          <option value="72">6 h / s</option>
+          <option value="144">12 h / s</option>
+        </select>
+      </label>
+      <label>day <select id="day"></select></label>
+      <label>phase <select id="phase"></select></label>
+    </div>
+    <div class="group">
+      <label title="Strongest signal a pair must reach in a 5-minute bin to count as close">
+        close range ≥ <output id="rssi-out"></output> dBm
+        <input id="rssi" type="range" min="-80" max="-50" step="1">
+      </label>
+      <label title="Minutes at close range within the window for a line between two people">
+        together ≥ <output id="min-out"></output> min
+        <input id="min" type="range" min="5" max="60" step="5">
+      </label>
+      <label title="How far back a line looks">
+        window <output id="win-out"></output>
+        <input id="win" type="range" min="30" max="360" step="30">
+      </label>
+    </div>
+    <div class="group">
+      <label>course <select id="course"><option value="">all</option></select></label>
+      <button id="reset" type="button">Reset to analysis defaults</button>
+      <button id="theme" type="button" aria-label="Toggle light and dark">◐</button>
+    </div>
+    <input id="scrub" class="scrub" type="range" min="0" step="1" aria-label="Time">
+  </nav>
+
+  <main class="grid">
+    <section class="panel network-panel">
+      <h2>Who is close to whom</h2>
+      <div id="network" class="network"></div>
+      <div id="legend" class="legend"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-network"></div></details>
+    </section>
+    <section class="panel">
+      <h2>How courses mix</h2>
+      <div id="matrix"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-matrix"></div></details>
+    </section>
+    <section class="panel">
+      <h2>Where people are today</h2>
+      <div id="zones"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-zones"></div></details>
+    </section>
+    <section class="panel">
+      <h2>Self-reports</h2>
+      <div id="presses"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-presses"></div></details>
+    </section>
+    <section class="panel strips-panel">
+      <h2>Across the whole study</h2>
+      <div id="strips"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-strips"></div></details>
+    </section>
+  </main>
+  <div id="tooltip" class="tooltip" role="status" hidden></div>
+  <div id="error" class="error" hidden></div>
+
+  <script src="vendor/d3.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
 </html>
