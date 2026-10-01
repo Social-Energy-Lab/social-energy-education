@@ -152,7 +152,7 @@ export function closeCounts(b, closeRssi, nNodes, nBins) {
   return out;
 }
 
-/** Mean close others at a press against ordinary seen bins, per phase (null when empty). */
+/** Mean close others at a press against the pressers' ordinary seen bins, per phase. */
 export function companyByPhase(b, closeRssi, nNodes, nBins, nPhases, binSeconds = 300) {
   const close = closeCounts(b, closeRssi, nNodes, nBins);
   const pressSum = new Array(nPhases).fill(0);
@@ -164,9 +164,13 @@ export function companyByPhase(b, closeRssi, nNodes, nBins, nPhases, binSeconds 
     pressSum[ph] += close[k * nNodes + b.presses.node[i]];
     nPress[ph] += 1;
   }
+  // Ordinary bins: those of the participants who pressed at least once, as in the analysis.
+  const pressed = new Uint8Array(nNodes);
+  for (const n of b.presses.node) pressed[n] = 1;
   const ordSum = new Array(nPhases).fill(0);
   const nOrd = new Array(nPhases).fill(0);
   for (let i = 0; i < b.seen.bin.length; i++) {
+    if (!pressed[b.seen.node[i]]) continue;
     const k = b.seen.bin[i];
     const ph = b.bins.phase[k];
     ordSum[ph] += close[k * nNodes + b.seen.node[i]];
@@ -178,13 +182,19 @@ export function companyByPhase(b, closeRssi, nNodes, nBins, nPhases, binSeconds 
 
 /** 1 for a press when another wearer, close in that bin, pressed within withinSec. */
 export function sharedMoments(b, closeRssi, withinSec, binSeconds) {
-  const close = new Set();
-  const p = b.pairs;
-  for (let i = 0; i < p.bin.length; i++) {
-    if (p.rssi[i] >= closeRssi) close.add(`${p.bin[i]}:${p.a[i]}:${p.b[i]}`);
-  }
-  const isClose = (bin, x, y) => close.has(`${bin}:${Math.min(x, y)}:${Math.max(x, y)}`);
   const { sec, node } = b.presses;
+  const p = b.pairs;
+  // Close pairs, only in bins that hold a press: numeric keys bin * 2^32 + a * 2^16 + b.
+  const close = new Set();
+  const pressBins = new Set(Array.from(sec, (s) => Math.floor(s / binSeconds)));
+  for (const bin of pressBins) {
+    const [lo, hi] = windowRange(p.bin, bin + 1, 1);
+    for (let i = lo; i < hi; i++) {
+      if (p.rssi[i] >= closeRssi) close.add(bin * 4294967296 + p.a[i] * 65536 + p.b[i]);
+    }
+  }
+  const isClose = (bin, x, y) =>
+    close.has(bin * 4294967296 + Math.min(x, y) * 65536 + Math.max(x, y));
   const out = new Uint8Array(sec.length);
   for (let i = 0; i < sec.length; i++) {
     for (let j = i + 1; j < sec.length && sec[j] - sec[i] <= withinSec; j++) {
@@ -210,15 +220,35 @@ export function perHour(b, binSeconds, nHours) {
   return out;
 }
 
-/** Mean ties per visible node (2E/N) for windows ending every stepBins; NaN when nobody heard. */
+/** Mean ties per visible node (2E/N) for windows ending every stepBins; NaN when nobody heard.
+ *  One pass with a sliding window, so a slider can redraw it while it moves. */
 export function tiesSeries(b, { windowBins, closeRssi, minBins }, stepBins, nNodes, nBins) {
   const steps = Math.floor(nBins / stepBins);
   const out = new Float64Array(steps);
+  const p = b.pairs;
+  const s = b.seen;
+  const pairCount = new Map(); // a * 65536 + b -> close bins in the window
+  const seenCount = new Uint32Array(nNodes);
+  let ties = 0;
+  let heard = 0;
+  let pIn = 0, pOut = 0, sIn = 0, sOut = 0;
+  const pairDelta = (i, d) => {
+    if (p.rssi[i] < closeRssi) return;
+    const key = p.a[i] * 65536 + p.b[i];
+    const before = pairCount.get(key) ?? 0;
+    const after = before + d;
+    if (after) pairCount.set(key, after); else pairCount.delete(key);
+    if (before < minBins && after >= minBins) ties++;
+    if (before >= minBins && after < minBins) ties--;
+  };
   for (let k = 0; k < steps; k++) {
     const endBin = (k + 1) * stepBins;
-    const n = visible(b, endBin, windowBins, nNodes).reduce((s, v) => s + v, 0);
-    const e = edges(b, { endBin, windowBins, closeRssi, minBins });
-    out[k] = n ? (2 * e.a.length) / n : NaN;
+    const startBin = Math.max(0, endBin - windowBins);
+    for (; pIn < p.bin.length && p.bin[pIn] < endBin; pIn++) pairDelta(pIn, 1);
+    for (; pOut < pIn && p.bin[pOut] < startBin; pOut++) pairDelta(pOut, -1);
+    for (; sIn < s.bin.length && s.bin[sIn] < endBin; sIn++) if (seenCount[s.node[sIn]]++ === 0) heard++;
+    for (; sOut < sIn && s.bin[sOut] < startBin; sOut++) if (--seenCount[s.node[sOut]] === 0) heard--;
+    out[k] = heard ? (2 * ties) / heard : NaN;
   }
   return out;
 }

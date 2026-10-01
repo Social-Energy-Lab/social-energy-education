@@ -162,3 +162,17 @@ def test_synthetic_inputs_cover_a_camp_longer_than_a_day(tmp_path):
     inp = synthetic_inputs(generate(spec, tmp_path / "camp"))
     assert inp.n_bins >= 36 * 12 - 1
     assert inp.rooms.height > 0  # people are placed in rooms
+
+
+def test_shuffle_is_not_reproducible_from_public_code(tmp_path):
+    inp = _golden()
+    nodes = {f"person:{i:02d}": f"c{i:02d}" for i in range(20)}
+    inp = BundleInput(**{**inp.__dict__, "nodes": nodes})
+    orders = {
+        tuple(
+            n["course"]
+            for n in write_bundle(inp, tmp_path / str(k), ExplorerConfig(), timezone="UTC")["nodes"]
+        )
+        for k in range(3)
+    }
+    assert len(orders) > 1

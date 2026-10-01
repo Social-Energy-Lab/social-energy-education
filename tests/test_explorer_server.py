@@ -65,3 +65,26 @@ def test_explore_without_bundle_says_how_to_make_one(tmp_path, monkeypatch, caps
     rc = cli.main(["explore", str(REPO_ROOT / "studies" / "dsa-2026" / "study.yaml")])
     assert rc == 2
     assert "explorer_export.py" in capsys.readouterr().out
+
+
+def test_requests_for_another_host_are_refused(server):
+    """DNS rebinding: a page on evil.example resolving to 127.0.0.1 must not read the bundle."""
+    host, port = server.server_address[:2]
+    req = urllib.request.Request(
+        f"http://{host}:{port}/bundle/meta.json", headers={"Host": "evil.example"}
+    )
+    try:
+        with urllib.request.urlopen(req) as r:
+            status = r.status
+    except urllib.error.HTTPError as err:
+        status = err.code
+    assert status == 400
+
+
+def test_localhost_name_is_accepted(server):
+    port = server.server_address[1]
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/bundle/meta.json", headers={"Host": f"localhost:{port}"}
+    )
+    with urllib.request.urlopen(req) as r:
+        assert r.status == 200

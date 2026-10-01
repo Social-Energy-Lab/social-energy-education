@@ -88,7 +88,7 @@ def write_bundle(
     timezone: str,
     mode: str = "team",
     qa: dict | None = None,
-    seed: int = 0,
+    seed: int | None = None,
 ) -> dict:
     """Write the bundle for ``inp`` to ``out_dir`` (outside the repo). Returns its meta."""
     out_dir = paths.refuse_inside_repo(out_dir)
@@ -98,7 +98,8 @@ def write_bundle(
     tz = ZoneInfo(timezone)
     qa = dict(qa or {})
 
-    # Nodes: shuffled so that index order says nothing about study IDs.
+    # Nodes: shuffled from OS entropy (seed=None), so the order cannot be recomputed from this
+    # public code and says nothing about study IDs. A seed is for tests only.
     entities = sorted(inp.nodes)
     order = np.random.default_rng(seed).permutation(len(entities))
     node_of = {e: int(order[i]) for i, e in enumerate(entities)}

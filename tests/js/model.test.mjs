@@ -81,7 +81,8 @@ test("company at a press against ordinary bins, per phase", () => {
   const c = m.companyByPhase(B, -65, N, NBINS, 2);
   assert.deepEqual(c.nPress, [2, 1]);
   assert.deepEqual(c.atPress, [1, 0]);
-  assert.deepEqual(c.ordinary, [4 / 7, 2 / 3]);
+  // Ordinary bins are those of the participants who pressed (nodes 0-2), as in the analysis.
+  assert.deepEqual(c.ordinary, [4 / 6, 1]);
 });
 
 test("shared moments: close people pressing within the window", () => {
@@ -122,4 +123,49 @@ test("decode reads columns back from little-endian buffers", () => {
   const d = m.decode(meta, { presses: buf });
   assert.deepEqual([...d.presses.sec], [10, 70000]);
   assert.deepEqual([...d.presses.node], [3, 1]);
+});
+
+// A bundle of the real size and shape: 1.4M pair readings over 4608 bins among 57 nodes.
+function realSize() {
+  let seed = 1;
+  const r = (k) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % k; };
+  const n = 1_400_000, N = 57, nBins = 4608;
+  const pairs = { bin: new Uint16Array(n), a: new Uint16Array(n), b: new Uint16Array(n), rssi: new Int8Array(n) };
+  for (let i = 0; i < n; i++) {
+    pairs.bin[i] = Math.floor((i * nBins) / n);
+    const a = r(N - 1);
+    pairs.a[i] = a;
+    pairs.b[i] = a + 1 + r(N - 1 - a);
+    pairs.rssi[i] = -80 + r(30);
+  }
+  const sn = 210_000;
+  const seen = { bin: new Uint16Array(sn), node: new Uint16Array(sn) };
+  for (let i = 0; i < sn; i++) { seen.bin[i] = Math.floor((i * nBins) / sn); seen.node[i] = i % N; }
+  const presses = {
+    sec: Uint32Array.from({ length: 2000 }, (_, i) => i * 690),
+    node: Uint16Array.from({ length: 2000 }, () => r(N)),
+  };
+  return { b: { pairs, seen, presses }, N, nBins };
+}
+
+const timed = (f) => { const t = performance.now(); f(); return performance.now() - t; };
+
+test("slider-driven computations stay interactive at the real size", () => {
+  const { b, N, nBins } = realSize();
+  const shared = timed(() => m.sharedMoments(b, -80, 300, 300));
+  const ties = timed(() => m.tiesSeries(b, { windowBins: 72, closeRssi: -80, minBins: 3 }, 6, N, nBins));
+  assert.ok(shared < 100, `sharedMoments took ${Math.round(shared)} ms`);
+  assert.ok(ties < 150, `tiesSeries took ${Math.round(ties)} ms`);
+});
+
+test("tiesSeries agrees with edges and visible step by step", () => {
+  const { b, N, nBins } = realSize();
+  const p = { windowBins: 30, closeRssi: -70, minBins: 4 };
+  const s = m.tiesSeries(b, p, 6, N, 600);
+  for (const k of [0, 3, 50, 99]) {
+    const endBin = (k + 1) * 6;
+    const n = m.visible(b, endBin, p.windowBins, N).reduce((x, v) => x + v, 0);
+    const e = m.edges(b, { ...p, endBin });
+    assert.equal(s[k], n ? (2 * e.a.length) / n : NaN);
+  }
 });

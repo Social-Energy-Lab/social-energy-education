@@ -2,7 +2,9 @@
 
 ``/bundle/<file>`` maps into the bundle directory; every other path maps into the app's
 ``static/`` directory. A path that resolves outside its root is a 404, so the server cannot be
-used to read anything else on the machine. The bundle must live outside the repository.
+used to read anything else on the machine. Requests naming any other host are refused, so a web
+page that rebinds its own name to 127.0.0.1 cannot read the bundle. The bundle must live outside
+the repository.
 """
 
 from __future__ import annotations
@@ -41,6 +43,10 @@ class _Handler(SimpleHTTPRequestHandler):
         return str(target) if target is not None else ""
 
     def send_head(self):
+        port = self.server.server_address[1]
+        if self.headers.get("Host", "") not in (f"127.0.0.1:{port}", f"localhost:{port}"):
+            self.send_error(HTTPStatus.BAD_REQUEST, "Unknown host")
+            return None
         target = self._resolve()
         if target is None or not target.is_file():
             self.send_error(HTTPStatus.NOT_FOUND)
