@@ -46,7 +46,25 @@ Both are fixed by one pass over all the logs. **That is the next step, and it is
 memory**: the delivery is several gigabytes of text and expands to tens of millions of contact
 rows, well past the free memory on the machine that ran this.
 
-## Next steps
+## Whole-camp result (2026-10-01)
+
+A full pass became possible by removing the contact lines first: what remains (readouts, presses, eco sessions) is small, and it is all the self-report comparison needs.
+
+- Over the whole camp our ingest and `Output/` agree **to the second** on nearly all presses. The earlier two-population result was the one-day confound described above.
+- The remaining disagreement sits in the **final readouts of the camp**: presses only we have, all dated later than the nearest upstream press, mostly by about half a day, plus a smaller set that only upstream has. These are records that survived a restart in flash and that we date against the new boot. Upstream's previous-boot retry places them; we have no equivalent yet.
+- **Restarts are the root cause, and they are frequent.** The firmware team confirmed that part of the data goes to flash while up to about 20,000 contacts in RAM are lost per restart. Restarts can be detected from the clock anchors alone (instrument doc, "Restarts wipe unread data").
+- **Readout stamps run late.** The second error source is the PC timestamp on a readout, which sits minutes after the moment the timer was read. Dating records from each power cycle's earliest anchor removes most of it (instrument doc, "Late readout stamps").
+
+Counts are in the private notes (`dsa-2026/notes/beacon-analyses-2026-10-01.md`).
+
+## Revised next steps
+
+1. Date every record as (power cycle's earliest implied start + uptime), with power cycles found from the anchors over **all** logs, not per run.
+2. Add the previous-boot rule for records exported after a restart, flagged (`redated_previous_boot`) rather than silently trusted.
+3. Rerun the self-report comparison, then contacts day by day, now feasible per day because the anchors come from the whole camp.
+4. Turn the restart case into a synthetic regression test: a tag that restarts between readouts and exports some pre-restart records from flash.
+
+## Next steps (2026-09-20, superseded by the revised steps above)
 
 1. Make a full-camp single-pass run possible. Either convert `ingest_logs` to a streaming/lazy polars pipeline writing parquet per table, or add a two-pass mode that collects clock anchors and reboots from all logs first and then resolves records in chunks. The anchor pass is small and cheap; only contacts are large.
 2. Re-run the self-report comparison over the whole camp. Self-reports and eco sessions are the right first targets: small, whole-camp files upstream, and directly meaningful.
