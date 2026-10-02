@@ -1,8 +1,9 @@
 """Self-report button presses → press episodes.
 
-The firmware makes a self-report event for every 3 s the button is held, with no cooldown, so one
-deliberate press held a little long yields two or three events, and a tag pressed in a bag yields
-a long run. A *chain* is a run of presses each within ``chain_s`` of the previous one; a chain
+The firmware makes one self-report event per press held for at least 3 s, with no cooldown, so
+several events are several presses: a person pressing again (a second thought, or the cancel press
+participants were told about), or a tag pressed over and over in a bag, which yields a long run.
+A *chain* is a run of presses each within ``chain_s`` of the previous one; a chain
 lasting ``accidental_s`` or holding ``accidental_n`` presses is accidental and dropped. The
 remaining presses within ``episode_s`` of the previous one form one episode.
 

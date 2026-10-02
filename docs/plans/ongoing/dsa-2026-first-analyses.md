@@ -29,9 +29,9 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 | Tie | close for at least one hour in one camp day (07:30–07:30) | a plausible size of a day's circle; results hold at −60/30 min and −70/60 min | `[inferred]` |
 | Parts of the day | clock blocks from 07:30, 12:30, 14:00, 18:30, 19:30, 22:30, 02:00 | most programme events have no end time | `[inferred]` |
 | Cross-course baseline | share expected if people mixed at random, from course sizes among those present | a raw share means nothing without it | rule |
-| Accidental presses | a chain of presses each under 20 s apart, lasting 60 s or holding 8 presses | the firmware makes an event per 3 s held, with no cooldown; a long run is a tag pressed in a bag | thresholds `[inferred]` |
-| One press | presses under 60 s apart are one episode | a deliberate press held a little long gives two or three events | `[inferred]` |
-| Cancel press | not applied | participants were told a second press cancels a mistaken one; the firmware has no such notion | research-team decision |
+| Accidental presses | a chain of presses each under 20 s apart, lasting 60 s or holding 8 presses | one event per press of at least 3 s, no cooldown (v1.0.0 source); a long run is a tag pressed over and over in a bag | thresholds `[inferred]` |
+| One press | presses under 60 s apart are one episode | the firmware does not repeat a held press, so two events are two presses; merging them treats a quick re-press, or a cancel press, as one moment | `[inferred]`; revisit with the cancel-press decision |
+| Cancel press | not applied; folded into the episode merge | participants were told a second press cancels a mistaken one; the firmware has no such notion, so a cancel pair is two ordinary events seconds apart | research-team decision, now sharper: count a quick pair as one moment, as none, or as two |
 | Lost presses | presses held in RAM at a restart are accepted as lost; press exposure leaves each tag's lost windows out | they cannot be recovered from any other tag | agreed 2026-10-01 |
 | A tie lasts | the pair is tied again on any of the next three days | separates a one-off encounter from repeated time together | `[inferred]` |
 | Room placement | the room tag heard most often in the bin, at least two hits | room tags barely pass walls | a stronger cut is open with the beacon team |
@@ -59,8 +59,7 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 
 ## Open questions
 
-- `[unknown: what restarts a worn tag during the day, and can the reset reason be logged?]`
+- `[unknown: what interrupts power on a worn tag during the day?]` The firmware logs no reset reason.
 - `[unknown: is the PC time on a readout stamped after the transfer rather than when the timer was read?]`
-- `[unknown: why held-button repeats come 4–9 s apart rather than every 3 s]`
 - `[unknown: which RSSI from a room tag means "inside this room"?]`
-- `[unknown: does eco mode scan every 5 or every 10 minutes at DSA 2026?]`
+- `[unknown: was the eco scan period changed from its 300 s default by control command during DSA 2026?]`
