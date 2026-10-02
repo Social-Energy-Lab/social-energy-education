@@ -8,11 +8,10 @@ Filters: contacts and presses go through the spine exactly as in ``copresence_by
 (window, both sides resolved, exclusions on both sides, consent). The timestamp comparison is
 device-level by nature and keeps only presses that resolve to a consenting person.
 
-Inputs: ``copresence_by_phase.py build`` must have run. The timestamp comparison needs our own
-ingest of the logs without contact lines, which this script produces itself (``--ingest``); the
-full logs do not fit in memory on the machine that ran this.
+Inputs: ``social-energy ingest-beacons`` (our ingest, ``derived/beacons/``) and
+``copresence_by_phase.py build`` must have run.
 
-    uv run --extra analysis python studies/dsa-2026/analyses/beacon_diagnostics.py [--ingest]
+    uv run --extra analysis python studies/dsa-2026/analyses/beacon_diagnostics.py
 """
 
 from __future__ import annotations
@@ -29,14 +28,11 @@ import copresence_by_phase as cp
 
 from social_energy import paths
 from social_energy.beacons import (
-    ingest_logs,
     lost_windows,
     power_cycles,
-    read_clock_anchors,
     read_deliveries,
 )
 from social_energy.spine import Spine
-from social_energy.study import StudyConfig
 
 SLUG = "beacon-diagnostics"
 #: Uptime this far behind the elapsed wall time means the tag restarted `[inferred]`.
@@ -52,28 +48,19 @@ def out_dir() -> Path:
     return d
 
 
-def ingest_without_contacts() -> None:
-    """Our ingest over every log with contact lines removed: readouts, presses, eco sessions."""
-    layout = paths.study(cp.STUDY)
-    work = out_dir() / "nocontacts"
-    work.mkdir(exist_ok=True)
-    for log in sorted((layout.raw / "beacons" / "Logs").glob("*.log")):
-        with (
-            log.open(encoding="utf-8", errors="replace") as src,
-            (work / log.name).open("w") as dst,
-        ):
-            dst.writelines(line for line in src if ",ID2: " not in line)
-    study = StudyConfig.load(cp.STUDY_YAML)
-    tables = ingest_logs(sorted(work.glob("*.log")), study.beacon_config())
-    tables.self_reports.write_parquet(out_dir() / "our_self_reports.parquet")
-    tables.readouts.write_parquet(out_dir() / "our_readouts.parquet")
-    tables.eco_sessions.write_parquet(out_dir() / "our_eco.parquet")
-    (out_dir() / "qa_ingest.json").write_text(json.dumps(tables.qa, indent=2))
+def our_table(name: str) -> pl.DataFrame:
+    """A table of our ingest (``social-energy ingest-beacons``)."""
+    return pl.read_parquet(paths.study(cp.STUDY).derived / "beacons" / f"{name}.parquet")
 
 
-def anchors(work: Path) -> pl.DataFrame:
-    """Every clock anchor in the logs, with its power cycle, ``cycle_start`` and ``delay_s``."""
-    found = read_clock_anchors(sorted(work.glob("*.log")), cp.TZ)
+def anchors() -> pl.DataFrame:
+    """Every readout with a clock anchor and a settled ID, with its power cycle."""
+    r = our_table("readouts").filter(
+        pl.col("current_timer").is_not_null() & (pl.col("id_status") != "ambiguous")
+    )
+    found = r.select(
+        "beacon", pl.col("pc_time").alias("ts"), pl.col("current_timer").alias("timer")
+    )
     return power_cycles(found, restart_margin_s=RESTART_MARGIN_S)
 
 
@@ -92,83 +79,6 @@ def resets(cycles: pl.DataFrame) -> pl.DataFrame:
             pl.max_horizontal("prev_ts", "implied").dt.convert_time_zone(cp.TZ).alias("boot"),
         )
     )
-
-
-def timing_check(log_names: list[str]) -> dict:
-    """Do mirrored contacts line up better after dating from each cycle's earliest anchor?
-
-    For a tag pair, A hearing B and B hearing A should happen within seconds. For each pair, the
-    median gap to the nearest mirrored record is compared as dated by our ingest and as
-    (cycle start + uptime). Runs our full ingest on the given logs only, because the whole camp
-    does not fit in memory; the cycles come from the anchors of every log.
-    """
-    layout = paths.study(cp.STUDY)
-    study = StudyConfig.load(cp.STUDY_YAML)
-    files = [layout.raw / "beacons" / "Logs" / n for n in log_names]
-    contacts = ingest_logs(files, study.beacon_config()).contacts.filter(pl.col("ok"))
-    c = contacts.select(
-        pl.col("beacon").cast(pl.Int64), pl.col("observed").cast(pl.Int64), "t", "uptime_s"
-    )
-    an = anchors(out_dir() / "nocontacts")
-    cycles = an.group_by("beacon", "cycle").agg(pl.col("cycle_start").first()).sort("cycle_start")
-    c = (
-        c.sort("t")
-        .join_asof(
-            cycles.select("beacon", "cycle_start"),
-            left_on="t",
-            right_on="cycle_start",
-            by="beacon",
-            strategy="backward",
-            check_sortedness=False,
-        )
-        .with_columns((pl.col("cycle_start") + pl.duration(seconds=pl.col("uptime_s"))).alias("t2"))
-        .filter(((pl.col("t2") - pl.col("t")).dt.total_seconds()).abs() < 7200)
-    )
-
-    def pair_offsets(col: str):
-        ab = c.select(
-            pl.col("beacon").alias("x"), pl.col("observed").alias("y"), pl.col(col).alias("t")
-        )
-        ba = ab.rename({"x": "y", "y": "x", "t": "tb"})
-        j = (
-            ab.unique()
-            .sort("t")
-            .join_asof(
-                ba.unique().sort("tb"),
-                left_on="t",
-                right_on="tb",
-                by=["x", "y"],
-                strategy="nearest",
-                check_sortedness=False,
-            )
-            .with_columns((pl.col("tb") - pl.col("t")).dt.total_seconds().alias("d"))
-            .filter(pl.col("d").abs() < 3600)
-        )
-        per = j.group_by("x", "y").agg(pl.col("d").median().alias("md"), pl.len().alias("n"))
-        return per.filter(pl.col("n") >= 20)
-
-    result = {
-        "files": log_names,
-        "anchor_delay_s_median": float(an["delay_s"].median()),
-        "anchor_delay_s_p90": float(an["delay_s"].quantile(0.9)),
-    }
-    for col, name in (("t", "as_dated"), ("t2", "cycle_start_corrected")):
-        per = pair_offsets(col)
-        md = per["md"].abs()
-        result[name] = {
-            "pairs": per.height,
-            "median_s": float(md.median()),
-            "share_over_60s": float((md > 60).mean()),
-            "share_over_300s": float((md > 300).mean()),
-        }
-        if col == "t":
-            bias = per.group_by("x").agg(pl.col("md").median().alias("b"), pl.len().alias("k"))
-            bias = bias.filter(pl.col("k") >= 5)["b"].abs()
-            result["per_tag_bias_s"] = {
-                "median": float(bias.median()),
-                "p90": float(bias.quantile(0.9)),
-            }
-    return result
 
 
 def style(plt) -> None:
@@ -221,8 +131,6 @@ def main() -> None:
     layout = paths.study(cp.STUDY)
     spine = Spine.load(layout.spine)
     out = out_dir()
-    if "--ingest" in sys.argv or not (out / "our_self_reports.parquet").exists():
-        ingest_without_contacts()
     summary: dict = {}
     participants = {p.ref for p in spine.people if p.role == "participant"}
     person_tags = {
@@ -233,9 +141,7 @@ def main() -> None:
 
     # ---- 1. Timestamps: our ingest vs Output/self_reports.csv ---------------------------------
     ours = (
-        consenting_presses(
-            pl.read_parquet(out / "our_self_reports.parquet").filter(pl.col("ok")), spine
-        )
+        consenting_presses(our_table("self_reports").filter(pl.col("ok")), spine)
         .select("beacon", "t", "source")
         .unique(["beacon", "t"])
     )
@@ -290,7 +196,7 @@ def main() -> None:
     plt.close(fig)
 
     # ---- 2. Tag health per day: voltage, two-sided detection, hours seen -----------------------
-    readouts = pl.read_parquet(out / "our_readouts.parquet").filter(
+    readouts = our_table("readouts").filter(
         pl.col("voltage_mv").is_not_null() & pl.col("beacon").is_in(list(person_tags))
     )
     volt = (
@@ -384,9 +290,7 @@ def main() -> None:
     by_hour = pl.concat(ph_rows).group_by("hour").agg(pl.col("count").sum() / len(TYPICAL))
     by_hour = by_hour.sort("hour")
 
-    eco = pl.read_parquet(out / "our_eco.parquet").filter(
-        pl.col("ok") & pl.col("beacon").is_in(list(person_tags))
-    )
+    eco = our_table("eco_sessions").filter(pl.col("ok") & pl.col("beacon").is_in(list(person_tags)))
     eco = eco.with_columns(
         pl.col("t_enter").dt.convert_time_zone(cp.TZ).alias("a"),
         pl.col("t_leave").dt.convert_time_zone(cp.TZ).alias("b"),
@@ -610,7 +514,7 @@ def main() -> None:
     }
 
     # ---- 9. Restarts: how often tags reset, and how much unread data each reset wiped -----------
-    cycles = anchors(out / "nocontacts")
+    cycles = anchors()
     all_resets = resets(cycles)
     # The lost windows, for every tag, in a table other analyses join: a press or a one-sided
     # measure inside one cannot be observed, so it belongs outside the exposure.
@@ -670,10 +574,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    if "--timing" in sys.argv:
-        # Two log files of one mid-camp day: enough pairs, and it fits in memory.
-        res = timing_check(["dsa_20260820_0828.log", "dsa_20260820_1227.log"])
-        (out_dir() / "timing_check.json").write_text(json.dumps(res, indent=2))
-        print(json.dumps(res, indent=2))
-    else:
-        main()
+    main()

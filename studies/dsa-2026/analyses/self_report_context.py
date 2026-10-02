@@ -9,8 +9,8 @@ Unit of analysis: the press, compared with the same participants' ordinary 5-min
 
 Filters, each counted in ``qa.json``:
 
-1. Source: our own ingest of the raw logs (``our_self_reports.parquet``, written by
-   ``beacon_diagnostics.py --ingest``), records with ``ok``. It dates each press from its power
+1. Source: our own ingest of the raw logs (``derived/beacons/self_reports.parquet``, written by
+   ``social-energy ingest-beacons``), records with ``ok``. It dates each press from its power
    cycle's earliest anchor and recognises a press resent in a later readout as a duplicate. The
    upstream ``Output/self_reports.csv`` dates from each readout's own, often late, stamp, so a
    resent press lands minutes away from its first copy and counts twice.
@@ -93,9 +93,7 @@ def press_episodes(
     layout: paths.StudyLayout, spine: Spine, participants: set[str], consented: set[str]
 ) -> tuple[pl.DataFrame, dict]:
     """Self-report press episodes of consenting participants, with a QA count per filter."""
-    ours = pl.read_parquet(
-        layout.derived / "analyses" / "beacon-diagnostics" / "our_self_reports.parquet"
-    )
+    ours = pl.read_parquet(layout.derived / "beacons" / "self_reports.parquet")
     raw = ours.filter(pl.col("ok")).select(pl.col("beacon").cast(pl.Int64), "t").unique()
     qa = {"rows": ours.height, "rows_ok_unique": raw.height}
     df = raw.filter((pl.col("t") >= local(INSTRUCTION)) & (pl.col("t") < local(cp.HANDOVER)))

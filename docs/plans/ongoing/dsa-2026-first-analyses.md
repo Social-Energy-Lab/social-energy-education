@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** none
-**Next:** ingest contacts per day for the whole camp with our ingest, then move co-presence off `Output/`
+**Next:** settle the spine questions only Mahdi can answer (open-ended return times, tag 50's second loss, the tagged participant without consent), then refresh the deck
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 
@@ -12,7 +12,7 @@
 - **Done:** three analyses under `studies/dsa-2026/analyses/` (`copresence_by_phase.py`, `self_report_context.py`, `beacon_diagnostics.py`); firmware answers from the beacon team written into [`../../context/instruments/beacons.md`](../../context/instruments/beacons.md); a meeting deck and two question docs built from the outputs (kept outside the repo). Numbers are in the private half: `dsa-2026/notes/beacon-analyses-2026-10-01.md`.
 - **Waiting elsewhere (not on Next):** sign-off on the analysis choices below by the research team; firmware documentation from the beacon team, which decides the previous-boot rule.
 - **Consent:** the beacon-consent ruling of 2026-09-22 was applied to the spine on 2026-10-01, and every analysis was rerun with it.
-- **Handoff:** run `copresence_by_phase.py build` once, then `report`, `self_report_context.py` and `beacon_diagnostics.py` in any order (`uv run --extra analysis python …`). All read through the spine and write only under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/`.
+- **Handoff:** run `uv run social-energy ingest-beacons studies/dsa-2026/study.yaml`, then `copresence_by_phase.py build` and `report`, then `beacon_diagnostics.py` (writes the lost windows), then `self_report_context.py` (`uv run --extra analysis python …`). All read through the spine and write only under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/`.
 
 ## Settings in use
 
@@ -20,8 +20,7 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 
 | Setting | Current value | Why | Status |
 |---|---|---|---|
-| Contact source | upstream `Output/` tables | our full ingest of contacts does not fit in memory for the whole camp yet | until our ingest streams per day; `Output/` keeps resent copies and late stamps |
-| Press source | our ingest, `ok` records | dated from the power cycle start; resent copies flagged `duplicate`, which `Output/` counts twice | rule, validated 2026-10-02 |
+| Contact and press source | our ingest (`social-energy ingest-beacons`, `derived/beacons/`), `ok` records | dated from the power cycle start; resent copies flagged; `Output/` dates from late stamps and keeps copies | rule, validated 2026-10-02; `build --upstream` reproduces the `Output/` version |
 | Window | tag deployment on 13 Aug to the handover on 29 Aug 09:00 | after the handover tags lay together on benches | the handover window is not yet a spine exclusion |
 | Comparison days | 14–23 Aug | arrival day is atypical; restarts and battery fade weigh more late | `[inferred]` |
 | Exclusions | applied to both sides of every contact | a tag's partners hold half the data about its wearer | rule |
@@ -52,7 +51,7 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 - [x] Ingest: date records as (power cycle's earliest implied start + uptime); previous-boot records must precede the restart (else `implausible_time`); headerless readouts are their own readouts; presses compared against `Output/` and switched to our ingest.
 - [x] Ingest: trust the hand-split `_cleaned` logs; repair the rest of the logger ID bug against power cycles.
 - [ ] When the original (uncleaned) logs arrive, run our repair on them and compare with the hand split.
-- [ ] Ingest contacts per day for the whole camp, then move co-presence to our ingest.
+- [x] Ingest the whole camp file by file (`ingest_logs_to`); co-presence, self-reports and diagnostics all read it.
 - [x] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
 - [x] Flag lost windows per tag in a table the analyses can join (`lost_windows.parquet`), so one-sided measures can be restricted to unaffected time.
 - [x] Rerun everything once the beacon-consent ruling is in the spine.
