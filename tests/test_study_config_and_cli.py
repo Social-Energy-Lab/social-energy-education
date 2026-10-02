@@ -63,7 +63,7 @@ def test_ingest_beacons_cli_writes_parquet_and_qa(tmp_path, monkeypatch):
     assert cli.main(["ingest-beacons", str(study_yaml)]) == 0
 
     out = data_root / "synthetic-camp" / "derived" / "beacons"
-    contacts = pl.read_parquet(out / "contacts.parquet")
+    contacts = pl.read_parquet(out / "contacts" / "*.parquet")
     assert contacts.height > 1000
     qa = json.loads((out / "qa.json").read_text())
     assert qa["contacts"] == contacts.height

@@ -9,10 +9,10 @@ the day-phase network.
 
 Filters, in order, each counted in ``qa.json``:
 
-1. Source: the upstream-derived ``raw/beacons/Output/contacts_*.csv``, not our own ingest of
-   ``Logs/``. The two disagree and the differential check is unresolved
-   (``docs/plans/ideas/beacon-differential-check.md``), so this is the field team's reading of the
-   data, taken as given. `[inferred: Output/ is fit for descriptive use]`
+1. Source: our own ingest of ``raw/beacons/Logs/`` (``social-energy ingest-beacons``, written to
+   ``derived/beacons/contacts/<day>.parquet``), records with ``ok``. It dates each record from
+   its power cycle's start and flags resent copies, which the upstream ``Output/`` tables keep
+   at a late, shifted time. ``build --upstream`` reads ``Output/contacts_*.csv`` instead.
 2. Window: from the tag deployment on 13 Aug to the handover on 29 Aug 09:00 local. After that the
    tags lay together on benches, which the spine does not yet exclude.
 3. Both sides resolved through the spine to an entity (``beacon`` assignments).
@@ -149,6 +149,23 @@ def resolve_contacts(raw: pl.DataFrame, spine: Spine, qa: dict) -> pl.DataFrame:
     return df
 
 
+def contact_days(layout: paths.StudyLayout, upstream: bool):
+    """Per local day: ``YYYYMMDD``, contacts (observer, observed, rssi, t UTC) and a QA dict."""
+    if upstream:
+        for csv in sorted((layout.raw / "beacons" / "Output").glob("contacts_*.csv")):
+            raw = read_upstream_contacts(csv)
+            yield re.search(r"(\d{8})", csv.name).group(1), raw, {"rows": raw.height}
+        return
+    for part in sorted((layout.derived / "beacons" / "contacts").glob("20*.parquet")):
+        rows = pl.read_parquet(part)
+        raw = rows.filter(pl.col("ok")).select(
+            pl.col("beacon").alias("observer"), "observed", "rssi", "t"
+        )
+        qa = {"rows": rows.height, "rows_ok": raw.height}
+        del rows
+        yield part.stem.replace("-", ""), raw, qa
+
+
 def build() -> None:
     study = StudyConfig.load(STUDY_YAML)
     layout = paths.study(STUDY)
@@ -156,10 +173,7 @@ def build() -> None:
     thr = study.raw["beacons"]["rssi_threshold_dbm"]
     out = out_dir()
     qa_all = {}
-    for csv in sorted((layout.raw / "beacons" / "Output").glob("contacts_*.csv")):
-        day = re.search(r"(\d{8})", csv.name).group(1)
-        raw = read_upstream_contacts(csv)
-        qa = {"rows": raw.height}
+    for day, raw, qa in contact_days(layout, upstream="--upstream" in sys.argv):
         df = resolve_contacts(raw, spine, qa)
         del raw
         persons = df.filter(

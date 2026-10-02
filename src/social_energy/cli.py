@@ -5,8 +5,9 @@ social-energy init-spine studies/<id>/study.yaml
     location-tag assignments from studies/<id>/locations.yaml.
 
 social-energy ingest-beacons studies/<id>/study.yaml
-    Parse $SOCIAL_ENERGY_DATA/<id>/raw/beacons/*.log into
-    $SOCIAL_ENERGY_DATA/<id>/derived/beacons/*.parquet plus qa.json.
+    Parse every .log under $SOCIAL_ENERGY_DATA/<id>/raw/beacons/, one file at a time, into
+    $SOCIAL_ENERGY_DATA/<id>/derived/beacons/: readouts, self_reports and eco_sessions parquet,
+    contacts/<local day>.parquet, plus qa.json.
 
 social-energy extract-acoustics studies/<id>/study.yaml [--delete-wavs]
     AudioMoth WAVs under raw/audiomoth/<device>/ -> derived/acoustics/<device>/.
@@ -33,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -41,7 +43,7 @@ import yaml
 
 from . import paths, zeitgeist
 from .acoustics import AcousticsConfig, extract_directory
-from .beacons import ingest_logs
+from .beacons import ingest_logs_to
 from .study import StudyConfig
 from .survey import ingest_zeitgeist
 
@@ -97,17 +99,16 @@ def init_spine(study: StudyConfig) -> int:
 
 def ingest_beacons(study: StudyConfig) -> int:
     layout = paths.study(study.study_id)
-    logs = sorted((layout.raw / "beacons").glob("*.log"))
+    logs = sorted((layout.raw / "beacons").rglob("*.log"))
     if not logs:
-        print(f"No .log files in {layout.raw / 'beacons'}")
+        print(f"No .log files under {layout.raw / 'beacons'}")
         return 1
-    tables = ingest_logs(logs, study.beacon_config())
     out = layout.derived / "beacons"
-    out.mkdir(parents=True, exist_ok=True)
-    for name in ("readouts", "contacts", "self_reports", "eco_sessions"):
-        getattr(tables, name).write_parquet(out / f"{name}.parquet")
-    (out / "qa.json").write_text(json.dumps(tables.qa, indent=2), encoding="utf-8")
-    print(json.dumps(tables.qa, indent=2))
+    if out.exists():
+        shutil.rmtree(out)
+    qa = ingest_logs_to(logs, study.beacon_config(), out)
+    (out / "qa.json").write_text(json.dumps(qa, indent=2), encoding="utf-8")
+    print(json.dumps(qa, indent=2))
     print(f"Wrote {out}")
     return 0
 

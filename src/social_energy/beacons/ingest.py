@@ -364,21 +364,29 @@ def _plausible(t: pl.Expr, config: BeaconConfig) -> pl.Expr:
     return (t >= bounds[0]) & (t < bounds[1]) & (t <= pl.col("pc_time")) & ~after_restart
 
 
-def _finish(records: pl.DataFrame, config: BeaconConfig, key: list[str]) -> pl.DataFrame:
-    """Add quality flags. A duplicate is a record already exported in an earlier readout."""
-    first_readout = pl.col("readout_order").min().over([*key, "t"])
+OK = (
+    pl.col("t").is_not_null()
+    & ~pl.col("implausible_time")
+    & ~pl.col("duplicate")
+    & ~pl.col("id_ambiguous")
+).alias("ok")
+
+
+def _finish(records: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
+    """Add quality flags, all but ``duplicate``, which needs every copy (``_flag_duplicates``)."""
     return records.with_columns(
         (pl.col("t").is_not_null() & ~_plausible(pl.col("t"), config)).alias("implausible_time"),
-        (pl.col("t").is_not_null() & (pl.col("readout_order") != first_readout)).alias("duplicate"),
+        pl.lit(False).alias("duplicate"),
         (pl.col("id_status") == "ambiguous").alias("id_ambiguous"),
-    ).with_columns(
-        (
-            pl.col("t").is_not_null()
-            & ~pl.col("implausible_time")
-            & ~pl.col("duplicate")
-            & ~pl.col("id_ambiguous")
-        ).alias("ok")
-    )
+    ).with_columns(OK)
+
+
+def _flag_duplicates(records: pl.DataFrame, key: list[str]) -> pl.DataFrame:
+    """A duplicate is a record already exported in an earlier readout: same key, same time."""
+    first_readout = pl.col("readout_order").min().over([*key, "t"])
+    return records.with_columns(
+        (pl.col("t").is_not_null() & (pl.col("readout_order") != first_readout)).alias("duplicate"),
+    ).with_columns(OK)
 
 
 READOUT_CONTEXT = [
@@ -388,21 +396,36 @@ READOUT_CONTEXT = [
 FLAGS = ["pre_reboot", "headerless", "implausible_time", "duplicate", "id_ambiguous", "ok"]
 
 
-def ingest_logs(paths: Iterable[Path], config: BeaconConfig) -> BeaconTables:
+CONTACT_KEY = ["beacon", "observed", "rssi"]
+SELF_REPORT_KEY = ["beacon"]
+ECO_KEY = ["beacon", "uptime_enter_s", "uptime_leave_s"]
+RECORD_KINDS = ["contact", "self_report", "eco"]
+
+
+def _parse(paths: Iterable[Path], config: BeaconConfig) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Classified lines, and the parsed lines grouped into readouts."""
     lines = _classify(_read_lines(paths), config.timezone)
     parsed = _assign_readouts(lines.filter(pl.col("kind") != "unparsed"), config.readout_gap_s)
+    return lines, parsed
 
-    readouts = _add_boot_context(_repair_ids(_readout_table(parsed), config), config)
-    readouts = readouts.sort("pc_time", "source", "first_line").with_columns(
+
+def _readouts(readout_rows: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
+    readouts = _add_boot_context(_repair_ids(readout_rows, config), config)
+    return readouts.sort("pc_time", "source", "first_line").with_columns(
         pl.int_range(pl.len()).alias("readout_order")
     )
-    context = readouts.select(READOUT_CONTEXT)
+
+
+def _records(
+    parsed: pl.DataFrame, context: pl.DataFrame, config: BeaconConfig
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, int]:
+    """Contacts, self-reports and eco sessions, flagged except for ``duplicate``."""
     data = (
-        parsed.drop("pc_time")
+        parsed.filter(pl.col("kind").is_in(RECORD_KINDS))
+        .drop("pc_time")
         .join(context, on="readout_key", how="left")
         .with_columns(pl.col("current_timer").is_null().alias("headerless"))
     )
-
     contacts = _finish(
         _resolve_boots(
             data.filter(pl.col("kind") == "contact").rename(
@@ -410,11 +433,9 @@ def ingest_logs(paths: Iterable[Path], config: BeaconConfig) -> BeaconTables:
             ),
             "uptime_s",
         ),
-        config,
-        key=["beacon", "observed", "rssi"],
-    ).select(
+        config).select(
         "beacon", "observed", "rssi", "t", "uptime_s", "readout_seq", *FLAGS,
-        "readout_key", "source", "line_no",
+        "readout_key", "source", "line_no", "readout_order",
     )  # fmt: skip
 
     self_reports = _finish(
@@ -422,9 +443,10 @@ def ingest_logs(paths: Iterable[Path], config: BeaconConfig) -> BeaconTables:
             data.filter(pl.col("kind") == "self_report").rename({"_uptime_s": "uptime_s"}),
             "uptime_s",
         ),
-        config,
-        key=["beacon"],
-    ).select("beacon", "t", "uptime_s", "readout_seq", *FLAGS, "readout_key", "source", "line_no")
+        config).select(
+        "beacon", "t", "uptime_s", "readout_seq", *FLAGS, "readout_key", "source", "line_no",
+        "readout_order",
+    )  # fmt: skip
 
     eco = data.filter(pl.col("kind") == "eco")
     eco = _resolve_boots(eco, "_enter").rename({"t": "t_enter"})
@@ -434,36 +456,149 @@ def ingest_logs(paths: Iterable[Path], config: BeaconConfig) -> BeaconTables:
         ),
         pl.col("t_enter").alias("t"),
     )
-    eco_sessions = _finish(eco, config, key=["beacon", "_enter", "_leave"]).select(
+    eco_sessions = _finish(eco, config).select(
         "beacon", "t_enter", "t_leave", pl.col("_enter").alias("uptime_enter_s"),
         pl.col("_leave").alias("uptime_leave_s"), "readout_seq", *FLAGS,
-        "readout_key", "source", "line_no",
+        "readout_key", "source", "line_no", "readout_order", "t",
     )  # fmt: skip
+    return contacts, self_reports, eco_sessions, int(data["headerless"].sum())
 
-    readouts_out = readouts.select(
-        "readout_key", "source", "first_line", "header_id", "beacon", "id_status",
-        "readout_seq", "pc_time", "current_timer", "anchor", "cycle", "cycle_start",
-        "reboot_before",
-        "contact_count", "voltage_mv", "status_byte",
-    ).sort("pc_time", "source", "first_line")  # fmt: skip
 
-    kinds = lines["kind"].value_counts()
-    count = dict(zip(kinds["kind"].to_list(), kinds["count"].to_list(), strict=True))
-    qa = {
-        "lines_total": lines.height,
-        "lines_unparsed": count.get("unparsed", 0),
-        "lines_other": count.get("other", 0),
-        "records_in_headerless_readouts": int(
-            data.filter(pl.col("kind").is_in(["contact", "self_report", "eco"]))["headerless"].sum()
-        ),
-        "readouts": readouts_out.height,
-        "contacts": contacts.height,
-        "self_reports": self_reports.height,
-        "eco_sessions": eco_sessions.height,
-        "ids_repaired": int((readouts_out["id_status"] == "repaired").sum()),
-        "ids_ambiguous": int((readouts_out["id_status"] == "ambiguous").sum()),
-        "reboots": int(readouts_out["reboot_before"].sum()),
-        "contacts_not_ok": int((~contacts["ok"]).sum()),
-        "contacts_unplaced_in_time": int(contacts["t"].is_null().sum()),
+def _finish_eco(eco: pl.DataFrame) -> pl.DataFrame:
+    return _flag_duplicates(eco, ECO_KEY).drop("t", "readout_order")
+
+
+READOUT_COLUMNS = [
+    "readout_key", "source", "first_line", "header_id", "beacon", "id_status",
+    "readout_seq", "pc_time", "current_timer", "anchor", "cycle", "cycle_start",
+    "reboot_before", "contact_count", "voltage_mv", "status_byte",
+]  # fmt: skip
+
+
+def _qa(
+    kinds: dict[str, int],
+    headerless: int,
+    readouts: pl.DataFrame,
+    contacts: dict[str, int],
+    self_reports: int,
+    eco_sessions: int,
+) -> dict[str, int]:
+    return {
+        "lines_total": sum(kinds.values()),
+        "lines_unparsed": kinds.get("unparsed", 0),
+        "lines_other": kinds.get("other", 0),
+        "records_in_headerless_readouts": headerless,
+        "readouts": readouts.height,
+        "contacts": contacts["rows"],
+        "self_reports": self_reports,
+        "eco_sessions": eco_sessions,
+        "ids_repaired": int((readouts["id_status"] == "repaired").sum()),
+        "ids_ambiguous": int((readouts["id_status"] == "ambiguous").sum()),
+        "reboots": int(readouts["reboot_before"].sum()),
+        "contacts_not_ok": contacts["not_ok"],
+        "contacts_unplaced_in_time": contacts["unplaced"],
     }
-    return BeaconTables(readouts_out, contacts, self_reports, eco_sessions, qa)
+
+
+def _kind_counts(lines: pl.DataFrame) -> dict[str, int]:
+    kinds = lines["kind"].value_counts()
+    return dict(zip(kinds["kind"].to_list(), kinds["count"].to_list(), strict=True))
+
+
+def _contact_counts(contacts: pl.DataFrame) -> dict[str, int]:
+    return {
+        "rows": contacts.height,
+        "not_ok": int((~contacts["ok"]).sum()),
+        "unplaced": int(contacts["t"].is_null().sum()),
+    }
+
+
+def ingest_logs(paths: Iterable[Path], config: BeaconConfig) -> BeaconTables:
+    """Ingest logger files in memory. For a whole camp, see ``ingest_logs_to``."""
+    lines, parsed = _parse(paths, config)
+    readouts = _readouts(_readout_table(parsed), config)
+    contacts, self_reports, eco, headerless = _records(
+        parsed, readouts.select(READOUT_CONTEXT), config
+    )
+    contacts = _flag_duplicates(contacts, CONTACT_KEY).drop("readout_order")
+    self_reports = _flag_duplicates(self_reports, SELF_REPORT_KEY).drop("readout_order")
+    eco = _finish_eco(eco)
+    readouts_out = readouts.select(READOUT_COLUMNS).sort("pc_time", "source", "first_line")
+    qa = _qa(
+        _kind_counts(lines),
+        headerless,
+        readouts_out,
+        _contact_counts(contacts),
+        self_reports.height,
+        eco.height,
+    )
+    return BeaconTables(readouts_out, contacts, self_reports, eco, qa)
+
+
+def ingest_logs_to(paths: Iterable[Path], config: BeaconConfig, out: Path) -> dict[str, int]:
+    """Ingest logger files one at a time and write the tables to ``out``; return the QA dict.
+
+    Gives the same tables as ``ingest_logs`` without holding every log in memory. Writes
+    ``readouts.parquet``, ``self_reports.parquet``, ``eco_sessions.parquet`` and contacts per local
+    day of ``t`` as ``contacts/<YYYY-MM-DD>.parquet`` (``contacts/unplaced.parquet`` for records
+    with no time). Copies of a record share its time, so duplicates are settled within each day.
+    """
+    out = Path(out)
+    work = out / "_work"
+    (out / "contacts").mkdir(parents=True, exist_ok=True)
+    work.mkdir(parents=True, exist_ok=True)
+    paths = list(paths)
+
+    # 1. Each file alone: readout structure, line counts, parsed records kept on disk.
+    kinds: dict[str, int] = {}
+    readout_rows = []
+    for i, path in enumerate(paths):
+        lines, parsed = _parse([path], config)
+        for kind, n in _kind_counts(lines).items():
+            kinds[kind] = kinds.get(kind, 0) + n
+        readout_rows.append(_readout_table(parsed))
+        parsed.filter(pl.col("kind").is_in(RECORD_KINDS)).write_parquet(
+            work / f"parsed_{i}.parquet"
+        )
+        del lines, parsed
+
+    # 2. The whole camp: IDs, power cycles, readout order.
+    readouts = _readouts(pl.concat(readout_rows), config)
+    context = readouts.select(READOUT_CONTEXT)
+
+    # 3. Each file again: date its records.
+    self_reports, eco, headerless = [], [], 0
+    day = pl.col("t").dt.convert_time_zone(config.timezone).dt.date().alias("_day")
+    for i in range(len(paths)):
+        parsed = pl.read_parquet(work / f"parsed_{i}.parquet")
+        contacts, srs, ecos, n = _records(parsed, context, config)
+        headerless += n
+        contacts.with_columns(day).write_parquet(work / f"contacts_{i}.parquet")
+        self_reports.append(srs)
+        eco.append(ecos)
+        (work / f"parsed_{i}.parquet").unlink()
+
+    # 4. Each day: flag copies, write.
+    scan = pl.scan_parquet(work / "contacts_*.parquet")
+    days = scan.select(pl.col("_day").unique()).collect()["_day"].to_list()
+    counts = {"rows": 0, "not_ok": 0, "unplaced": 0}
+    for d in days:
+        part = scan.filter(pl.col("_day").is_null() if d is None else pl.col("_day") == d).collect()
+        part = _flag_duplicates(part.drop("_day"), CONTACT_KEY).drop("readout_order")
+        name = "unplaced" if d is None else d.isoformat()
+        part.write_parquet(out / "contacts" / f"{name}.parquet")
+        for k, v in _contact_counts(part).items():
+            counts[k] += v
+    for f in work.glob("contacts_*.parquet"):
+        f.unlink()
+    work.rmdir()
+
+    self_reports_out = _flag_duplicates(pl.concat(self_reports), SELF_REPORT_KEY).drop(
+        "readout_order"
+    )
+    eco_out = _finish_eco(pl.concat(eco))
+    readouts_out = readouts.select(READOUT_COLUMNS).sort("pc_time", "source", "first_line")
+    self_reports_out.write_parquet(out / "self_reports.parquet")
+    eco_out.write_parquet(out / "eco_sessions.parquet")
+    readouts_out.write_parquet(out / "readouts.parquet")
+    return _qa(kinds, headerless, readouts_out, counts, self_reports_out.height, eco_out.height)
