@@ -59,7 +59,9 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 
 ## Open questions
 
-- `[unknown: what interrupts power on a worn tag during the day?]` The firmware logs no reset reason.
+Questions that only matter for the next field phase live in [`../ideas/next-field-phase-beacon-practice.md`](../ideas/next-field-phase-beacon-practice.md).
+
+
 - `[unknown: is the PC time on a readout stamped after the transfer rather than when the timer was read?]`
 - `[unknown: which RSSI from a room tag means "inside this room"?]`
 - `[unknown: was the eco scan period changed from its 300 s default by control command during DSA 2026?]`
