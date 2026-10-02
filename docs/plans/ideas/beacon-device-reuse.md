@@ -24,7 +24,7 @@ Worth stating plainly, because the two open beacon plans are easy to confuse.
 
 The delivered `Output/` tables have two columns for self-reports (`ID`, `Local Time`) and four for contacts (`ID1`, `ID2`, `RSSI`, `Contact Local Time`). There is no person column anywhere in them. The upstream processing converts record uptime to wall-clock and stops; it never asks who was wearing the tag. Our ingest deliberately stops at the same place, per invariant 4: raw tables speak device IDs, and only the spine resolves identity.
 
-So device reuse is not something the upstream tables get wrong. It is a step neither implementation performs, sitting downstream of both. `beacon-differential-check.md` asks *do the two implementations agree on when a record happened*; this plan asks *whose record is it*. Answering the first does nothing for the second.
+So device reuse is not something the upstream tables get wrong. It is a step neither implementation performs, sitting downstream of both. The differential check (settled, see the instrument doc) asked *do the two implementations agree on when a record happened*; this plan asks *whose record is it*. Answering the first does nothing for the second.
 
 They do share a root cause, and it is worth keeping in view. A device's timeline is discontinuous in two independent ways: the tag reboots (battery change, reflash — all tags were reflashed once mid-camp, location tags again later), which resets uptime and breaks the clock; and the wearer changes, which breaks attribution. **The two cut points need not coincide.** A reflash mid-morning and a handover that afternoon are two different splits of the same device's records, and code that handles only one of them will look correct on most tags.
 

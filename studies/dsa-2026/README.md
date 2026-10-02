@@ -38,7 +38,7 @@ Sundays follow a different schedule (brunch, afternoon plenum). Spontaneous, unp
 
 | Module | What | Who | Status in toolkit |
 |---|---|---|---|
-| Beacons | contact logs + room presence + self-report button + eco sessions | nearly all participants and staff; ~57 room/zone tags | ingest ✅ (`social_energy.beacons`); full delivery imported 2026-09-20 (13–29 Aug), differential check against the delivered tables open (`docs/plans/ideas/beacon-differential-check.md`) |
+| Beacons | contact logs + room presence + self-report button + eco sessions | nearly all participants and staff; ~57 room/zone tags | ingest ✅ (`social_energy.beacons`); full delivery imported 2026-09-20 (13–29 Aug), checked against the delivered `Output/` tables, every disagreement explained (`docs/context/instruments/beacons.md`) |
 | EDA (Shimmer) | skin conductance (+HR?) during daytime sessions, 15–28 Aug | ~13–15 consenting participants | planned |
 | Acoustics (AudioMoth ×2) | scheduled recordings in dining hall and main hall | spaces, not persons | features + verified deletion ✅ (`social_energy.acoustics`) |
 | Survey (SurveyJS on zeitgeist-platform) | baseline questionnaire, right after the AI interview | 88 respondents after exclusions | download ✅ (`fetch-zeitgeist`), ingest ✅ (`social_energy.survey`); scoring planned |

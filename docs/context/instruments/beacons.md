@@ -80,6 +80,8 @@ So an exclusion window on a tag does **not** remove that person from the dataset
 - `eco_sessions`: `beacon`, `t_enter`, `t_leave`, same flags.
 - `qa`: counts accounting for every input line.
 
+`ingest_logs` works in memory. For a whole camp, `ingest_logs_to` (behind `social-energy ingest-beacons`) gives the same tables one log at a time and writes contacts per local day as `contacts/<YYYY-MM-DD>.parquet`, with `contacts/unplaced.parquet` for records it cannot date.
+
 ## The upstream `Output/` tables
 
 The `Output/` folder that arrives with a delivery is produced by the upstream repo's own `postprocessing.py` (`Network_Log+Postprocessing/`). Its defaults and column headers match the delivered files exactly: daily `contacts_YYYYMMDD.csv` (`ID1,ID2,RSSI,Contact Local Time`), `self_reports.csv` (`ID,Local Time`), `eco_sessions.csv` (`ID,Enter Local Time,Exit Local Time`), plus `beacon_summary.csv`, `measurements.csv`, `current_issues.csv`, `sanity_findings.csv` and `transfer_mislabel.md`. Times are local wall clock, to the second.
@@ -91,7 +93,14 @@ How it resolves uptime to wall clock, in our words:
 - Records it still cannot place, or whose ID/RSSI falls outside the fielded ranges (IDs 1–170 plus 252–254, RSSI −110..−10), are **skipped** and counted in `sanity_findings.csv`.
 - Direction survives in the contact tables: `ID1` is the tag that heard, `ID2` the tag it heard (checked on DSA 2026: a tag whose memory was wiped stops appearing as `ID1` while others keep logging it as `ID2`). There is no readout table, no boot context, no per-record flags and no `Status` byte, so storage-full loss is invisible in it.
 
-Treat it as an independent implementation to check ours against, not as ground truth. `[unknown: at which commit was the delivered Output/ produced?]`
+Checked against our ingest on DSA 2026 (2026-10-02): every disagreement is explained, and `Output/` is not used for analysis.
+
+- It dates each record from its own readout's stamp, which runs minutes late, so its times sit later than ours by exactly that delay.
+- A resent record therefore lands at a second, shifted time and is kept twice; ours lands on its first copy and is flagged `duplicate`.
+- A readout that arrived without its header is dated from a neighbouring anchor, after a restart sometimes from the wrong boot.
+- Contacts built from either source give co-presence networks within a few percent of each other.
+
+`[unknown: at which commit was the delivered Output/ produced?]`
 
 ## Open questions
 

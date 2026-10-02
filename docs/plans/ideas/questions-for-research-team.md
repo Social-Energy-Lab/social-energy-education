@@ -39,7 +39,7 @@ These are not blocked on a decision but on material Mahdi will hand over.
 Read off <https://github.com/thofbaur/network-beacon_NRF54L15> rather than asked. Written into `docs/context/instruments/beacons.md`.
 
 - **Firmware settings are in the repo.** `Network_Beacon_nrf54/dsa.conf` (build-time), `dsa_runtime.conf` (runtime defaults) and `shared/common_include.h` hold the production values, and the history dates them: production values on 2026-08-08/09, location-tag values 08-12, DSA tag parameters 08-13, eco mode off for one location tag 08-15. What remains to ask is narrower (see below).
-- **The delivered `Output/` folder comes from the upstream `postprocessing.py`.** Its default filenames and column headers match the delivery exactly. It dates events from `Current Timer` anchors, retries against the *previous boot's* anchor when the first attempt lands over 600 s in the future under a high-water guard, and skips records it cannot place or whose ID/RSSI is out of range into `sanity_findings.csv`. That retry is the likely explanation of the self-report offsets in `beacon-differential-check.md`, and our ingest has no equivalent.
+- **The delivered `Output/` folder comes from the upstream `postprocessing.py`.** Its default filenames and column headers match the delivery exactly. It dates events from `Current Timer` anchors, retries against the *previous boot's* anchor when the first attempt lands over 600 s in the future under a high-water guard, and skips records it cannot place or whose ID/RSSI is out of range into `sanity_findings.csv`. Our ingest dates from power cycles instead; the comparison is settled in `docs/context/instruments/beacons.md`.
 
 ## Answered (2026-09-20, by the firmware author)
 

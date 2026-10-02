@@ -10,7 +10,7 @@
 
 - **Branch:** `main`, published at `Social-Energy-Lab/social-energy-education`
 - **Done:** see Tasks
-- **Waiting elsewhere (not on Next):** Shimmer EDA exports are still being collected by Mahdi. **Beacons are no longer a blocker:** the full delivery (105 logs, 13–29 Aug, plus upstream-derived tables) was imported on 2026-09-20; follow-up in `ideas/beacon-differential-check.md` and `ideas/beacon-device-reuse.md`. The AI interviews and the survey are downloadable (`fetch-zeitgeist`, see `docs/context/data-layout.md`); linking them to study IDs is in `ongoing/dsa-2026-spine.md`
+- **Waiting elsewhere (not on Next):** Shimmer EDA exports are still being collected by Mahdi. **Beacons are no longer a blocker:** the full delivery (105 logs, 13–29 Aug, plus upstream-derived tables) was imported on 2026-09-20; the comparison with the delivered tables is settled (instrument doc); follow-up in `ideas/beacon-device-reuse.md`. The AI interviews and the survey are downloadable (`fetch-zeitgeist`, see `docs/context/data-layout.md`); linking them to study IDs is in `ongoing/dsa-2026-spine.md`
 - **Handoff:** `uv sync && uv run pytest` runs the whole suite on synthetic data. Run `git config core.hooksPath .githooks` once per clone to enable the data-perimeter pre-commit hook. The private context library for DSA 2026 is at `$SOCIAL_ENERGY_DATA/dsa-2026/context/` (Álvaro's machine: `~/research-data/social-energy`). Follow-up work is planned in `ongoing/dsa-2026-spine.md` and `ideas/*`. Survey ingest continues in `ongoing/survey-scoring.md`.
 
 ## Context
