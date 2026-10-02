@@ -313,10 +313,11 @@ def _resolve_boots(records: pl.DataFrame, uptime_col: str) -> pl.DataFrame:
     """Decide which boot each record's uptime belongs to, and compute its time.
 
     Within one readout, records come out in recording order, so a drop in uptime marks
-    a reboot. Records after the last drop belong to the current boot, unless even they
-    exceed the readout's Current Timer, in which case the current boot has no records
-    yet. Records are dated from their power cycle's start; records one boot back from the
-    previous cycle's start. Records further back cannot be placed in time.
+    a reboot. Records after the last drop belong to the current boot, unless even the
+    oldest of them exceeds the readout's Current Timer, in which case the current boot has no
+    records yet. (The tag keeps recording during a long transfer, so the newest records may pass
+    the timer read at its start.) Records are dated from their power cycle's start; records one
+    boot back from the previous cycle's start. Records further back cannot be placed in time.
     """
     timer_now = pl.coalesce(
         pl.col("current_timer"), (pl.col("pc_time") - pl.col("cycle_start")).dt.total_seconds()
@@ -334,7 +335,7 @@ def _resolve_boots(records: pl.DataFrame, uptime_col: str) -> pl.DataFrame:
         (
             pl.col(uptime_col)
             .filter(pl.col("_seg") == pl.col("_seg").max())
-            .max()
+            .min()
             .over("readout_key")
             > timer_now
         ).alias("_no_current"),
@@ -361,7 +362,8 @@ def _plausible(t: pl.Expr, config: BeaconConfig) -> pl.Expr:
     bounds = pl.Series([start, end]).dt.replace_time_zone(config.timezone).dt.convert_time_zone(UTC)
     # A record of the previous boot must precede the restart that ended it.
     after_restart = pl.col("pre_reboot") & (t >= pl.col("cycle_start"))
-    return (t >= bounds[0]) & (t < bounds[1]) & (t <= pl.col("pc_time")) & ~after_restart
+    # Nothing is logged before it happened: the record's own line is stamped after it.
+    return (t >= bounds[0]) & (t < bounds[1]) & (t <= pl.col("line_time")) & ~after_restart
 
 
 OK = (
@@ -422,7 +424,7 @@ def _records(
     """Contacts, self-reports and eco sessions, flagged except for ``duplicate``."""
     data = (
         parsed.filter(pl.col("kind").is_in(RECORD_KINDS))
-        .drop("pc_time")
+        .rename({"pc_time": "line_time"})
         .join(context, on="readout_key", how="left")
         .with_columns(pl.col("current_timer").is_null().alias("headerless"))
     )

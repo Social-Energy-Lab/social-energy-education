@@ -213,3 +213,14 @@ def test_a_cycle_that_started_after_the_implied_start_does_not_match(tmp_path):
     t = ingest_logs([log], id_bug_config())
     r = t.readouts.filter(pl.col("header_id") == "3").sort("pc_time")
     assert r["beacon"].to_list() == [51, 3]
+
+
+def test_records_made_during_a_long_transfer_stay_in_the_current_boot():
+    # Booted 08:00 local. The tag kept recording while it was read out, so the last record's
+    # uptime (7210) passes the Current Timer read at the start (7200). That is not a reboot.
+    config = BeaconConfig(timezone=TZ, valid_from=date(2026, 8, 12), valid_to=date(2026, 8, 29))
+    t = ingest_logs([GOLDEN.parent / "long_transfer.log"], config)
+    c = t.contacts.sort("line_no")
+    assert c["pre_reboot"].to_list() == [False, False]
+    assert local(c) == ["2026-08-20 09:56:40", "2026-08-20 10:00:10"]
+    assert c["ok"].to_list() == [True, True]
