@@ -124,6 +124,8 @@ class StudyConfig:
             valid_to=_as_date(section["valid_to"]),
             ambiguous_id_cutoff=_as_datetime(section.get("ambiguous_id_cutoff")),
             anchor_tolerance_s=int(section.get("anchor_tolerance_s", 5)),
+            restart_margin_s=int(section.get("restart_margin_s", 3600)),
+            readout_gap_s=int(section.get("readout_gap_s", 60)),
         )
 
     def survey_config(self) -> SurveyConfig:

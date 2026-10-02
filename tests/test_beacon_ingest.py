@@ -120,3 +120,49 @@ def test_qa_summary_accounts_for_every_line(tables):
     assert qa["ids_repaired"] == 1
     assert qa["ids_ambiguous"] == 1
     assert qa["reboots"] == 1
+
+
+# ---- dating from power cycles (tests/fixtures/beacon_logs/late_stamps.log) -----------------------
+# Tag 7 booted 08:00 local. The 14:05 readout was stamped 5 min late (implied start 08:05). At 16:00
+# a readout arrived without its header. The tag restarted at 17:00 (uptime 3600 at 18:00).
+
+LATE = GOLDEN.parent / "late_stamps.log"
+
+
+@pytest.fixture(scope="module")
+def late():
+    config = BeaconConfig(timezone=TZ, valid_from=date(2026, 8, 12), valid_to=date(2026, 8, 29))
+    return ingest_logs([LATE], config)
+
+
+def test_records_are_dated_from_the_power_cycle_start_not_the_late_stamp(late):
+    c = late.contacts.filter(pl.col("readout_seq") == 1)
+    assert local(c) == ["2026-08-20 13:00:00"]
+
+
+def test_a_late_stamp_is_not_a_reboot(late):
+    r = late.readouts.sort("pc_time")
+    assert r["reboot_before"].to_list() == [False, False, False, True]
+    assert r["cycle"].to_list() == [1, 1, 1, 2]
+    assert late.qa["reboots"] == 1
+
+
+def test_a_headerless_readout_is_its_own_readout_dated_from_its_cycle(late):
+    r = late.readouts.sort("pc_time")
+    assert r.height == 4
+    assert r["current_timer"].to_list() == [7200, 21600, None, 3600]
+    c = late.contacts.filter(pl.col("readout_seq") == 2)
+    assert local(c) == ["2026-08-20 15:00:00"]
+    assert c["headerless"].to_list() == [True]
+    s = late.self_reports
+    assert local(s) == ["2026-08-20 14:56:40"]
+    assert s["ok"].to_list() == [True]
+
+
+def test_previous_boot_records_use_the_previous_cycle_and_must_precede_the_restart(late):
+    c = late.contacts.filter(pl.col("readout_seq") == 3).sort("line_no")
+    assert c["pre_reboot"].to_list() == [True, True, False]
+    assert local(c) == ["2026-08-20 16:00:00", "2026-08-20 17:10:00", "2026-08-20 17:30:00"]
+    # 17:10 would be after the 17:00 restart: impossible for the previous boot.
+    assert c["implausible_time"].to_list() == [False, True, False]
+    assert late.qa["contacts_unplaced_in_time"] == 0

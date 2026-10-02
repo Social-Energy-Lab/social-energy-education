@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** none
-**Next:** date records against each power cycle's earliest anchor in `social_energy.beacons`, add the previous-boot rule, and rerun the differential check against `Output/`
+**Next:** repair the logger ID bug against power cycles instead of single anchors (late stamps defeat the 5 s match), then compare with the beacon team's hand split once the original logs are in
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 
@@ -20,7 +20,8 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 
 | Setting | Current value | Why | Status |
 |---|---|---|---|
-| Contact source | upstream `Output/` tables | our ingest and theirs disagree around restarts; theirs handles the previous boot | until the differential check is settled |
+| Contact source | upstream `Output/` tables | our full ingest of contacts does not fit in memory for the whole camp yet | until our ingest streams per day; `Output/` keeps resent copies and late stamps |
+| Press source | our ingest, `ok` records | dated from the power cycle start; resent copies flagged `duplicate`, which `Output/` counts twice | rule, validated 2026-10-02 |
 | Window | tag deployment on 13 Aug to the handover on 29 Aug 09:00 | after the handover tags lay together on benches | the handover window is not yet a spine exclusion |
 | Comparison days | 14–23 Aug | arrival day is atypical; restarts and battery fade weigh more late | `[inferred]` |
 | Exclusions | applied to both sides of every contact | a tag's partners hold half the data about its wearer | rule |
@@ -48,7 +49,9 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 
 ## Next steps
 
-- [ ] Ingest: date records as (power cycle's earliest implied start + uptime); add the previous-boot rule with a visible flag; then rerun the self-report and contact comparison against `Output/` (`ideas/beacon-differential-check.md`).
+- [x] Ingest: date records as (power cycle's earliest implied start + uptime); previous-boot records must precede the restart (else `implausible_time`); headerless readouts are their own readouts; presses compared against `Output/` and switched to our ingest.
+- [ ] Ingest: repair the logger ID bug against power cycles; check against the beacon team's hand split.
+- [ ] Ingest contacts per day for the whole camp, then move co-presence to our ingest.
 - [x] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
 - [x] Flag lost windows per tag in a table the analyses can join (`lost_windows.parquet`), so one-sided measures can be restricted to unaffected time.
 - [x] Rerun everything once the beacon-consent ruling is in the spine.

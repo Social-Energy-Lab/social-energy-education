@@ -26,6 +26,8 @@ from pathlib import Path
 
 import polars as pl
 
+from .cycles import power_cycles
+
 LINE_RE = r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),ID: ([^,]*),(.*)$"
 KINDS: dict[str, str] = {
     "status": r"^Status: (\d+)$",
@@ -47,8 +49,12 @@ class BeaconConfig:
     # Logger bug (fixed upstream in commit 2e1f52d): before this local wall-clock
     # time, beacon IDs 48-57 were printed as the characters "0"-"9".
     ambiguous_id_cutoff: datetime | None = None
-    # Max difference (s) between clock anchors that still counts as the same boot.
+    # Max difference (s) between clock anchors that counts as the same boot (ID repair only).
     anchor_tolerance_s: int = 5
+    # Uptime this far behind the wall time elapsed since the tag's previous anchor is a restart.
+    restart_margin_s: int = 3600
+    # A gap this long between two lines of one tag in one file starts a new readout.
+    readout_gap_s: int = 60
 
 
 @dataclass
@@ -115,25 +121,26 @@ def _classify(lines: pl.DataFrame, tz: str) -> pl.DataFrame:
     ).drop("_ts")
 
 
-def _assign_readouts(rows: pl.DataFrame) -> pl.DataFrame:
+def _assign_readouts(rows: pl.DataFrame, gap_s: int) -> pl.DataFrame:
     """Group lines into readouts: one connection of the base station to one beacon.
 
-    A readout starts at a ``Status`` line, or at a ``Current Timer`` line not directly
-    preceded by that beacon's ``Status``. Data lines that come before any start in a
-    file (seen in early logs) are attached to that beacon's next readout and flagged.
+    A readout starts at a ``Status`` line, at a ``Current Timer`` line not directly preceded by
+    that beacon's ``Status``, at the beacon's first line in a file, or after a gap of more than
+    ``gap_s`` since its previous line. Lines of one transfer come seconds apart; a block of records
+    arriving later without header lines is a readout of its own, with no clock anchor.
     """
     rows = rows.sort("source", "line_no")
-    prev_kind = pl.col("kind").shift(1).over("source", "header_id")
-    starts = (pl.col("kind") == "status") | (
-        (pl.col("kind") == "timer") & (prev_kind.is_null() | (prev_kind != "status"))
+    by = ["source", "header_id"]
+    prev_kind = pl.col("kind").shift(1).over(by)
+    gap = (pl.col("pc_time") - pl.col("pc_time").shift(1).over(by)).dt.total_seconds()
+    starts = (
+        (pl.col("kind") == "status")
+        | ((pl.col("kind") == "timer") & (prev_kind != "status"))
+        | prev_kind.is_null()
+        | (gap > gap_s)
     )
-    rows = rows.with_columns(
-        starts.cast(pl.Int64).cum_sum().over("source", "header_id").alias("_local")
-    )
+    rows = rows.with_columns(starts.cast(pl.Int64).cum_sum().over(by).alias("_local"))
     return rows.with_columns(
-        (pl.col("_local") == 0).alias("reference_after"),
-        pl.when(pl.col("_local") == 0).then(1).otherwise(pl.col("_local")).alias("_local"),
-    ).with_columns(
         (
             pl.col("source") + "#" + pl.col("header_id") + "#" + pl.col("_local").cast(pl.String)
         ).alias("readout_key")
@@ -180,11 +187,7 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
         .dt.replace_time_zone(config.timezone)
         .dt.convert_time_zone(UTC)[0]
     )
-    is_ambiguous = (
-        pl.col("header_id").str.contains(r"^[0-9]$")
-        & (pl.col("pc_time") < cutoff)
-        & pl.col("anchor").is_not_null()
-    )
+    is_ambiguous = pl.col("header_id").str.contains(r"^[0-9]$") & (pl.col("pc_time") < cutoff)
     readouts = readouts.with_columns(is_ambiguous.alias("_ambiguous"))
     known = readouts.filter(~pl.col("_ambiguous") & pl.col("anchor").is_not_null())
     tolerance = timedelta(seconds=config.anchor_tolerance_s)
@@ -196,6 +199,10 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
             status.append("ok")
             continue
         n = int(row["header_id"])
+        if row["anchor"] is None:
+            fixed_beacon.append(n)
+            status.append("ambiguous")
+            continue
         matches = [
             candidate
             for candidate in (n, n + 48)
@@ -217,16 +224,55 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
 
 
 def _add_boot_context(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
-    tolerance = timedelta(seconds=config.anchor_tolerance_s)
-    readouts = readouts.sort("beacon", "pc_time").with_columns(
-        pl.col("anchor").shift(1).over("beacon").alias("prev_anchor"),
-        pl.int_range(pl.len()).over("beacon").alias("readout_seq"),
+    """Put every readout in its tag's power cycle (see ``cycles.power_cycles``).
+
+    Readouts with a clock anchor define the cycles; a readout without one (headerless, or with an
+    unresolved ID) belongs to the latest cycle that had started by its PC time. ``cycle_start`` is
+    the cycle's earliest implied start, so a late stamp does not shift the records it dates.
+    """
+    anchored = readouts.filter(
+        pl.col("anchor").is_not_null()
+        & pl.col("beacon").is_not_null()
+        & (pl.col("id_status") != "ambiguous")
+    ).select(
+        "readout_key",
+        "beacon",
+        pl.col("pc_time").alias("ts"),
+        pl.col("current_timer").alias("timer"),
     )
-    return readouts.with_columns(
-        (
-            pl.col("prev_anchor").is_not_null()
-            & ((pl.col("anchor") - pl.col("prev_anchor")).abs() > tolerance)
-        ).alias("reboot_before")
+    cyc = power_cycles(anchored, restart_margin_s=config.restart_margin_s).select(
+        "readout_key", "restart", "cycle", "cycle_start"
+    )
+    starts = (
+        cyc.join(anchored.select("readout_key", "beacon"), on="readout_key")
+        .group_by("beacon", "cycle")
+        .agg(pl.col("cycle_start").first())
+        .sort("beacon", "cycle")
+        .with_columns(pl.col("cycle_start").shift(1).over("beacon").alias("prev_cycle_start"))
+    )
+    readouts = readouts.join(cyc, on="readout_key", how="left")
+    placed = readouts.filter(pl.col("cycle").is_not_null())
+    unplaced = (
+        readouts.filter(pl.col("cycle").is_null())
+        .drop("cycle", "cycle_start")
+        .sort("pc_time")
+        .join_asof(
+            starts.select("beacon", "cycle", "cycle_start").sort("cycle_start"),
+            left_on="pc_time",
+            right_on="cycle_start",
+            by="beacon",
+            strategy="backward",
+            check_sortedness=False,
+        )
+        .with_columns(pl.lit(False).alias("restart"))
+    )
+    readouts = pl.concat([placed, unplaced.select(placed.columns)])
+    readouts = readouts.join(
+        starts.select("beacon", "cycle", "prev_cycle_start"), on=["beacon", "cycle"], how="left"
+    )
+    return readouts.sort("beacon", "pc_time").with_columns(
+        pl.int_range(pl.len()).over("beacon").alias("readout_seq"),
+        pl.col("restart").fill_null(False).alias("reboot_before"),
     )
 
 
@@ -239,9 +285,12 @@ def _resolve_boots(records: pl.DataFrame, uptime_col: str) -> pl.DataFrame:
     Within one readout, records come out in recording order, so a drop in uptime marks
     a reboot. Records after the last drop belong to the current boot, unless even they
     exceed the readout's Current Timer, in which case the current boot has no records
-    yet. Records one boot back are resolved with the previous readout's anchor. Records
-    further back cannot be placed in time.
+    yet. Records are dated from their power cycle's start; records one boot back from the
+    previous cycle's start. Records further back cannot be placed in time.
     """
+    timer_now = pl.coalesce(
+        pl.col("current_timer"), (pl.col("pc_time") - pl.col("cycle_start")).dt.total_seconds()
+    )
     records = records.sort("readout_key", "line_no").with_columns(
         (pl.col(uptime_col) < pl.col(uptime_col).shift(1).over("readout_key"))
         .fill_null(False)
@@ -257,7 +306,7 @@ def _resolve_boots(records: pl.DataFrame, uptime_col: str) -> pl.DataFrame:
             .filter(pl.col("_seg") == pl.col("_seg").max())
             .max()
             .over("readout_key")
-            > pl.col("current_timer")
+            > timer_now
         ).alias("_no_current"),
     ).with_columns(
         (pl.col("_last_seg") - pl.col("_seg") + pl.col("_no_current").cast(pl.Int64)).alias(
@@ -266,9 +315,9 @@ def _resolve_boots(records: pl.DataFrame, uptime_col: str) -> pl.DataFrame:
     )
     anchor = (
         pl.when(pl.col("_boots_back") == 0)
-        .then(pl.col("anchor"))
+        .then(pl.col("cycle_start"))
         .when(pl.col("_boots_back") == 1)
-        .then(pl.col("prev_anchor"))
+        .then(pl.col("prev_cycle_start"))
     )
     return records.with_columns(
         (pl.col("_boots_back") > 0).alias("pre_reboot"),
@@ -280,7 +329,9 @@ def _plausible(t: pl.Expr, config: BeaconConfig) -> pl.Expr:
     start = datetime.combine(config.valid_from, datetime.min.time())
     end = datetime.combine(config.valid_to + timedelta(days=1), datetime.min.time())
     bounds = pl.Series([start, end]).dt.replace_time_zone(config.timezone).dt.convert_time_zone(UTC)
-    return (t >= bounds[0]) & (t < bounds[1]) & (t <= pl.col("pc_time"))
+    # A record of the previous boot must precede the restart that ended it.
+    after_restart = pl.col("pre_reboot") & (t >= pl.col("cycle_start"))
+    return (t >= bounds[0]) & (t < bounds[1]) & (t <= pl.col("pc_time")) & ~after_restart
 
 
 def _finish(records: pl.DataFrame, config: BeaconConfig, key: list[str]) -> pl.DataFrame:
@@ -302,21 +353,25 @@ def _finish(records: pl.DataFrame, config: BeaconConfig, key: list[str]) -> pl.D
 
 READOUT_CONTEXT = [
     "readout_key", "beacon", "readout_seq", "readout_order", "pc_time",
-    "current_timer", "anchor", "prev_anchor", "id_status",
+    "current_timer", "cycle_start", "prev_cycle_start", "id_status",
 ]  # fmt: skip
-FLAGS = ["pre_reboot", "reference_after", "implausible_time", "duplicate", "id_ambiguous", "ok"]
+FLAGS = ["pre_reboot", "headerless", "implausible_time", "duplicate", "id_ambiguous", "ok"]
 
 
 def ingest_logs(paths: Iterable[Path], config: BeaconConfig) -> BeaconTables:
     lines = _classify(_read_lines(paths), config.timezone)
-    parsed = _assign_readouts(lines.filter(pl.col("kind") != "unparsed"))
+    parsed = _assign_readouts(lines.filter(pl.col("kind") != "unparsed"), config.readout_gap_s)
 
     readouts = _add_boot_context(_repair_ids(_readout_table(parsed), config), config)
     readouts = readouts.sort("pc_time", "source", "first_line").with_columns(
         pl.int_range(pl.len()).alias("readout_order")
     )
     context = readouts.select(READOUT_CONTEXT)
-    data = parsed.drop("pc_time").join(context, on="readout_key", how="left")
+    data = (
+        parsed.drop("pc_time")
+        .join(context, on="readout_key", how="left")
+        .with_columns(pl.col("current_timer").is_null().alias("headerless"))
+    )
 
     contacts = _finish(
         _resolve_boots(
@@ -357,7 +412,8 @@ def ingest_logs(paths: Iterable[Path], config: BeaconConfig) -> BeaconTables:
 
     readouts_out = readouts.select(
         "readout_key", "source", "first_line", "header_id", "beacon", "id_status",
-        "readout_seq", "pc_time", "current_timer", "anchor", "reboot_before",
+        "readout_seq", "pc_time", "current_timer", "anchor", "cycle", "cycle_start",
+        "reboot_before",
         "contact_count", "voltage_mv", "status_byte",
     ).sort("pc_time", "source", "first_line")  # fmt: skip
 
@@ -367,7 +423,9 @@ def ingest_logs(paths: Iterable[Path], config: BeaconConfig) -> BeaconTables:
         "lines_total": lines.height,
         "lines_unparsed": count.get("unparsed", 0),
         "lines_other": count.get("other", 0),
-        "lines_before_first_reference": int(parsed["reference_after"].sum()),
+        "records_in_headerless_readouts": int(
+            data.filter(pl.col("kind").is_in(["contact", "self_report", "eco"]))["headerless"].sum()
+        ),
         "readouts": readouts_out.height,
         "contacts": contacts.height,
         "self_reports": self_reports.height,

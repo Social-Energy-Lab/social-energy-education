@@ -9,22 +9,23 @@ Unit of analysis: the press, compared with the same participants' ordinary 5-min
 
 Filters, each counted in ``qa.json``:
 
-1. Source: the upstream-derived ``raw/beacons/Output/self_reports.csv`` (see
-   ``copresence_by_phase.py`` for why upstream rather than our own ingest).
+1. Source: our own ingest of the raw logs (``our_self_reports.parquet``, written by
+   ``beacon_diagnostics.py --ingest``), records with ``ok``. It dates each press from its power
+   cycle's earliest anchor and recognises a press resent in a later readout as a duplicate. The
+   upstream ``Output/self_reports.csv`` dates from each readout's own, often late, stamp, so a
+   resent press lands minutes away from its first copy and counts twice.
 2. From the instruction (14 Aug 08:45) to the handover (29 Aug 09:00).
 3. Resolved through the spine to a participant; presses on location tags are handling artefacts
    and fall out here (``spine/open_questions.md`` Q3).
 4. Not in an exclusion window; the wearer in ``spine.consented("self_report")``.
 5. Accidental chains: a run of presses each less than ``CHAIN_S`` apart that lasts at least
    ``ACCIDENTAL_S`` or holds at least ``ACCIDENTAL_N`` presses is a button held down by something
-   else (a tag in a bag), and is dropped. The firmware creates an event per 3 s of holding with no
-   cooldown, so continuous pressing shows up as a dense run (see the beacons instrument doc)
-   `[inferred: both thresholds]`.
+   else (a tag in a bag), and is dropped. The firmware creates one event per press of 3 s, with no
+   cooldown, so something pressing the tag over and over shows up as a dense run (see the beacons
+   instrument doc) `[inferred: both thresholds]`.
 6. Episodes: presses by the same wearer less than ``EPISODE_S`` apart are one episode, timed at
-   its first press, since a deliberate press held a little long yields two or three events
-   `[inferred: the window length]`. A press followed by its retraction looks the same in the data,
-   so retractions cannot be removed
-   `[unknown: can a retraction be told apart from a held press in the export?]`.
+   its first press `[inferred: the window length]`. The firmware has no cancel press, so a press
+   followed by its retraction is two ordinary events seconds apart and becomes one episode.
 
 Exposure for press rates leaves out each tag's lost windows (``lost_windows.parquet`` from
 ``beacon_diagnostics.py``): a restart wipes presses held in RAM, so that time cannot count.
@@ -92,19 +93,11 @@ def press_episodes(
     layout: paths.StudyLayout, spine: Spine, participants: set[str], consented: set[str]
 ) -> tuple[pl.DataFrame, dict]:
     """Self-report press episodes of consenting participants, with a QA count per filter."""
-    raw = (
-        pl.read_csv(layout.raw / "beacons" / "Output" / "self_reports.csv")
-        .select(
-            pl.col("ID").alias("beacon"),
-            pl.col("Local Time")
-            .str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S")
-            .dt.replace_time_zone(cp.TZ)
-            .dt.convert_time_zone("UTC")
-            .alias("t"),
-        )
-        .unique()
+    ours = pl.read_parquet(
+        layout.derived / "analyses" / "beacon-diagnostics" / "our_self_reports.parquet"
     )
-    qa = {"rows_unique": raw.height}
+    raw = ours.filter(pl.col("ok")).select(pl.col("beacon").cast(pl.Int64), "t").unique()
+    qa = {"rows": ours.height, "rows_ok_unique": raw.height}
     df = raw.filter((pl.col("t") >= local(INSTRUCTION)) & (pl.col("t") < local(cp.HANDOVER)))
     qa["in_window"] = df.height
     df = spine.resolve(df, device_col="beacon", time_col="t", kind="beacon", out="entity")
