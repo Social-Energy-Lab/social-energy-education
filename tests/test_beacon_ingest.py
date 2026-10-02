@@ -166,3 +166,50 @@ def test_previous_boot_records_use_the_previous_cycle_and_must_precede_the_resta
     # 17:10 would be after the 17:00 restart: impossible for the previous boot.
     assert c["implausible_time"].to_list() == [False, True, False]
     assert late.qa["contacts_unplaced_in_time"] == 0
+
+
+# ---- logger ID bug against power cycles (id_bug.log, id_bug_cleaned.log) -------------------------
+# Tag 51 booted 15 Aug 06:13:20 local (100000 s before 16 Aug 10:00). The ambiguous "3" readout on
+# 15 Aug implies 06:23:20, a stamp 10 minutes late: it is tag 51. Tag 3 booted 16 Aug 07:35.
+
+
+def id_bug_config(**kw):
+    return BeaconConfig(
+        timezone=TZ,
+        valid_from=date(2026, 8, 12),
+        valid_to=date(2026, 8, 29),
+        ambiguous_id_cutoff=datetime(2026, 8, 15, 20, 0, 0),
+        **kw,
+    )
+
+
+def test_a_late_stamped_ambiguous_readout_is_repaired_by_power_cycle():
+    t = ingest_logs([GOLDEN.parent / "id_bug.log"], id_bug_config())
+    r = t.readouts.filter(pl.col("header_id") == "3").sort("pc_time")
+    assert r["beacon"].to_list() == [51, 3]
+    assert r["id_status"].to_list() == ["repaired", "ok"]
+
+
+def test_ids_in_files_split_by_hand_are_trusted():
+    paths = [GOLDEN.parent / "id_bug_cleaned.log"]
+    t = ingest_logs(paths, id_bug_config(ids_split_in=("*_cleaned.log",)))
+    assert t.readouts["id_status"].to_list() == ["ok"]
+    assert t.readouts["beacon"].to_list() == [3]
+    t = ingest_logs(paths, id_bug_config())
+    assert t.readouts["id_status"].to_list() == ["ambiguous"]
+
+
+def test_a_cycle_that_started_after_the_implied_start_does_not_match(tmp_path):
+    # Tag 3 booted 15 Aug 06:50, half an hour after the ambiguous readout's implied 06:23:20.
+    # Stamps are only ever late, so that cycle cannot be the ambiguous readout's own.
+    log = tmp_path / "id_bug_late_boot.log"
+    lines = (GOLDEN.parent / "id_bug.log").read_text().splitlines()[:7]
+    lines += [
+        "2026-08-16 10:05:00,ID: 3,Status: 0",
+        "2026-08-16 10:05:00,ID: 3,Current Timer: 98400",
+        "2026-08-16 10:05:00,ID: 3,Contact Count: 0",
+    ]
+    log.write_text("\n".join(lines) + "\n")
+    t = ingest_logs([log], id_bug_config())
+    r = t.readouts.filter(pl.col("header_id") == "3").sort("pc_time")
+    assert r["beacon"].to_list() == [51, 3]

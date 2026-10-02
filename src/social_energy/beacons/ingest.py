@@ -19,6 +19,7 @@ Principles:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -49,8 +50,11 @@ class BeaconConfig:
     # Logger bug (fixed upstream in commit 2e1f52d): before this local wall-clock
     # time, beacon IDs 48-57 were printed as the characters "0"-"9".
     ambiguous_id_cutoff: datetime | None = None
-    # Max difference (s) between clock anchors that counts as the same boot (ID repair only).
-    anchor_tolerance_s: int = 5
+    # File-name patterns of logs whose readout IDs were already split by hand (trusted as printed).
+    ids_split_in: tuple[str, ...] = ()
+    # ID repair: how far (s) an ambiguous readout's implied start may lie before a cycle's estimated
+    # start. That estimate is itself the latest of several late stamps, so a little earlier is fine.
+    anchor_tolerance_s: int = 300
     # Uptime this far behind the wall time elapsed since the tag's previous anchor is a restart.
     restart_margin_s: int = 3600
     # A gap this long between two lines of one tag in one file starts a new readout.
@@ -176,9 +180,12 @@ def _readout_table(rows: pl.DataFrame) -> pl.DataFrame:
 def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
     """Undo the logger bug that printed beacon IDs 48-57 as "0"-"9".
 
-    An ambiguous readout for header ``n`` came from beacon ``n`` or ``n + 48``. Every
-    readout of one boot shares a clock anchor (``pc_time - current_timer``), so the
-    candidate whose unambiguous readouts share this anchor is the right one.
+    An ambiguous readout for header ``n`` came from beacon ``n`` or ``n + 48``. Its implied start
+    (``pc_time - current_timer``) lies at or a little after the start of the power cycle it belongs
+    to, since stamps only run late. The candidate with a cycle (from unambiguous readouts) that
+    started at most ``restart_margin_s`` before it, and no more than ``anchor_tolerance_s`` after
+    (the cycle's start is estimated from late stamps too), is the right one.
+    Logs matching ``ids_split_in`` were split by hand and are trusted.
     """
     if config.ambiguous_id_cutoff is None:
         return readouts.with_columns(pl.lit("ok").alias("id_status"))
@@ -187,10 +194,28 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
         .dt.replace_time_zone(config.timezone)
         .dt.convert_time_zone(UTC)[0]
     )
-    is_ambiguous = pl.col("header_id").str.contains(r"^[0-9]$") & (pl.col("pc_time") < cutoff)
+    split_by_hand = pl.lit(False)
+    for pattern in config.ids_split_in:
+        split_by_hand = split_by_hand | pl.col("source").str.contains(_glob_to_regex(pattern))
+    is_ambiguous = (
+        pl.col("header_id").str.contains(r"^[0-9]$") & (pl.col("pc_time") < cutoff) & ~split_by_hand
+    )
     readouts = readouts.with_columns(is_ambiguous.alias("_ambiguous"))
-    known = readouts.filter(~pl.col("_ambiguous") & pl.col("anchor").is_not_null())
-    tolerance = timedelta(seconds=config.anchor_tolerance_s)
+    known = readouts.filter(
+        ~pl.col("_ambiguous") & pl.col("anchor").is_not_null() & pl.col("beacon").is_not_null()
+    )
+    starts = (
+        power_cycles(
+            known.select(
+                "beacon", pl.col("pc_time").alias("ts"), pl.col("current_timer").alias("timer")
+            ),
+            restart_margin_s=config.restart_margin_s,
+        )
+        .select("beacon", "cycle_start")
+        .unique()
+    )
+    early = timedelta(seconds=config.anchor_tolerance_s)
+    late = timedelta(seconds=config.restart_margin_s)
 
     fixed_beacon, status = [], []
     for row in readouts.iter_rows(named=True):
@@ -206,9 +231,10 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
         matches = [
             candidate
             for candidate in (n, n + 48)
-            if known.filter(
+            if starts.filter(
                 (pl.col("beacon") == candidate)
-                & ((pl.col("anchor") - row["anchor"]).abs() <= tolerance)
+                & (pl.col("cycle_start") <= row["anchor"] + early)
+                & (pl.col("cycle_start") >= row["anchor"] - late)
             ).height
         ]
         if len(matches) == 1:
@@ -221,6 +247,10 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
         pl.Series("beacon", fixed_beacon, dtype=pl.Int64),
         pl.Series("id_status", status, dtype=pl.String),
     ).drop("_ambiguous")
+
+
+def _glob_to_regex(pattern: str) -> str:
+    return "^" + re.escape(pattern).replace(r"\*", ".*").replace(r"\?", ".") + "$"
 
 
 def _add_boot_context(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:

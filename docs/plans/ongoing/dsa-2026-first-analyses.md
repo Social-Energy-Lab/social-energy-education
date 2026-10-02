@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** none
-**Next:** repair the logger ID bug against power cycles instead of single anchors (late stamps defeat the 5 s match), then compare with the beacon team's hand split once the original logs are in
+**Next:** ingest contacts per day for the whole camp with our ingest, then move co-presence off `Output/`
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 
@@ -50,7 +50,8 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 ## Next steps
 
 - [x] Ingest: date records as (power cycle's earliest implied start + uptime); previous-boot records must precede the restart (else `implausible_time`); headerless readouts are their own readouts; presses compared against `Output/` and switched to our ingest.
-- [ ] Ingest: repair the logger ID bug against power cycles; check against the beacon team's hand split.
+- [x] Ingest: trust the hand-split `_cleaned` logs; repair the rest of the logger ID bug against power cycles.
+- [ ] When the original (uncleaned) logs arrive, run our repair on them and compare with the hand split.
 - [ ] Ingest contacts per day for the whole camp, then move co-presence to our ingest.
 - [x] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
 - [x] Flag lost windows per tag in a table the analyses can join (`lost_windows.parquet`), so one-sided measures can be restricted to unaffected time.

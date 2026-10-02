@@ -17,6 +17,9 @@ beacons:
   valid_to: 2026-08-29
   # Logger printed beacon IDs 48-57 as "0"-"9" before upstream commit 2e1f52d.
   ambiguous_id_cutoff: "2026-08-15 20:17:48"
+  # The beacon team split the 13-15 Aug readouts into 0-9 and 48-57 by hand in these files
+  # (confirmed 2026-10-02); their IDs are trusted as printed.
+  ids_split_in: ["*_cleaned.log"]
   rssi_threshold_dbm:
     person_tag: -80
     location_tag: -100
