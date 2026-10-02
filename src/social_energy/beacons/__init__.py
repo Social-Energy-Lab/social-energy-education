@@ -1,6 +1,6 @@
 """BLE proximity beacons: logger files → canonical contact, self-report and eco tables."""
 
-from .cycles import lost_windows, power_cycles, read_clock_anchors
+from .cycles import lost_windows, power_cycles, read_clock_anchors, read_deliveries
 from .ingest import BeaconConfig, BeaconTables, ingest_logs
 from .presses import press_episodes
 
@@ -12,4 +12,5 @@ __all__ = [
     "power_cycles",
     "press_episodes",
     "read_clock_anchors",
+    "read_deliveries",
 ]

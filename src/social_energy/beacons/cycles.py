@@ -20,6 +20,9 @@ from pathlib import Path
 import polars as pl
 
 ANCHOR = ",Current Timer: "
+RECORD_LINE = (
+    r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),ID: (\d+),(?:ID2: |Self-report time: |Eco Session )"
+)
 
 
 def read_clock_anchors(paths: Iterable[Path], timezone: str) -> pl.DataFrame:
@@ -91,17 +94,72 @@ def power_cycles(anchors: pl.DataFrame, *, restart_margin_s: int) -> pl.DataFram
     )
 
 
-def lost_windows(cycles: pl.DataFrame) -> pl.DataFrame:
+def read_deliveries(paths: Iterable[Path], timezone: str) -> pl.DataFrame:
+    """When each tag delivered records: ``beacon``, ``ts`` (UTC), one row per distinct PC second.
+
+    Only lines that carry a record (contact, self-report, eco session) count. A readout can arrive
+    without its header, and so without a clock anchor, yet still drain the tag; a connection that
+    logged only a ``Status`` line delivered nothing.
+    """
+    frames = [
+        pl.scan_csv(
+            path,
+            has_header=False,
+            separator="\x1f",
+            quote_char=None,
+            schema={"line": pl.String},
+            encoding="utf8-lossy",
+        )
+        for path in paths
+    ]
+    if not frames:
+        return pl.DataFrame(schema={"beacon": pl.Int64, "ts": pl.Datetime("us", "UTC")})
+    return (
+        pl.concat(frames)
+        .filter(pl.col("line").str.contains(RECORD_LINE))
+        .select(
+            pl.col("line").str.extract(RECORD_LINE, 2).cast(pl.Int64).alias("beacon"),
+            pl.col("line").str.extract(RECORD_LINE, 1).alias("ts"),
+        )
+        .unique()
+        .with_columns(
+            pl.col("ts")
+            .str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S")
+            .dt.replace_time_zone(timezone, ambiguous="earliest")
+            .dt.convert_time_zone("UTC")
+        )
+        .unique()
+        .sort("beacon", "ts")
+        .collect(engine="streaming")
+    )
+
+
+def lost_windows(cycles: pl.DataFrame, deliveries: pl.DataFrame | None = None) -> pl.DataFrame:
     """Per restart, the span whose unread records were wiped: ``beacon``, ``start``, ``end``.
 
-    ``start`` is the previous readout; ``end`` is the restart, estimated by the restart anchor's
-    implied start. A restart implied before the previous readout (a late stamp) loses nothing
-    measurable and is left out.
+    ``start`` is the last readout before the restart: the previous clock anchor, or a later
+    delivery of records (``read_deliveries``) when a readout arrived without its anchor. ``end``
+    is the restart, estimated by the restart anchor's implied start. A restart implied before the
+    last readout (a late stamp) loses nothing measurable and is left out.
     """
-    return (
+    windows = (
         cycles.sort("beacon", "ts", "timer")
         .with_columns(pl.col("ts").shift().over("beacon").alias("start"))
         .filter(pl.col("restart"))
         .select("beacon", "start", pl.col("implied").alias("end"))
-        .filter(pl.col("end") > pl.col("start"))
     )
+    if deliveries is not None:
+        latest = (
+            windows.with_row_index("_w")
+            .join(deliveries.select("beacon", pl.col("ts").alias("_d")), on="beacon")
+            .filter((pl.col("_d") > pl.col("start")) & (pl.col("_d") < pl.col("end")))
+            .group_by("_w")
+            .agg(pl.col("_d").max())
+        )
+        windows = (
+            windows.with_row_index("_w")
+            .join(latest, on="_w", how="left")
+            .with_columns(pl.coalesce("_d", "start").alias("start"))
+            .drop("_w", "_d")
+        )
+    return windows.filter(pl.col("end") > pl.col("start"))

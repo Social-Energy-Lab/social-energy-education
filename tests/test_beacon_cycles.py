@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import polars as pl
 
-from social_energy.beacons import lost_windows, power_cycles, read_clock_anchors
+from social_energy.beacons import lost_windows, power_cycles, read_clock_anchors, read_deliveries
 
 GOLDEN = Path(__file__).parent / "fixtures" / "beacon_logs" / "golden.log"
 TZ = "Europe/Berlin"
@@ -90,3 +90,28 @@ def test_anchors_from_the_golden_log():
     assert c["cycle_start"].to_list()[1:] == [at(11, 50), at(11, 50)]
     w = lost_windows(c)
     assert w.rows() == [(37, at(10), at(11, 50))]
+
+
+HEADERLESS = GOLDEN.parent / "headerless.log"
+
+
+def test_deliveries_are_readout_lines_that_carry_records():
+    d = read_deliveries([HEADERLESS], TZ)
+    # 12:00 (contact), 18:00 (headerless contact + press), 09:00 next day (eco); the lone Status
+    # at 20:00 delivered nothing and the malformed ID is skipped. Berlin is UTC+2.
+    assert d.sort("ts").rows() == [(7, at(10, day=20)), (7, at(16, day=20)), (7, at(7, day=21))]
+
+
+def test_a_readout_without_anchor_shortens_the_lost_window():
+    c = power_cycles(read_clock_anchors([HEADERLESS], TZ), restart_margin_s=3600)
+    # Booted 00:00 UTC on 20 Aug, restarted 06:00 UTC on 21 Aug (09:00 local - 3600 s).
+    assert lost_windows(c).rows() == [(7, at(10, day=20), at(6, day=21))]
+    d = read_deliveries([HEADERLESS], TZ)
+    assert lost_windows(c, d).rows() == [(7, at(16, day=20), at(6, day=21))]
+
+
+def test_deliveries_after_the_restart_do_not_count():
+    c = power_cycles(anchors([(1, at(10), 7200), (1, at(16), 3600)]), restart_margin_s=3600)
+    d = anchors([(1, at(15, 30), 0), (1, at(12), 0), (1, at(11), 0)]).select("beacon", "ts")
+    # Restart at 15:00; the latest delivery before it wins, and 15:30 belongs to the new boot.
+    assert lost_windows(c, d).rows() == [(1, at(12), at(15))]

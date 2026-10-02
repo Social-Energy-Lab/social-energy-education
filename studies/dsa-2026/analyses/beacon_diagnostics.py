@@ -28,7 +28,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 import copresence_by_phase as cp
 
 from social_energy import paths
-from social_energy.beacons import ingest_logs, lost_windows, power_cycles, read_clock_anchors
+from social_energy.beacons import (
+    ingest_logs,
+    lost_windows,
+    power_cycles,
+    read_clock_anchors,
+    read_deliveries,
+)
 from social_energy.spine import Spine
 from social_energy.study import StudyConfig
 
@@ -608,11 +614,18 @@ def main() -> None:
     all_resets = resets(cycles)
     # The lost windows, for every tag, in a table other analyses join: a press or a one-sided
     # measure inside one cannot be observed, so it belongs outside the exposure.
-    lost_windows(cycles).write_parquet(out / "lost_windows.parquet")
+    # A readout can arrive without its header (no anchor) and still drain the tag, so the window
+    # starts at the last delivery of records, not only at the last anchor.
+    raw_logs = sorted((paths.study(cp.STUDY).raw / "beacons" / "Logs").glob("*.log"))
+    windows = lost_windows(cycles, read_deliveries(raw_logs, cp.TZ))
+    windows.write_parquet(out / "lost_windows.parquet")
     rs = all_resets.filter(pl.col("beacon").is_in(list(person_tags)))
+    lw = windows.filter(pl.col("beacon").is_in(list(person_tags))).with_columns(
+        pl.col("start", "end").dt.convert_time_zone(cp.TZ)
+    )
     days9 = [cp.FIRST_DAY + timedelta(d) for d in range(16)]
     lost = np.zeros(len(days9))
-    for a, b in rs.select("prev_ts", "boot").iter_rows():
+    for a, b in lw.select("start", "end").iter_rows():
         t = a
         while t < b:
             nxt = min(b, (t + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0))
@@ -641,13 +654,13 @@ def main() -> None:
     fig.tight_layout()
     fig.savefig(out / "q_resets.png", dpi=160)
     plt.close(fig)
-    lost_h = ((pl.col("boot") - pl.col("prev_ts")).dt.total_seconds() / 3600).alias("h")
+    lost_h = ((pl.col("end") - pl.col("start")).dt.total_seconds() / 3600).alias("h")
     summary["resets"] = {
         "person_tag_resets": rs.height,
         "tags_with_reset": rs["beacon"].n_unique(),
         "person_tags": len(person_tags),
         "lost_window_hours_quartiles": [
-            float(x) for x in np.percentile(rs.select(lost_h)["h"].to_numpy(), [25, 50, 75])
+            float(x) for x in np.percentile(lw.select(lost_h)["h"].to_numpy(), [25, 50, 75])
         ],
         "lost_share_by_day": dict(zip(lab9, lost_share.round(3).tolist(), strict=True)),
     }
