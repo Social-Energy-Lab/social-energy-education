@@ -1,8 +1,8 @@
 # DSA 2026: first analyses of co-presence, self-reports and beacon health
 
 **Priority:** high
-**Gate:** blocked:Mahdi answers the spine questions in open_questions.md (open-ended return times, tag 50's second loss, the tagged participant without consent) (recheck 2026-10-30)
-**Next:** settle the spine questions only Mahdi can answer (open-ended return times, tag 50's second loss, the tagged participant without consent), then refresh the deck
+**Gate:** blocked:Mahdi answers the spine questions in the private open_questions.md (recheck 2026-10-30)
+**Next:** settle the spine questions only Mahdi can answer (listed in the private open_questions.md), then refresh the deck
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 

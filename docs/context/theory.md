@@ -54,7 +54,7 @@ or divert it. That is what the project and this repo address.
 | Physiological synchrony | EDA/heart-rate coupling between co-present wearers | EDA wearables | named in design (cardiac synchrony, Høffding); `[inferred]` for EDA |
 | Trust in life (baseline) | belonging, trust, perspective-taking, relationships, well-being, sense of identity | survey block B | the questionnaire's own trust block |
 | Lust for life / agency (baseline) | self-efficacy (general and resonance-oriented), openness, proactive learning, cooperation, initiative | survey block C | the questionnaire's own agency block |
-| Gradient | "not enough room in my current life for …" items attached to several scales; social-status now vs expected at 30 | survey | scored separately, never inside the parent scale |
+| Gradient | items asking whether present life leaves room for a construct, attached to several scales; social-status now vs expected at 30 | survey | scored separately, never inside the parent scale |
 | Lived experience, reasons | phenomenological + AI interviews | interviews | qualitative |
 
 ## Settled
