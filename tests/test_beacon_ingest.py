@@ -105,7 +105,8 @@ def test_quality_column_summarises_flags(tables):
         c["ok"].to_list()
         == (
             # pre_reboot is informational: those times are resolved, from the previous anchor.
-            ~(c["duplicate"] | c["implausible_time"] | c["id_ambiguous"]) & c["t"].is_not_null()
+            ~(c["duplicate"] | c["implausible_time"] | c["id_ambiguous"] | c["invalid_value"])
+            & c["t"].is_not_null()
         ).to_list()
     )
 
@@ -224,3 +225,66 @@ def test_records_made_during_a_long_transfer_stay_in_the_current_boot():
     assert c["pre_reboot"].to_list() == [False, False]
     assert local(c) == ["2026-08-20 09:56:40", "2026-08-20 10:00:10"]
     assert c["ok"].to_list() == [True, True]
+
+
+# ---- logger quirks and value checks (logger_quirks.log) ------------------------------------------
+# Tag 9 booted 20 Aug 08:00 local (Current Timer 7200 at 10:00). Its header and first contact were
+# written with a doubled comma after the ID, as in a hand-edited log. Contact timers 7000-7003 date
+# to 09:56:40-09:56:43. ID2 200 is outside the ID table and RSSI -5 is not physical; 253 is a
+# development kit, which is a valid ID. Contact Count 230000 is past what fits before flash is full.
+
+QUIRKS = GOLDEN.parent / "logger_quirks.log"
+
+
+def quirks_config(**kw):
+    return BeaconConfig(timezone=TZ, valid_from=date(2026, 8, 12), valid_to=date(2026, 8, 29), **kw)
+
+
+def test_a_doubled_comma_after_the_id_is_still_parsed():
+    t = ingest_logs([QUIRKS], quirks_config())
+    assert t.qa["lines_other"] == 0
+    assert t.readouts["current_timer"].to_list() == [7200]
+    assert t.contacts.height == 4
+    assert local(t.contacts.sort("line_no")) == [
+        "2026-08-20 09:56:40", "2026-08-20 09:56:41", "2026-08-20 09:56:42", "2026-08-20 09:56:43",
+    ]  # fmt: skip
+
+
+def test_values_outside_the_id_table_or_rssi_range_are_flagged_not_dropped():
+    config = quirks_config(valid_id_ranges=((1, 170), (252, 254)), rssi_range=(-110, -10))
+    c = ingest_logs([QUIRKS], config).contacts.sort("line_no")
+    assert c["invalid_value"].to_list() == [False, True, True, False]
+    assert c["ok"].to_list() == [True, False, False, True]
+
+
+def test_without_value_ranges_nothing_is_flagged_invalid():
+    c = ingest_logs([QUIRKS], quirks_config()).contacts
+    assert not c["invalid_value"].any()
+
+
+def test_a_contact_count_past_the_storage_limit_flags_the_readout():
+    r = ingest_logs([QUIRKS], quirks_config(storage_full_count=215_000)).readouts
+    assert r["storage_full"].to_list() == [True]
+    r = ingest_logs([QUIRKS], quirks_config()).readouts
+    assert r["storage_full"].to_list() == [False]
+
+
+def test_witness_overrides_settle_only_readouts_the_anchors_left_ambiguous(tables):
+    four = tables.readouts.filter(pl.col("header_id") == "4")["readout_key"].to_list()
+    three = tables.readouts.filter(pl.col("id_status") == "repaired")["readout_key"].to_list()
+    config = BeaconConfig(
+        timezone=TZ,
+        valid_from=date(2026, 8, 12),
+        valid_to=date(2026, 8, 29),
+        ambiguous_id_cutoff=datetime(2026, 8, 15, 20, 17, 48),
+        # the "3" readout was already repaired to 51 by its anchor: an override must not move it
+        id_overrides=((four[0], 52), (three[0], 3)),
+    )
+    t = ingest_logs([GOLDEN], config)
+    r = t.readouts.filter(pl.col("header_id") == "4")
+    assert r["beacon"].to_list() == [52]
+    assert r["id_status"].to_list() == ["witnessed"]
+    assert t.readouts.filter(pl.col("readout_key") == three[0])["beacon"].to_list() == [51]
+    assert t.qa["ids_witnessed"] == 1
+    assert t.qa["ids_ambiguous"] == 0
+    assert not t.contacts.filter(pl.col("beacon") == 52)["id_ambiguous"].any()

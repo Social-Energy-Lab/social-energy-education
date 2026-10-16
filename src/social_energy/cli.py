@@ -43,7 +43,7 @@ import yaml
 
 from . import paths, zeitgeist
 from .acoustics import AcousticsConfig, extract_directory
-from .beacons import ingest_logs_to
+from .beacons import ingest_with_witnesses
 from .study import StudyConfig
 from .survey import ingest_zeitgeist
 
@@ -106,7 +106,7 @@ def ingest_beacons(study: StudyConfig) -> int:
     out = layout.derived / "beacons"
     if out.exists():
         shutil.rmtree(out)
-    qa = ingest_logs_to(logs, study.beacon_config(), out)
+    qa = ingest_with_witnesses(logs, study.beacon_config(), out)
     (out / "qa.json").write_text(json.dumps(qa, indent=2), encoding="utf-8")
     print(json.dumps(qa, indent=2))
     print(f"Wrote {out}")

@@ -1,8 +1,8 @@
 # DSA 2026: first analyses of co-presence, self-reports and beacon health
 
 **Priority:** high
-**Gate:** blocked:Mahdi answers the spine questions in open_questions.md (open-ended return times, tag 50's second loss, the tagged participant without consent) (recheck 2026-10-30)
-**Next:** settle the spine questions only Mahdi can answer (open-ended return times, tag 50's second loss, the tagged participant without consent), then refresh the deck
+**Gate:** blocked:Mahdi answers the spine questions in the private open_questions.md (recheck 2026-10-30)
+**Next:** settle the spine questions only Mahdi can answer (listed in the private open_questions.md), then refresh the deck for the research-group presentation on 2026-11-03 (biweekly review before it)
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 
@@ -10,7 +10,7 @@
 
 - **Branch:** `main`
 - **Done:** three analyses under `studies/dsa-2026/analyses/` (`copresence_by_phase.py`, `self_report_context.py`, `beacon_diagnostics.py`); firmware answers from the beacon team written into [`../../context/instruments/beacons.md`](../../context/instruments/beacons.md); a meeting deck and two question docs built from the outputs (kept outside the repo). Numbers are in the private half: `dsa-2026/notes/beacon-analyses-2026-10-01.md`.
-- **Waiting elsewhere (not on Next):** sign-off on the analysis choices below by the research team; firmware documentation from the beacon team, which decides the previous-boot rule.
+- **Waiting elsewhere (not on Next):** the firmware team's experiment log (commands, base buttons, battery changes); sign-off on the analysis choices below by the research team; firmware documentation from the beacon team, which decides the previous-boot rule.
 - **Consent:** the beacon-consent ruling of 2026-09-22 was applied to the spine on 2026-10-01, and every analysis was rerun with it.
 - **Handoff:** run `uv run social-energy ingest-beacons studies/dsa-2026/study.yaml`, then `copresence_by_phase.py build` and `report`, then `beacon_diagnostics.py` (writes the lost windows), then `self_report_context.py` (`uv run --extra analysis python …`). All read through the spine and write only under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/`.
 
@@ -50,7 +50,13 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 
 - [x] Ingest: date records as (power cycle's earliest implied start + uptime); previous-boot records must precede the restart (else `implausible_time`); headerless readouts are their own readouts; presses compared against `Output/` and switched to our ingest.
 - [x] Ingest: trust the hand-split `_cleaned` logs; repair the rest of the logger ID bug against power cycles.
-- [ ] When the original (uncleaned) logs arrive, run our repair on them and compare with the hand split.
+- [x] Run our repair on the original (uncleaned) logs and compare with the hand split. Done 2026-10-17 on the Nextcloud delivery: the ingest now reads the raw logs and repairs IDs itself (anchors, then partners' witnesses); the hand split is a benchmark. Results in the private half (`dsa-2026/notes/beacon-guide-check-2026-10-17.md`).
+- [x] Rerun the three analyses on the new delivery and compare with the outputs from the earlier, incomplete copy (kept as `derived/analyses-drive-2026-09-20/`). Done 2026-10-17; the comparison is in the private half.
+- [x] Observation window (2026-10-17, Álvaro): from the beacon team's deployment start, 13 Aug 18:00, to the 29 Aug 09:00 handover (`study.yaml`, `beacons.observation_window`). **Provisional** until the beacon team confirms that 11:30–18:00 is not usable.
+- [x] Readouts still ambiguous after witnesses (2026-10-17, Álvaro): excluded, not filled from the hand split. Their evidence is a split count with no timing peak; the hand label always equals that majority, so it adds no independent confidence. They stay in the tables, flagged `id_ambiguous`.
+- [ ] Exposure for those readouts: an excluded readout's interval is data missing for one of its two candidate tags, but which one is unknown. Count it as a lost window for both candidates in one-sided measures (press rates), so their exposure is not overstated.
+- [x] Estimate timer drift per power cycle from the lower edge of `delay_s` against uptime (2026-10-17): about +20 s/day on every cleanly fitted cycle; see the instrument doc.
+- [ ] Correct dating for drift in the toolkit: date each cycle along its fitted minimum-delay line (boot time and rate), and fall back to the camp-wide rate where a cycle's fit is poor. Test with a synthetic camp whose clocks run at a known rate; then rerun the analyses and compare press-to-event alignment and mirrored-contact offsets.
 - [x] Ingest the whole camp file by file (`ingest_logs_to`); co-presence, self-reports and diagnostics all read it.
 - [x] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
 - [x] Flag lost windows per tag in a table the analyses can join (`lost_windows.parquet`), so one-sided measures can be restricted to unaffected time.
@@ -66,6 +72,5 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 Questions that only matter for the next field phase live in [`../ideas/next-field-phase-beacon-practice.md`](../ideas/next-field-phase-beacon-practice.md).
 
 
-- `[unknown: is the PC time on a readout stamped after the transfer rather than when the timer was read?]`
 - `[unknown: which RSSI from a room tag means "inside this room"?]`
 - `[unknown: was the eco scan period changed from its 300 s default by control command during DSA 2026?]`

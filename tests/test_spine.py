@@ -22,8 +22,8 @@ def spine_dir(tmp_path: Path) -> Path:
         tmp_path,
         "people.yaml",
         [
-            {"id": "74", "role": "participant", "consent": ["beacons", "survey"]},
-            {"id": "75", "role": "participant", "consent": ["beacons"]},
+            {"id": "201", "role": "participant", "consent": ["beacons", "survey"]},
+            {"id": "202", "role": "participant", "consent": ["beacons"]},
             {"id": "L1", "role": "course_leader", "consent": []},
         ],
     )
@@ -36,11 +36,11 @@ def spine_dir(tmp_path: Path) -> Path:
         tmp_path,
         "assignments.yaml",
         [
-            # person 74 wore beacon 74 until it failed, then spare beacon 7
-            {"device": "beacon:74", "entity": "person:74",
-             "start": "2026-08-13 11:30:00", "end": "2026-08-14 15:40:00"},
-            {"device": "beacon:7", "entity": "person:74", "start": "2026-08-14 15:40:00"},
-            {"device": "beacon:75", "entity": "person:75", "start": "2026-08-13 11:30:00"},
+            # person 201 wore beacon 201 until it was swapped, then spare beacon 207
+            {"device": "beacon:201", "entity": "person:201",
+             "start": "2026-08-13 11:30:00", "end": "2026-08-14 13:00:00"},
+            {"device": "beacon:207", "entity": "person:201", "start": "2026-08-14 13:00:00"},
+            {"device": "beacon:202", "entity": "person:202", "start": "2026-08-13 11:30:00"},
             {"device": "beacon:134", "entity": "location:aula-stage",
              "start": "2026-08-13 11:30:00"},
         ],
@@ -58,9 +58,9 @@ def spine_dir(tmp_path: Path) -> Path:
         tmp_path,
         "exclusions.yaml",
         [
-            {"target": "beacon:75", "start": "2026-08-15 15:30:00",
+            {"target": "beacon:202", "start": "2026-08-15 15:30:00",
              "end": "2026-08-15 16:10:00", "reason": "taken off for swimming"},
-            {"target": "person:74", "start": "2026-08-16 22:00:00",
+            {"target": "person:201", "start": "2026-08-16 22:00:00",
              "end": "2026-08-17 10:00:00", "reason": "badge lost overnight"},
         ],
     )  # fmt: skip
@@ -75,15 +75,15 @@ def test_load_parses_naive_times_in_study_timezone(spine_dir):
     spine = Spine.load(spine_dir)
     first = spine.assignments[0]
     assert first.start == datetime(2026, 8, 13, 9, 30, tzinfo=UTC)  # 11:30 CEST
-    assert first.end == datetime(2026, 8, 14, 13, 40, tzinfo=UTC)
+    assert first.end == datetime(2026, 8, 14, 11, 0, tzinfo=UTC)  # 13:00 CEST
     assert spine.assignments[1].end is None
 
 
 def test_entity_for_follows_device_swaps(spine_dir):
     spine = Spine.load(spine_dir)
-    assert spine.entity_for("beacon:74", berlin("2026-08-14 10:00:00")) == "person:74"
-    assert spine.entity_for("beacon:74", berlin("2026-08-14 16:00:00")) is None
-    assert spine.entity_for("beacon:7", berlin("2026-08-14 16:00:00")) == "person:74"
+    assert spine.entity_for("beacon:201", berlin("2026-08-14 10:00:00")) == "person:201"
+    assert spine.entity_for("beacon:201", berlin("2026-08-14 16:00:00")) is None
+    assert spine.entity_for("beacon:207", berlin("2026-08-14 16:00:00")) == "person:201"
     assert spine.entity_for("beacon:134", berlin("2026-08-20 12:00:00")) == "location:aula-stage"
 
 
@@ -91,13 +91,13 @@ def test_resolve_adds_entity_column(spine_dir):
     spine = Spine.load(spine_dir)
     df = pl.DataFrame(
         {
-            "observer": [74, 7, 75, 99],
+            "observer": [201, 207, 202, 209],
             "t": [berlin(s) for s in ["2026-08-14 10:00:00", "2026-08-14 16:00:00",
                                       "2026-08-14 16:00:00", "2026-08-14 16:00:00"]],
         }
     )  # fmt: skip
     out = spine.resolve(df, device_col="observer", time_col="t", kind="beacon", out="who")
-    assert out["who"].to_list() == ["person:74", "person:74", "person:75", None]
+    assert out["who"].to_list() == ["person:201", "person:201", "person:202", None]
     assert out.columns == ["observer", "t", "who"]
 
 
@@ -105,7 +105,7 @@ def test_excluded_flags_device_and_person_windows(spine_dir):
     spine = Spine.load(spine_dir)
     df = pl.DataFrame(
         {
-            "observer": [75, 75, 7, 7],
+            "observer": [202, 202, 207, 207],
             "t": [berlin(s) for s in ["2026-08-15 15:45:00", "2026-08-15 17:00:00",
                                       "2026-08-16 23:00:00", "2026-08-17 11:00:00"]],
         }
@@ -116,29 +116,29 @@ def test_excluded_flags_device_and_person_windows(spine_dir):
 
 def test_consent_by_module(spine_dir):
     spine = Spine.load(spine_dir)
-    assert spine.consented("beacons") == {"74", "75"}
-    assert spine.consented("survey") == {"74"}
+    assert spine.consented("beacons") == {"201", "202"}
+    assert spine.consented("survey") == {"201"}
 
 
 def test_overlapping_assignments_for_one_device_are_rejected(spine_dir):
     doc = yaml.safe_load((spine_dir / "assignments.yaml").read_text())
-    doc.append({"device": "beacon:75", "entity": "person:74", "start": "2026-08-20 10:00:00"})
+    doc.append({"device": "beacon:202", "entity": "person:201", "start": "2026-08-20 10:00:00"})
     _dump(spine_dir, "assignments.yaml", doc)
-    with pytest.raises(SpineError, match="beacon:75"):
+    with pytest.raises(SpineError, match="beacon:202"):
         Spine.load(spine_dir)
 
 
 def test_person_wearing_two_beacons_at_once_is_rejected(spine_dir):
     doc = yaml.safe_load((spine_dir / "assignments.yaml").read_text())
-    doc.append({"device": "beacon:99", "entity": "person:75", "start": "2026-08-20 10:00:00"})
+    doc.append({"device": "beacon:209", "entity": "person:202", "start": "2026-08-20 10:00:00"})
     _dump(spine_dir, "assignments.yaml", doc)
-    with pytest.raises(SpineError, match="person:75"):
+    with pytest.raises(SpineError, match="person:202"):
         Spine.load(spine_dir)
 
 
 def test_unknown_entities_are_rejected(spine_dir):
     doc = yaml.safe_load((spine_dir / "assignments.yaml").read_text())
-    doc.append({"device": "beacon:99", "entity": "person:999", "start": "2026-08-20 10:00:00"})
+    doc.append({"device": "beacon:209", "entity": "person:999", "start": "2026-08-20 10:00:00"})
     _dump(spine_dir, "assignments.yaml", doc)
     with pytest.raises(SpineError, match="person:999"):
         Spine.load(spine_dir)
@@ -168,7 +168,7 @@ def test_exclusion_with_an_unknown_target_kind_is_rejected(spine_dir):
 def test_exclusions_for_assigned_devices_and_known_people_still_load(spine_dir):
     """The guard must not reject the two legitimate shapes the fixture already uses."""
     spine = Spine.load(spine_dir)
-    assert {e.target for e in spine.exclusions} == {"beacon:75", "person:74"}
+    assert {e.target for e in spine.exclusions} == {"beacon:202", "person:201"}
 
 
 def test_event_notes_carry_uncertainty_markers(spine_dir):
@@ -205,7 +205,7 @@ def test_unassigned_flag_admits_an_exclusion_for_a_device_nobody_ever_wore(spine
     assert excl.unassigned is True
 
     # and it actually flags rows for that device, which is the whole point
-    df = pl.DataFrame({"id": [200, 75], "t": [berlin("2026-08-14 12:00:00")] * 2})
+    df = pl.DataFrame({"id": [200, 202], "t": [berlin("2026-08-14 12:00:00")] * 2})
     flagged = spine.flag_excluded(df, device_col="id", time_col="t", kind="beacon")
     assert flagged["excluded"].to_list() == [True, False]
 

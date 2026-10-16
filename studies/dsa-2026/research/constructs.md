@@ -22,5 +22,5 @@ A working table linking the theory to concrete, computable measures. Status colu
 
 - **Self-efficacy sits in lust for life** (block C), following the survey's own block logic (2026-09-20, Mahdi; see `docs/context/theory.md`). Resonance-oriented self-efficacy is grounded theoretically in trust in life but is scored under C.
 - **Staff presses** (course and academy leaders) are **provisionally analysed separately** from participants' presses (2026-09-20, Mahdi). Not decided; revisit once there are enough presses to compare. Keep the role from the spine on every press so either choice stays possible.
-- **Status of this table:** the research team has not reviewed it yet (2026-09-20, Mahdi: "we'll need to think about this"), so **no entry is `agreed`**. Treat everything here as `proposed` until that review.
+- **Status of this table:** the research team has not reviewed it yet (2026-09-20, Mahdi), so **no entry is `agreed`**. Treat everything here as `proposed` until that review.
 - Course membership per participant is not yet available; Mahdi will supply it with the study-ID list (no date yet). Mixing measures wait on it.

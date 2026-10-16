@@ -29,7 +29,8 @@ import polars as pl
 
 from .cycles import power_cycles
 
-LINE_RE = r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),ID: ([^,]*),(.*)$"
+# One or more commas after the ID: a hand-edited log can carry a doubled one.
+LINE_RE = r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),ID: ([^,]*),+(.*)$"
 KINDS: dict[str, str] = {
     "status": r"^Status: (\d+)$",
     "timer": r"^Current Timer: (\d+)$",
@@ -59,6 +60,25 @@ class BeaconConfig:
     restart_margin_s: int = 3600
     # A gap this long between two lines of one tag in one file starts a new readout.
     readout_gap_s: int = 60
+    # Contact values outside these are ``invalid_value`` (corrupted or fake records). Empty / None
+    # means no check. IDs: inclusive (low, high) ranges of the fielded ID table.
+    valid_id_ranges: tuple[tuple[int, int], ...] = ()
+    rssi_range: tuple[int, int] | None = None
+    # A readout's Contact Count at or above this means the tag's flash was full and its oldest
+    # contacts were discarded silently (``storage_full``). None means no check.
+    storage_full_count: int | None = None
+    # (readout_key, beacon) settled by partners' ID2 sightings (``beacons.witness``). Only for
+    # readouts the clock anchors left ambiguous; their status becomes "witnessed".
+    id_overrides: tuple[tuple[str, int], ...] = ()
+    # Witness repair (``beacons.witness``): how far apart (s) a contact and a partner's sighting may
+    # be, how many votes a decision needs, and the share the winning candidate must hold.
+    witness_tolerance_s: int = 300
+    witness_min_votes: int = 5
+    witness_min_share: float = 0.9
+    # Timing: sightings within this many seconds of a candidate's median offset form its peak, and
+    # a peak this many times the other candidate's settles a split count.
+    witness_peak_s: int = 10
+    witness_min_peak_ratio: float = 3.0
 
 
 @dataclass
@@ -216,6 +236,7 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
     )
     early = timedelta(seconds=config.anchor_tolerance_s)
     late = timedelta(seconds=config.restart_margin_s)
+    overrides = dict(config.id_overrides)
 
     fixed_beacon, status = [], []
     for row in readouts.iter_rows(named=True):
@@ -225,8 +246,9 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
             continue
         n = int(row["header_id"])
         if row["anchor"] is None:
-            fixed_beacon.append(n)
-            status.append("ambiguous")
+            witnessed = row["readout_key"] in overrides
+            fixed_beacon.append(overrides[row["readout_key"]] if witnessed else n)
+            status.append("witnessed" if witnessed else "ambiguous")
             continue
         matches = [
             candidate
@@ -240,6 +262,9 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
         if len(matches) == 1:
             fixed_beacon.append(matches[0])
             status.append("ok" if matches[0] == n else "repaired")
+        elif row["readout_key"] in overrides:
+            fixed_beacon.append(overrides[row["readout_key"]])
+            status.append("witnessed")
         else:
             fixed_beacon.append(n)
             status.append("ambiguous")
@@ -371,6 +396,7 @@ OK = (
     & ~pl.col("implausible_time")
     & ~pl.col("duplicate")
     & ~pl.col("id_ambiguous")
+    & ~pl.col("invalid_value")
 ).alias("ok")
 
 
@@ -380,7 +406,23 @@ def _finish(records: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
         (pl.col("t").is_not_null() & ~_plausible(pl.col("t"), config)).alias("implausible_time"),
         pl.lit(False).alias("duplicate"),
         (pl.col("id_status") == "ambiguous").alias("id_ambiguous"),
+        pl.col("invalid_value")
+        if "invalid_value" in records.columns
+        else pl.lit(False).alias("invalid_value"),
     ).with_columns(OK)
+
+
+def _invalid_value(config: BeaconConfig) -> pl.Expr:
+    """A contact whose partner ID is not in the ID table or whose RSSI is not physical."""
+    bad = pl.lit(False)
+    if config.valid_id_ranges:
+        in_table = pl.lit(False)
+        for low, high in config.valid_id_ranges:
+            in_table = in_table | pl.col("observed").is_between(low, high)
+        bad = bad | ~in_table
+    if config.rssi_range is not None:
+        bad = bad | ~pl.col("rssi").is_between(*config.rssi_range)
+    return bad.alias("invalid_value")
 
 
 def _flag_duplicates(records: pl.DataFrame, key: list[str]) -> pl.DataFrame:
@@ -395,7 +437,10 @@ READOUT_CONTEXT = [
     "readout_key", "beacon", "readout_seq", "readout_order", "pc_time",
     "current_timer", "cycle_start", "prev_cycle_start", "id_status",
 ]  # fmt: skip
-FLAGS = ["pre_reboot", "headerless", "implausible_time", "duplicate", "id_ambiguous", "ok"]
+FLAGS = [
+    "pre_reboot", "headerless", "implausible_time", "duplicate", "id_ambiguous", "invalid_value",
+    "ok",
+]  # fmt: skip
 
 
 CONTACT_KEY = ["beacon", "observed", "rssi"]
@@ -413,8 +458,13 @@ def _parse(paths: Iterable[Path], config: BeaconConfig) -> tuple[pl.DataFrame, p
 
 def _readouts(readout_rows: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
     readouts = _add_boot_context(_repair_ids(readout_rows, config), config)
+    full = (
+        pl.lit(False)
+        if config.storage_full_count is None
+        else (pl.col("contact_count") >= config.storage_full_count).fill_null(False)
+    )
     return readouts.sort("pc_time", "source", "first_line").with_columns(
-        pl.int_range(pl.len()).alias("readout_order")
+        pl.int_range(pl.len()).alias("readout_order"), full.alias("storage_full")
     )
 
 
@@ -430,9 +480,9 @@ def _records(
     )
     contacts = _finish(
         _resolve_boots(
-            data.filter(pl.col("kind") == "contact").rename(
-                {"_observed": "observed", "_uptime_c": "uptime_s", "_rssi": "rssi"}
-            ),
+            data.filter(pl.col("kind") == "contact")
+            .rename({"_observed": "observed", "_uptime_c": "uptime_s", "_rssi": "rssi"})
+            .with_columns(_invalid_value(config)),
             "uptime_s",
         ),
         config).select(
@@ -473,7 +523,7 @@ def _finish_eco(eco: pl.DataFrame) -> pl.DataFrame:
 READOUT_COLUMNS = [
     "readout_key", "source", "first_line", "header_id", "beacon", "id_status",
     "readout_seq", "pc_time", "current_timer", "anchor", "cycle", "cycle_start",
-    "reboot_before", "contact_count", "voltage_mv", "status_byte",
+    "reboot_before", "contact_count", "storage_full", "voltage_mv", "status_byte",
 ]  # fmt: skip
 
 
@@ -496,6 +546,7 @@ def _qa(
         "eco_sessions": eco_sessions,
         "ids_repaired": int((readouts["id_status"] == "repaired").sum()),
         "ids_ambiguous": int((readouts["id_status"] == "ambiguous").sum()),
+        "ids_witnessed": int((readouts["id_status"] == "witnessed").sum()),
         "reboots": int(readouts["reboot_before"].sum()),
         "contacts_not_ok": contacts["not_ok"],
         "contacts_unplaced_in_time": contacts["unplaced"],
