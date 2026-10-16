@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** blocked:Mahdi answers the spine questions in the private open_questions.md (recheck 2026-10-30)
-**Next:** settle the spine questions only Mahdi can answer (listed in the private open_questions.md), then refresh the deck
+**Next:** settle the spine questions only Mahdi can answer (listed in the private open_questions.md), then refresh the deck for the research-group presentation on 2026-11-03 (biweekly review before it)
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 
@@ -50,7 +50,8 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 
 - [x] Ingest: date records as (power cycle's earliest implied start + uptime); previous-boot records must precede the restart (else `implausible_time`); headerless readouts are their own readouts; presses compared against `Output/` and switched to our ingest.
 - [x] Ingest: trust the hand-split `_cleaned` logs; repair the rest of the logger ID bug against power cycles.
-- [ ] When the original (uncleaned) logs arrive, run our repair on them and compare with the hand split.
+- [ ] Run our repair on the original (uncleaned) logs and compare with the hand split. The originals are on the team Nextcloud since 2026-10-12; download into `raw/beacons/` first.
+- [ ] Estimate timer drift per power cycle from the lower edge of `delay_s` against uptime, and decide whether records need a per-cycle rate correction before dating (instrument doc, open questions).
 - [x] Ingest the whole camp file by file (`ingest_logs_to`); co-presence, self-reports and diagnostics all read it.
 - [x] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
 - [x] Flag lost windows per tag in a table the analyses can join (`lost_windows.parquet`), so one-sided measures can be restricted to unaffected time.
