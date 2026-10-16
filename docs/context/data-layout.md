@@ -54,7 +54,7 @@ $SOCIAL_ENERGY_DATA/              the data root, and the private repo
 
 | Source | How it reaches `raw/` | Lands in |
 |---|---|---|
-| Beacons | copy the logger files as delivered | `raw/beacons/` |
+| Beacons | copy the raw logger files as delivered (the unmodified ones, if a delivery has several versions); keep other versions outside `raw/beacons/`, since the ingest reads every `.log` under it | `raw/beacons/` |
 | EDA | wearable export `[unknown: export format]` | `raw/eda/` |
 | AudioMoth | copy each card as it is, one folder per device | `raw/audiomoth/<device>/` |
 | In-person interviews | copy each transmitter's volume, keeping the original folders (see [`instruments/qualitative.md`](instruments/qualitative.md)) | `raw/interview-audio/<kit>/<tx>/` |
