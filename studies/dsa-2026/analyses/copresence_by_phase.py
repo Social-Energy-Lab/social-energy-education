@@ -51,7 +51,6 @@ BIN = "5m"
 TZ = "Europe/Berlin"
 FIRST_DAY = date(2026, 8, 13)
 LAST_DAY = date(2026, 8, 29)
-HANDOVER = "2026-08-29 09:00:00"
 # A camp day runs from 07:30 to 07:30, so the night belongs to the evening before it.
 DAY_START = timedelta(hours=7, minutes=30)
 
@@ -69,6 +68,9 @@ PHASE_ORDER = [p for p, _ in PHASES]
 
 REPO = Path(__file__).resolve().parents[3]
 STUDY_YAML = REPO / "studies" / STUDY / "study.yaml"
+# What the analyses count, local wall-clock times (study.yaml, beacons.observation_window).
+_WINDOW = StudyConfig.load(STUDY_YAML).raw["beacons"]["observation_window"]
+WINDOW_START, HANDOVER = str(_WINDOW["start"]), str(_WINDOW["end"])
 
 
 def out_dir() -> Path:
@@ -116,7 +118,7 @@ def read_upstream_contacts(path: Path) -> pl.DataFrame:
 
 
 def window_bounds() -> tuple[pl.Expr, pl.Expr]:
-    lo = pl.lit(str(FIRST_DAY)).str.strptime(pl.Datetime("us"), "%Y-%m-%d")
+    lo = pl.lit(WINDOW_START).str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S")
     hi = pl.lit(HANDOVER).str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S")
     return (
         lo.dt.replace_time_zone(TZ).dt.convert_time_zone("UTC"),

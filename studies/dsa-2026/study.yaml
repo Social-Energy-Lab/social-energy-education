@@ -15,6 +15,11 @@ beacons:
   firmware_commit: null   # [unknown: commit flashed at arrival]
   valid_from: 2026-08-12  # plausibility window for record timestamps
   valid_to: 2026-08-29
+  # What the analyses count. Start: the beacon team's deployment start (processing guide); tags
+  # were on participants from 11:30, and arrival afternoon holds setup and test activity.
+  # `[unknown: confirm with the beacon team that 13 Aug 11:30-18:00 is not usable]`
+  # End: tags handed back (stricter than the guide's 11:00).
+  observation_window: {start: "2026-08-13 18:00:00", end: "2026-08-29 09:00:00"}
   # Logger printed beacon IDs 48-57 as "0"-"9" on lines stamped up to 22:00 that day (firmware
   # team's processing guide, 2026-10-17); the upstream fix commit 2e1f52d is from 20:17.
   ambiguous_id_cutoff: "2026-08-15 22:00:00"
