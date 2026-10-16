@@ -54,7 +54,8 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 - [x] Rerun the three analyses on the new delivery and compare with the outputs from the earlier, incomplete copy (kept as `derived/analyses-drive-2026-09-20/`). Done 2026-10-17; the comparison is in the private half.
 - [ ] Decide the observation window: from arrival (13 Aug 11:30, tags on participants) or from the beacon team's deployment start (18:00). Arrival day before 18:00 has most of the still-ambiguous readouts.
 - [ ] Readouts still ambiguous after witnesses, and headerless ones (no own anchor): leave flagged, or a sensitivity run with the hand label as a declared fallback.
-- [ ] Estimate timer drift per power cycle from the lower edge of `delay_s` against uptime, and decide whether records need a per-cycle rate correction before dating (instrument doc, open questions).
+- [x] Estimate timer drift per power cycle from the lower edge of `delay_s` against uptime (2026-10-17): about +20 s/day on every cleanly fitted cycle; see the instrument doc.
+- [ ] Correct dating for drift in the toolkit: date each cycle along its fitted minimum-delay line (boot time and rate), and fall back to the camp-wide rate where a cycle's fit is poor. Test with a synthetic camp whose clocks run at a known rate; then rerun the analyses and compare press-to-event alignment and mirrored-contact offsets.
 - [x] Ingest the whole camp file by file (`ingest_logs_to`); co-presence, self-reports and diagnostics all read it.
 - [x] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
 - [x] Flag lost windows per tag in a table the analyses can join (`lost_windows.parquet`), so one-sided measures can be restricted to unaffected time.
