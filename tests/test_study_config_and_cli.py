@@ -21,7 +21,10 @@ def test_dsa_study_config_builds_beacon_config():
     assert config.study_id == "dsa-2026"
     assert beacons.timezone == "Europe/Berlin"
     assert beacons.valid_from == date(2026, 8, 12)
-    assert beacons.ambiguous_id_cutoff == datetime(2026, 8, 15, 20, 17, 48)
+    assert beacons.ambiguous_id_cutoff == datetime(2026, 8, 15, 22, 0, 0)
+    assert beacons.valid_id_ranges == ((1, 170), (252, 254))
+    assert beacons.rssi_range == (-110, -10)
+    assert beacons.storage_full_count == 215000
     assert len(config.locations) == 67
 
 

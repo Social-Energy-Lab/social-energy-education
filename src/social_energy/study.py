@@ -127,6 +127,9 @@ class StudyConfig:
             anchor_tolerance_s=int(section.get("anchor_tolerance_s", 300)),
             restart_margin_s=int(section.get("restart_margin_s", 3600)),
             readout_gap_s=int(section.get("readout_gap_s", 60)),
+            valid_id_ranges=tuple(tuple(r) for r in section.get("valid_id_ranges") or ()),
+            rssi_range=tuple(section["rssi_range"]) if section.get("rssi_range") else None,
+            storage_full_count=section.get("storage_full_count"),
         )
 
     def survey_config(self) -> SurveyConfig:

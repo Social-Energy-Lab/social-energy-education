@@ -29,7 +29,8 @@ import polars as pl
 
 from .cycles import power_cycles
 
-LINE_RE = r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),ID: ([^,]*),(.*)$"
+# One or more commas after the ID: a hand-edited log can carry a doubled one.
+LINE_RE = r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),ID: ([^,]*),+(.*)$"
 KINDS: dict[str, str] = {
     "status": r"^Status: (\d+)$",
     "timer": r"^Current Timer: (\d+)$",
@@ -59,6 +60,13 @@ class BeaconConfig:
     restart_margin_s: int = 3600
     # A gap this long between two lines of one tag in one file starts a new readout.
     readout_gap_s: int = 60
+    # Contact values outside these are ``invalid_value`` (corrupted or fake records). Empty / None
+    # means no check. IDs: inclusive (low, high) ranges of the fielded ID table.
+    valid_id_ranges: tuple[tuple[int, int], ...] = ()
+    rssi_range: tuple[int, int] | None = None
+    # A readout's Contact Count at or above this means the tag's flash was full and its oldest
+    # contacts were discarded silently (``storage_full``). None means no check.
+    storage_full_count: int | None = None
 
 
 @dataclass
@@ -371,6 +379,7 @@ OK = (
     & ~pl.col("implausible_time")
     & ~pl.col("duplicate")
     & ~pl.col("id_ambiguous")
+    & ~pl.col("invalid_value")
 ).alias("ok")
 
 
@@ -380,7 +389,23 @@ def _finish(records: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
         (pl.col("t").is_not_null() & ~_plausible(pl.col("t"), config)).alias("implausible_time"),
         pl.lit(False).alias("duplicate"),
         (pl.col("id_status") == "ambiguous").alias("id_ambiguous"),
+        pl.col("invalid_value")
+        if "invalid_value" in records.columns
+        else pl.lit(False).alias("invalid_value"),
     ).with_columns(OK)
+
+
+def _invalid_value(config: BeaconConfig) -> pl.Expr:
+    """A contact whose partner ID is not in the ID table or whose RSSI is not physical."""
+    bad = pl.lit(False)
+    if config.valid_id_ranges:
+        in_table = pl.lit(False)
+        for low, high in config.valid_id_ranges:
+            in_table = in_table | pl.col("observed").is_between(low, high)
+        bad = bad | ~in_table
+    if config.rssi_range is not None:
+        bad = bad | ~pl.col("rssi").is_between(*config.rssi_range)
+    return bad.alias("invalid_value")
 
 
 def _flag_duplicates(records: pl.DataFrame, key: list[str]) -> pl.DataFrame:
@@ -395,7 +420,10 @@ READOUT_CONTEXT = [
     "readout_key", "beacon", "readout_seq", "readout_order", "pc_time",
     "current_timer", "cycle_start", "prev_cycle_start", "id_status",
 ]  # fmt: skip
-FLAGS = ["pre_reboot", "headerless", "implausible_time", "duplicate", "id_ambiguous", "ok"]
+FLAGS = [
+    "pre_reboot", "headerless", "implausible_time", "duplicate", "id_ambiguous", "invalid_value",
+    "ok",
+]  # fmt: skip
 
 
 CONTACT_KEY = ["beacon", "observed", "rssi"]
@@ -413,8 +441,13 @@ def _parse(paths: Iterable[Path], config: BeaconConfig) -> tuple[pl.DataFrame, p
 
 def _readouts(readout_rows: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
     readouts = _add_boot_context(_repair_ids(readout_rows, config), config)
+    full = (
+        pl.lit(False)
+        if config.storage_full_count is None
+        else (pl.col("contact_count") >= config.storage_full_count).fill_null(False)
+    )
     return readouts.sort("pc_time", "source", "first_line").with_columns(
-        pl.int_range(pl.len()).alias("readout_order")
+        pl.int_range(pl.len()).alias("readout_order"), full.alias("storage_full")
     )
 
 
@@ -430,9 +463,9 @@ def _records(
     )
     contacts = _finish(
         _resolve_boots(
-            data.filter(pl.col("kind") == "contact").rename(
-                {"_observed": "observed", "_uptime_c": "uptime_s", "_rssi": "rssi"}
-            ),
+            data.filter(pl.col("kind") == "contact")
+            .rename({"_observed": "observed", "_uptime_c": "uptime_s", "_rssi": "rssi"})
+            .with_columns(_invalid_value(config)),
             "uptime_s",
         ),
         config).select(
@@ -473,7 +506,7 @@ def _finish_eco(eco: pl.DataFrame) -> pl.DataFrame:
 READOUT_COLUMNS = [
     "readout_key", "source", "first_line", "header_id", "beacon", "id_status",
     "readout_seq", "pc_time", "current_timer", "anchor", "cycle", "cycle_start",
-    "reboot_before", "contact_count", "voltage_mv", "status_byte",
+    "reboot_before", "contact_count", "storage_full", "voltage_mv", "status_byte",
 ]  # fmt: skip
 
 

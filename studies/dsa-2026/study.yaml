@@ -15,8 +15,14 @@ beacons:
   firmware_commit: null   # [unknown: commit flashed at arrival]
   valid_from: 2026-08-12  # plausibility window for record timestamps
   valid_to: 2026-08-29
-  # Logger printed beacon IDs 48-57 as "0"-"9" before upstream commit 2e1f52d.
-  ambiguous_id_cutoff: "2026-08-15 20:17:48"
+  # Logger printed beacon IDs 48-57 as "0"-"9" on lines stamped up to 22:00 that day (firmware
+  # team's processing guide, 2026-10-17); the upstream fix commit 2e1f52d is from 20:17.
+  ambiguous_id_cutoff: "2026-08-15 22:00:00"
+  # The fielded ID table: tags 1-170, development kits 252-254 (255 = address not in the table).
+  valid_id_ranges: [[1, 170], [252, 254]]
+  rssi_range: [-110, -10]
+  # 238 full flash blocks of 804 plus the RAM ring: a Contact Count this high means flash was full.
+  storage_full_count: 215000
   # The beacon team split the 13-15 Aug readouts into 0-9 and 48-57 by hand in these files
   # (confirmed 2026-10-02); their IDs are trusted as printed.
   ids_split_in: ["*_cleaned.log"]
