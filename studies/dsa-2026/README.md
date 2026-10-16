@@ -79,7 +79,7 @@ Machine-readable in [`study.yaml`](study.yaml). In short:
 - **15 Aug ~01:30–11:45:** several outdoor tags found inactive and activated.
 - **15 Aug:** logger script updated after corrupted output was noticed.
 - **15 Aug 17:45:** main-hall and hall–dining-corridor location tags reflashed **without** eco mode and with the accelerometer off.
-- **15 Aug 20:17:** upstream logger fix for the ID 48–57 bug.
+- **15 Aug 20:17:** upstream logger fix for the ID 48–57 bug, in use from 22:00 (log lines up to 22:00 are affected).
 - **16 Aug:** outdoor tags wrapped or removed for rain at times.
 - **18 Aug 16:10:** a location tag added to a course room that had none before (room 2.01).
 - **~18–20 Aug:** one outdoor tag failed from water ingress and was removed. Another was moved.

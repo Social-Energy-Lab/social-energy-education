@@ -10,7 +10,7 @@
 
 - **Branch:** `main`
 - **Done:** three analyses under `studies/dsa-2026/analyses/` (`copresence_by_phase.py`, `self_report_context.py`, `beacon_diagnostics.py`); firmware answers from the beacon team written into [`../../context/instruments/beacons.md`](../../context/instruments/beacons.md); a meeting deck and two question docs built from the outputs (kept outside the repo). Numbers are in the private half: `dsa-2026/notes/beacon-analyses-2026-10-01.md`.
-- **Waiting elsewhere (not on Next):** sign-off on the analysis choices below by the research team; firmware documentation from the beacon team, which decides the previous-boot rule.
+- **Waiting elsewhere (not on Next):** the firmware team's experiment log (commands, base buttons, battery changes); sign-off on the analysis choices below by the research team; firmware documentation from the beacon team, which decides the previous-boot rule.
 - **Consent:** the beacon-consent ruling of 2026-09-22 was applied to the spine on 2026-10-01, and every analysis was rerun with it.
 - **Handoff:** run `uv run social-energy ingest-beacons studies/dsa-2026/study.yaml`, then `copresence_by_phase.py build` and `report`, then `beacon_diagnostics.py` (writes the lost windows), then `self_report_context.py` (`uv run --extra analysis python …`). All read through the spine and write only under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/`.
 
@@ -67,6 +67,5 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 Questions that only matter for the next field phase live in [`../ideas/next-field-phase-beacon-practice.md`](../ideas/next-field-phase-beacon-practice.md).
 
 
-- `[unknown: is the PC time on a readout stamped after the transfer rather than when the timer was read?]`
 - `[unknown: which RSSI from a room tag means "inside this room"?]`
 - `[unknown: was the eco scan period changed from its 300 s default by control command during DSA 2026?]`
