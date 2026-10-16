@@ -50,7 +50,10 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 
 - [x] Ingest: date records as (power cycle's earliest implied start + uptime); previous-boot records must precede the restart (else `implausible_time`); headerless readouts are their own readouts; presses compared against `Output/` and switched to our ingest.
 - [x] Ingest: trust the hand-split `_cleaned` logs; repair the rest of the logger ID bug against power cycles.
-- [ ] Run our repair on the original (uncleaned) logs and compare with the hand split. The originals are on the team Nextcloud since 2026-10-12; download into `raw/beacons/` first.
+- [x] Run our repair on the original (uncleaned) logs and compare with the hand split. Done 2026-10-17 on the Nextcloud delivery: the ingest now reads the raw logs and repairs IDs itself (anchors, then partners' witnesses); the hand split is a benchmark. Results in the private half (`dsa-2026/notes/beacon-guide-check-2026-10-17.md`).
+- [x] Rerun the three analyses on the new delivery and compare with the outputs from the earlier, incomplete copy (kept as `derived/analyses-drive-2026-09-20/`). Done 2026-10-17; the comparison is in the private half.
+- [ ] Decide the observation window: from arrival (13 Aug 11:30, tags on participants) or from the beacon team's deployment start (18:00). Arrival day before 18:00 has most of the still-ambiguous readouts.
+- [ ] Readouts still ambiguous after witnesses, and headerless ones (no own anchor): leave flagged, or a sensitivity run with the hand label as a declared fallback.
 - [ ] Estimate timer drift per power cycle from the lower edge of `delay_s` against uptime, and decide whether records need a per-cycle rate correction before dating (instrument doc, open questions).
 - [x] Ingest the whole camp file by file (`ingest_logs_to`); co-presence, self-reports and diagnostics all read it.
 - [x] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
