@@ -67,6 +67,18 @@ class BeaconConfig:
     # A readout's Contact Count at or above this means the tag's flash was full and its oldest
     # contacts were discarded silently (``storage_full``). None means no check.
     storage_full_count: int | None = None
+    # (readout_key, beacon) settled by partners' ID2 sightings (``beacons.witness``). Only for
+    # readouts the clock anchors left ambiguous; their status becomes "witnessed".
+    id_overrides: tuple[tuple[str, int], ...] = ()
+    # Witness repair (``beacons.witness``): how far apart (s) a contact and a partner's sighting may
+    # be, how many votes a decision needs, and the share the winning candidate must hold.
+    witness_tolerance_s: int = 300
+    witness_min_votes: int = 5
+    witness_min_share: float = 0.9
+    # Timing: sightings within this many seconds of a candidate's median offset form its peak, and
+    # a peak this many times the other candidate's settles a split count.
+    witness_peak_s: int = 10
+    witness_min_peak_ratio: float = 3.0
 
 
 @dataclass
@@ -224,6 +236,7 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
     )
     early = timedelta(seconds=config.anchor_tolerance_s)
     late = timedelta(seconds=config.restart_margin_s)
+    overrides = dict(config.id_overrides)
 
     fixed_beacon, status = [], []
     for row in readouts.iter_rows(named=True):
@@ -233,8 +246,9 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
             continue
         n = int(row["header_id"])
         if row["anchor"] is None:
-            fixed_beacon.append(n)
-            status.append("ambiguous")
+            witnessed = row["readout_key"] in overrides
+            fixed_beacon.append(overrides[row["readout_key"]] if witnessed else n)
+            status.append("witnessed" if witnessed else "ambiguous")
             continue
         matches = [
             candidate
@@ -248,6 +262,9 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
         if len(matches) == 1:
             fixed_beacon.append(matches[0])
             status.append("ok" if matches[0] == n else "repaired")
+        elif row["readout_key"] in overrides:
+            fixed_beacon.append(overrides[row["readout_key"]])
+            status.append("witnessed")
         else:
             fixed_beacon.append(n)
             status.append("ambiguous")
@@ -529,6 +546,7 @@ def _qa(
         "eco_sessions": eco_sessions,
         "ids_repaired": int((readouts["id_status"] == "repaired").sum()),
         "ids_ambiguous": int((readouts["id_status"] == "ambiguous").sum()),
+        "ids_witnessed": int((readouts["id_status"] == "witnessed").sum()),
         "reboots": int(readouts["reboot_before"].sum()),
         "contacts_not_ok": contacts["not_ok"],
         "contacts_unplaced_in_time": contacts["unplaced"],

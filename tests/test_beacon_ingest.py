@@ -267,3 +267,24 @@ def test_a_contact_count_past_the_storage_limit_flags_the_readout():
     assert r["storage_full"].to_list() == [True]
     r = ingest_logs([QUIRKS], quirks_config()).readouts
     assert r["storage_full"].to_list() == [False]
+
+
+def test_witness_overrides_settle_only_readouts_the_anchors_left_ambiguous(tables):
+    four = tables.readouts.filter(pl.col("header_id") == "4")["readout_key"].to_list()
+    three = tables.readouts.filter(pl.col("id_status") == "repaired")["readout_key"].to_list()
+    config = BeaconConfig(
+        timezone=TZ,
+        valid_from=date(2026, 8, 12),
+        valid_to=date(2026, 8, 29),
+        ambiguous_id_cutoff=datetime(2026, 8, 15, 20, 17, 48),
+        # the "3" readout was already repaired to 51 by its anchor: an override must not move it
+        id_overrides=((four[0], 52), (three[0], 3)),
+    )
+    t = ingest_logs([GOLDEN], config)
+    r = t.readouts.filter(pl.col("header_id") == "4")
+    assert r["beacon"].to_list() == [52]
+    assert r["id_status"].to_list() == ["witnessed"]
+    assert t.readouts.filter(pl.col("readout_key") == three[0])["beacon"].to_list() == [51]
+    assert t.qa["ids_witnessed"] == 1
+    assert t.qa["ids_ambiguous"] == 0
+    assert not t.contacts.filter(pl.col("beacon") == 52)["id_ambiguous"].any()

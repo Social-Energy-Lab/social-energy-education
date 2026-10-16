@@ -23,9 +23,10 @@ beacons:
   rssi_range: [-110, -10]
   # 238 full flash blocks of 804 plus the RAM ring: a Contact Count this high means flash was full.
   storage_full_count: 215000
-  # The beacon team split the 13-15 Aug readouts into 0-9 and 48-57 by hand in these files
-  # (confirmed 2026-10-02); their IDs are trusted as printed.
-  ids_split_in: ["*_cleaned.log"]
+  # We ingest the raw logs (the delivery's Original/) and repair the IDs ourselves: clock anchors
+  # first, then partners' ID2 witnesses. The beacon team's hand split of 13-15 Aug
+  # (*_cleaned.log) is kept as a benchmark, not trusted as input.
+  ids_split_in: []
   rssi_threshold_dbm:
     person_tag: -80
     location_tag: -100
