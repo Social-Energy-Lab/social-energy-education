@@ -1,7 +1,7 @@
 # Survey ingest and scoring (SurveyJS → scale scores)
 
 **Priority:** high
-**Gate:** blocked:confirmed reverse-keying list and the live B19/B20 slider range (recheck 2026-10-07)
+**Gate:** blocked:confirmed reverse-keying list and the live B19/B20 slider range (_team/questions.md #7–8) (recheck 2026-10-30)
 **Next:** write `studies/dsa-2026/survey_codebook.yaml` from `docs/context/instruments/survey.md` (codes and scales only, no own-item wording), including how old-version codes map to current ones (`GRADIENT_variable_C11` → `ZGL_C11_GRAD`, `SWE_0n_resonance` → ?).
 
 **Goal:** `social_energy.survey` flattens a SurveyJS export into one row per respondent and computes validated scale scores from a public codebook.

@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** none
-**Next:** transcribe the rest of the beacon field log (battery changes, tags taken off, the further broken tags) and build `events.yaml` from the programme
+**Next:** transcribe the rest of the beacon field log into exclusions.yaml (battery changes, tags taken off, the further broken tags); events.yaml is built (2026-09-22)
 
 **Goal:** a validated local spine for DSA 2026 (`$SOCIAL_ENERGY_DATA/dsa-2026/spine/`), so that every sensor record resolves to a person or location and the known bad windows are excluded.
 
