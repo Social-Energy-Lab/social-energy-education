@@ -1,8 +1,8 @@
 # DSA 2026 spine: transcribe the field logs into the local spine
 
 **Priority:** high
-**Gate:** none
-**Next:** transcribe the rest of the beacon field log into exclusions.yaml (battery changes, tags taken off, the further broken tags); events.yaml is built (2026-09-22)
+**Gate:** blocked:Mahdi answers the remaining spine questions in the private open_questions.md (recheck 2026-10-30)
+**Next:** fold Mahdi's answers into exclusions.yaml and assignments.yaml; the beacon field log is fully transcribed (2026-10-17), and every gap it leaves is a question in open_questions.md
 
 **Goal:** a validated local spine for DSA 2026 (`$SOCIAL_ENERGY_DATA/dsa-2026/spine/`), so that every sensor record resolves to a person or location and the known bad windows are excluded.
 
