@@ -56,6 +56,14 @@ class ExplorerConfig:
 
 
 @dataclass(frozen=True)
+class SurveyScoringConfig:
+    codebook: Path | None
+    corrections: Path | None
+    # Scoring waits until the analysis plan is signed and frozen: the freeze date and commit.
+    analysis_plan_frozen: str | None
+
+
+@dataclass(frozen=True)
 class StudyConfig:
     path: Path
     study_id: str
@@ -136,6 +144,24 @@ class StudyConfig:
             witness_peak_s=int(section.get("witness_peak_s", 10)),
             witness_min_peak_ratio=float(section.get("witness_min_peak_ratio", 3.0)),
             clock_rate_ppm=float(section.get("clock_rate_ppm", 0.0)),
+        )
+
+    def survey_scoring_config(self) -> SurveyScoringConfig:
+        """Codebook and gate from ``study.yaml``; the study-ID correction table from local.yaml.
+
+        ``survey.codebook`` is relative to the study folder. ``survey.study_id_corrections`` in
+        the private local.yaml is relative to the study's data root (it never lives in the repo).
+        """
+        section = self.raw.get("survey") or {}
+        codebook = section.get("codebook")
+        corrections = (self.local.get("survey") or {}).get("study_id_corrections")
+        if corrections is not None:
+            corrections = paths.study(self.study_id).root / str(corrections)
+        frozen = section.get("analysis_plan_frozen")
+        return SurveyScoringConfig(
+            codebook=self.path.parent / str(codebook) if codebook else None,
+            corrections=corrections,
+            analysis_plan_frozen=str(frozen) if frozen else None,
         )
 
     def survey_config(self) -> SurveyConfig:

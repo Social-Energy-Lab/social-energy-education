@@ -1,0 +1,67 @@
+# Golden-fixture codebook for tests/test_survey_scoring.py. Every code is invented.
+title: golden fixture
+version: 1
+roles: {B: trust_in_life, C: lust_for_life}
+min_share: 0.5
+min_share_status: confirmed
+
+renames:
+  OLD_G: {to: C_G, status: confirmed}
+
+groups:
+  belong:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: invented belonging
+    prefix: "B."
+    items: [Q1, Q2, Q3, Q4]
+    range: [1, 4]
+    printed_reversed: true
+    reverse: [Q2]
+    reverse_status: inferred
+    min_items: 3
+
+  agency:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: invented agency
+    prefix: "C."
+    items: [Q1, Q2, Q3]
+    range: [1, 5]
+    missing_codes: ["6", "DK"]
+    reverse: [Q3]
+    reverse_status: confirmed
+
+  agency_grad:
+    block: C
+    role: lust_for_life
+    kind: gradient
+    concept: invented agency gradient
+    parent: agency
+    items: [C_G]
+    range: [1, 4]
+
+  degrees:
+    block: C
+    role: lust_for_life
+    kind: items
+    concept: invented degree expectation
+    items: [D1]
+    range: [1, 2]
+    missing_codes: ["3"]
+
+  frequency:
+    block: B
+    role: trust_in_life
+    kind: items
+    concept: invented coded frequency
+    items: [F1]
+    code_values: {F1_1: 1, F1_2: 2, F1_3: 3}
+    range: [1, 3]
+    printed_reversed: true
+    missing_codes: [F1_9]
+
+unscored:
+  background: [AGE, SCHOOL]

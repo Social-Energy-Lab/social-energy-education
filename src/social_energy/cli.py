@@ -27,6 +27,12 @@ social-energy explore studies/<id>/study.yaml [--port N] [--no-browser]
 social-energy ingest-survey studies/<id>/study.yaml
     Parse raw/survey/zeitgeist/*/responses.jsonl into
     derived/survey/{items,respondents}.parquet plus qa.json.
+
+social-energy score-survey studies/<id>/study.yaml
+    Score derived/survey/items.parquet with the codebook named by survey.codebook into
+    derived/survey/scoring/{scores,reliability,submissions}.parquet plus qa.json. Refuses
+    until survey.analysis_plan_frozen is set: scales are scored only after the analysis
+    plan is signed and frozen.
 """
 
 from __future__ import annotations
@@ -39,13 +45,14 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import polars as pl
 import yaml
 
 from . import paths, zeitgeist
 from .acoustics import AcousticsConfig, extract_directory
 from .beacons import ingest_with_witnesses
 from .study import StudyConfig
-from .survey import ingest_zeitgeist
+from .survey import ingest_zeitgeist, load_codebook, load_corrections, score_survey
 
 SPINE_README = """\
 # Local spine (never commit)
@@ -179,12 +186,48 @@ def ingest_survey(study: StudyConfig) -> int:
     return 0
 
 
+def score_survey_command(study: StudyConfig) -> int:
+    config = study.survey_scoring_config()
+    if not config.analysis_plan_frozen:
+        print(
+            "Refusing to score: survey.analysis_plan_frozen is not set in study.yaml. Scales "
+            "are scored only after the analysis plan is signed and frozen."
+        )
+        return 3
+    if config.codebook is None or not config.codebook.is_file():
+        print(f"No codebook: set survey.codebook in {study.path} (found {config.codebook}).")
+        return 1
+    layout = paths.study(study.study_id)
+    source = layout.derived / "survey"
+    if not (source / "items.parquet").is_file():
+        print(f"No {source / 'items.parquet'}: run ingest-survey first.")
+        return 1
+    items = pl.read_parquet(source / "items.parquet")
+    respondents = pl.read_parquet(source / "respondents.parquet")
+    corrections = load_corrections(config.corrections) if config.corrections else None
+    ignore = tuple(i for i in [study.survey_config().study_id_item] if i)
+    tables = score_survey(items, respondents, load_codebook(config.codebook), corrections, ignore)
+    out = source / "scoring"
+    out.mkdir(parents=True, exist_ok=True)
+    tables.scores.write_parquet(out / "scores.parquet")
+    tables.reliability.write_parquet(out / "reliability.parquet")
+    tables.submissions.write_parquet(out / "submissions.parquet")
+    (out / "qa.json").write_text(json.dumps(tables.qa, indent=2, default=str), encoding="utf-8")
+    if tables.qa["pending"]:
+        print("Provisional: the codebook has unconfirmed entries:")
+        for entry in tables.qa["pending"]:
+            print(f"  {entry}")
+    print(f"Wrote {out}")
+    return 0
+
+
 COMMANDS = {
     "init-spine": init_spine,
     "ingest-beacons": ingest_beacons,
     "extract-acoustics": extract_acoustics,
     "fetch-zeitgeist": fetch_zeitgeist,
     "ingest-survey": ingest_survey,
+    "score-survey": score_survey_command,
 }
 
 
