@@ -21,6 +21,8 @@ From the PhD project (see `docs/context/theory.md`). This page records which que
 | RQ3: formal vs informal settings | courses/plenum vs KüA/late-night | compare network turnover and self-report rates |
 | Collective moments | temporal clustering of self-reports among co-present people; acoustics | **cascade detection**: presses within minutes among co-located people |
 
+The plan that fixes which of these are tested, how, and with which error control is [`analysis-plan.md`](analysis-plan.md) (draft).
+
 ## Guardrails
 
 - Unit counts are small (~100 people). Prefer descriptive, visual and within-person analyses before inferential claims.
