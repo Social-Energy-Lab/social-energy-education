@@ -1,0 +1,619 @@
+# Survey codebook, DSA 2026 baseline (SurveyJS short version on zeitgeist-platform).
+#
+# Codes and scales only. No item wording: the study's own items (ZGL_*, RSWE_*, *_GRAD,
+# SYMBOL_*) are unpublished, and PISA items are referenced by code. The spec behind every
+# entry is docs/context/instruments/survey.md; the loader is social_energy.survey.codebook.
+#
+# Codes are the export's item codes: matrix rows are "<BLOCK_SCALE>.<ITEM>" (written here as
+# `prefix` + item), standalone items use their bare code.
+#
+# Recoding per group: non-substantive codes and out-of-range values -> missing; a scale printed
+# in reverse (printed_reversed) is flipped so that high = more of the construct; then each item
+# in `reverse` (worded against the construct, judged AFTER that flip) is flipped. Both flips
+# are min + max - x.
+#
+# Status: `confirmed` (research team), `inferred` (from documents, not confirmed), `unknown`.
+# Everything below that the research team has not confirmed says so, and every scoring run
+# lists it (Codebook.pending, qa.json "pending"). The questions to answer are under `pending`.
+
+title: DSA 2026 baseline survey
+version: 1
+roles: {A: background, B: trust_in_life, C: lust_for_life}
+
+# A scale score needs valid answers on at least ceil(min_share x items) of its items, unless a
+# group sets min_items. [inferred] Proposed default; PISA scales its indices only for students
+# with at least three valid answers.
+min_share: 0.5
+min_share_status: inferred
+
+pending:
+  - "[unknown: confirm the reverse-keying list: every scale's `reverse` below, including the scales with none]"
+  - "[unknown: which B19/B20 slider range went live, 1-10 or 0-10?] The export holds 1-10 only, which fits either."
+  - "[unknown: do the old form-version codes in `renames` stand for the same items, on the same response format, as their current codes?]"
+  - "[unknown: is a scale score valid from half its items (min_share 0.5), or should a stricter rule apply?]"
+  - "[unknown: B16 and C5 are split into positive and negative affect subscales; should the PISA single index (negative items reversed) be scored as well?]"
+  - "[unknown: do the B16 add-ons (tired, listless, exhausted) form their own subscale, or join negative affect?]"
+  - "[unknown: are B19 (fear drivers) and B20 (sources of joy) meant as scales, or read item by item?]"
+
+# Old form-version code -> current code. Both are never present on one record in the export;
+# a record carrying both would keep the current code and count a conflict in the QA.
+renames:
+  GRADIENT_variable_C11:
+    to: ZGL_C11_GRAD
+    status: inferred
+    note: "[inferred] form version 16 only, in the flat view; renamed in later versions"
+  GRADIENT_variable_C21:
+    to: ZGL_C21_GRAD
+    status: inferred
+    note: "[inferred] form version 16 only, in the flat view; renamed in later versions"
+  C1A_SWE.SWE_05_resonance:
+    to: C1A_SWE.SWE_05
+    status: inferred
+    note: "[inferred] same matrix row under an earlier key: form version 16 carries it in place of SWE_05, and the draft that used this key lists the same item"
+  C1A_SWE.SWE_06_resonance:
+    to: C1A_SWE.SWE_06
+    status: inferred
+    note: "[inferred] as SWE_05_resonance"
+  C1A_SWE.SWE_07_resonance:
+    to: C1A_SWE.SWE_07
+    status: inferred
+    note: "[inferred] as SWE_05_resonance"
+
+groups:
+  # --- A: background (recoded, not averaged) ------------------------------------------------
+  a14_social_status:
+    block: A
+    role: background
+    kind: items
+    concept: subjective social status, now and at 30
+    source: PISA ST259
+    items: [ST259Q01JA, ST259Q02JA]
+    range: [1, 10]
+
+  # --- B: membrane / trust in life ----------------------------------------------------------
+  b1_belonging:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: school belonging
+    source: PISA BELONG (ST034)
+    prefix: B1_ST034.
+    items: [ST034Q01TA, ST034Q02TA, ST034Q03TA, ST034Q04TA, ST034Q05TA, ST034Q06TA]
+    range: [1, 4]
+    printed_reversed: true
+    reverse: [ST034Q01TA, ST034Q04TA, ST034Q06TA]
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook; it lists Q02, Q03, Q05 against the printed order, the same recoding net of the flip
+
+  b2_climate_hindrance:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: hindrances to school climate (high = more)
+    source: PISA SC061, student view
+    prefix: B2_SC061.
+    items: [SC061Q01, SC061Q02, SC061Q03, SC061Q04, SC061Q05, SC061Q06, SC061Q07, SC061Q08,
+            SC061Q09, SC061Q10, SC061Q11]
+    range: [1, 4]
+    reverse: []
+    reverse_status: inferred
+
+  b3_bullying:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: bullying, last 12 months (high = more)
+    source: PISA BULLIED (ST038)
+    prefix: B3_ST038.
+    items: [ST038Q03NA, ST038Q04NA, ST038Q05NA, ST038Q06NA, ST038Q07NA, ST038Q08NA,
+            ST038Q09JA, ST038Q10JA, ST038Q11JA]
+    range: [1, 4]
+    reverse: []
+    reverse_status: inferred
+
+  b4a_diversity_practices:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: school diversity practices
+    source: PISA SC173 + own
+    prefix: B4A_SC173.
+    items: [SC173Q01, SC173Q02, SC173Q03, SC173Q04, SC173Q05, SC173Q06, ZGL_B4A_01, ZGL_B4A_02]
+    range: [1, 5]
+    missing_codes: [ZGL_B4_01, "6"]  # "don't know": a code in the export, option 6 in the spec
+    reverse: []
+    reverse_status: inferred
+
+  b4b_discrimination:
+    block: B
+    role: trust_in_life
+    kind: items
+    concept: discrimination experienced / observed
+    source: own
+    prefix: B4B_ZGL.
+    items: [ZGL_B4B_01, ZGL_B4B_02]
+    range: [1, 4]
+
+  b7_extracurricular:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: extracurricular activities at school
+    source: PISA CREATAS (ST337) + own
+    prefix: B7_ST337.
+    items: [ST337Q01JA, ST337Q02JA, ST337Q03JA, ST337Q04JA, ST337Q05JA, ST337Q06JA,
+            ST337Q07JA, ST337Q08JA, ZGL_B7_01, ZGL_B7_02, ZGL_B7_03, ZGL_B7_04]
+    range: [1, 5]
+    missing_codes: ["6", "7"]  # not offered / cannot join
+    reverse: []
+    reverse_status: inferred
+
+  b8_trust:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: trust
+    source: PISA ST315
+    prefix: B8_ST315.
+    items: [ST315Q01JA, ST315Q02JA, ST315Q03JA, ST315Q04JA, ST315Q05JA, ST315Q06JA,
+            ST315Q07JA, ST315Q08JA, ST315Q09JA, ST315Q10JA]
+    range: [1, 5]
+    reverse: [ST315Q01JA, ST315Q05JA, ST315Q07JA]
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook
+
+  b10_perspective_taking:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: perspective-taking
+    source: PISA ST303
+    prefix: B10_ST303.
+    items: [ST303Q01JA, ST303Q02JA, ST303Q03JA, ST303Q04JA, ST303Q05JA, ST303Q06JA,
+            ST303Q07JA, ST303Q08JA]
+    range: [1, 5]
+    reverse: [ST303Q05JA, ST303Q07JA]
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook
+
+  b11_teacher_relationship:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: teacher-student relationship
+    source: PISA RELATST (ST267)
+    prefix: B11_ST267.
+    items: [ST267Q01JA, ST267Q02JA, ST267Q03JA, ST267Q04JA, ST267Q05JA, ST267Q06JA,
+            ST267Q07JA, ST267Q08JA]
+    range: [1, 4]
+    reverse: [ST267Q04JA, ST267Q08JA]
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook
+
+  b12_teacher_support:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: teacher support
+    source: PISA TEACHSUP (ST270)
+    prefix: B12_ST270.
+    items: [ST270Q01JA, ST270Q02JA, ST270Q03JA, ST270Q04JA]
+    range: [1, 4]
+    printed_reversed: true  # the handbook reverses all four items: the same flip
+    reverse: []
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook
+
+  b12_own_items:
+    block: B
+    role: trust_in_life
+    kind: items
+    concept: teacher feedback and resonance items (own)
+    source: own
+    prefix: B12_ST270.
+    items: [ZGL_B12_01, ZGL_B12_02_Resonanz]
+    range: [1, 4]
+    printed_reversed: true
+
+  b14_family_support:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: family support
+    source: PISA FAMSUP (ST300)
+    prefix: B14_ST300.
+    items: [ST300Q01JA, ST300Q02JA, ST300Q03JA, ST300Q04JA, ST300Q05JA, ST300Q06JA,
+            ST300Q07JA, ST300Q08JA, ST300Q09JA, ST300Q10JA]
+    range: [1, 5]
+    reverse: []
+    reverse_status: inferred
+
+  b15_identity:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: sense of identity
+    source: Lounsbury et al. 2005, own German translation
+    prefix: B15_APSI.
+    items: [APSI_1_adjusted, APSI_2_adjusted, APSI_3, APSI_4, APSI_5, APSI_6_adjusted,
+            APSI_7, APSI_8]
+    range: [1, 5]
+    reverse: [APSI_6_adjusted]
+    reverse_status: inferred
+    reverse_source: wording
+
+  b15_identity_grad:
+    block: B
+    role: trust_in_life
+    kind: gradient
+    concept: sense of identity gradient
+    parent: b15_identity
+    items: [ZGL_B15_GRAD]
+    range: [1, 5]
+
+  b16_positive_affect:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: well-being, positive affect
+    source: PISA ST826
+    prefix: B16_ST826.
+    items: [ST826C01HA_DE, ST826C03HA_DE, ST826C05HA_DE, ST826C07HA_DE, ST826C09HA_DE]
+    range: [1, 5]
+    reverse: []
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook (its reversed items are the negative subscale)
+
+  b16_negative_affect:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: well-being, negative affect (high = more)
+    source: PISA ST826
+    prefix: B16_ST826.
+    items: [ST826C02HA_DE, ST826C04HA_DE, ST826C06HA_DE, ST826C08HA_DE]
+    range: [1, 5]
+    reverse: []
+    reverse_status: inferred
+
+  b16_fatigue:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: well-being add-ons, fatigue (high = more; own)
+    source: own
+    prefix: B16_ST826.
+    items: [ZGL_B16_10, ZGL_B16_11, ZGL_B16_12]
+    range: [1, 5]
+    reverse: []
+    reverse_status: inferred
+
+  b17_life_satisfaction:
+    block: B
+    role: trust_in_life
+    kind: items
+    concept: life satisfaction
+    source: PISA ST016
+    items: [ST016]
+    range: [0, 10]
+
+  b18_truancy:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: truancy and lateness (high = more)
+    source: PISA ST062
+    prefix: B18_ST062.
+    items: [ST062Q01TA, ST062Q02TA, ST062Q03TA]
+    range: [1, 4]
+    reverse: []
+    reverse_status: inferred
+
+  b19_fear_drivers:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: fear drivers (own)
+    source: own
+    items: [ZGL_B19_1, ZGL_B19_2, ZGL_B19_3, ZGL_B19_4, ZGL_B19_5, ZGL_B19_6, ZGL_B19_7]
+    range: [1, 10]
+    range_status: inferred
+    reverse: []
+    reverse_status: inferred
+    note: "[unknown: which B19/B20 slider range went live, 1-10 or 0-10?]"
+
+  b20_joy_sources:
+    block: B
+    role: trust_in_life
+    kind: scale
+    concept: sources of joy (own)
+    source: own
+    items: [ZGL_B20_1, ZGL_B20_2, ZGL_B20_3, ZGL_B20_4, ZGL_B20_5, ZGL_B20_6, ZGL_B20_7,
+            ZGL_B20_8]
+    range: [1, 10]
+    range_status: inferred
+    reverse: []
+    reverse_status: inferred
+    note: "[unknown: which B19/B20 slider range went live, 1-10 or 0-10?]"
+
+  b21_strength_frequency:
+    block: B
+    role: trust_in_life
+    kind: items
+    concept: how often a source of strength is used (own)
+    source: own
+    items: [SYMBOL_2]
+    # Options 1-5 are frequency levels, most frequent first; 6 is not a frequency level and is
+    # analysed from the raw code; 7 is "don't know".
+    code_values: {SYMBOL_2_1: 1, SYMBOL_2_2: 2, SYMBOL_2_3: 3, SYMBOL_2_4: 4, SYMBOL_2_5: 5}
+    range: [1, 5]
+    printed_reversed: true
+    missing_codes: [SYMBOL_2_6, SYMBOL_2_7]
+
+  # --- C: agency / lust for life ------------------------------------------------------------
+  c1a_self_efficacy:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: general self-efficacy
+    source: Schwarzer & Jerusalem 1999
+    prefix: C1A_SWE.
+    items: [SWE_01, SWE_02, SWE_03, SWE_04, SWE_05, SWE_06, SWE_07, SWE_08, SWE_09, SWE_10]
+    range: [1, 4]
+    reverse: []
+    reverse_status: inferred
+
+  c1a_self_efficacy_grad:
+    block: C
+    role: lust_for_life
+    kind: gradient
+    concept: general self-efficacy gradient
+    parent: c1a_self_efficacy
+    items: [ZGL_C1A_GRAD]
+    range: [1, 4]
+
+  c1b_resonance_self_efficacy:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: resonance-oriented self-efficacy (exploratory)
+    source: own, after Rosa
+    prefix: C1B_RSWE.
+    items: [RSWE_01, RSWE_02, RSWE_03, RSWE_04, RSWE_05, RSWE_06]
+    range: [1, 4]
+    reverse: []
+    reverse_status: inferred
+
+  c1b_resonance_self_efficacy_grad:
+    block: C
+    role: lust_for_life
+    kind: gradient
+    concept: resonance-oriented self-efficacy gradient
+    parent: c1b_resonance_self_efficacy
+    items: [RSWE_GRADIENT]  # the export's code; the spec calls it RSWE_GRAD
+    range: [1, 4]
+
+  c3_creative_self_efficacy:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: creative self-efficacy
+    source: PISA CREATEFF (ST334)
+    prefix: C3_ST334.
+    items: [ST334Q01JA, ST334Q02JA, ST334Q03JA, ST334Q04JA, ST334Q05JA, ST334Q06JA,
+            ST334Q07JA, ST334Q08JA, ST334Q09JA, ST334Q10JA]
+    range: [1, 4]
+    reverse: []
+    reverse_status: inferred
+
+  c5_future_positive:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: feelings about the future, positive
+    source: PISA ST836, adapted
+    prefix: C5_ST836.
+    items: [ST836C02JA_DE, ST836C04JA_DE, ST836C06JA_DE, ST836C08JA_DE, ST836C10JA_DE]
+    range: [1, 5]
+    reverse: []
+    reverse_status: inferred
+
+  c5_future_negative:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: feelings about the future, negative (high = more)
+    source: PISA ST836, adapted
+    prefix: C5_ST836.
+    items: [ST836C01JA_DE, ST836C03JA_DE, ST836C05JA_DE, ST836C07JA_DE, ST836C09JA_DE]
+    range: [1, 5]
+    reverse: []
+    reverse_status: inferred
+
+  c6_proactive_learning:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: proactive learning
+    source: PISA ST293, adapted
+    prefix: C6_ST293.
+    items: [ST293Q01JA, ST293Q02JA, ST293Q03JA, ST293Q04JA, ST293Q05JA, ST293Q06JA,
+            ST293Q07JA, ST293Q08JA, ST293Q09JA]
+    range: [1, 5]
+    reverse: [ST293Q04JA, ST293Q07JA]
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook
+
+  c7_cooperation:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: cooperation
+    source: PISA COOPAGR (ST343)
+    prefix: C7_ST343.
+    items: [ST343Q01JA, ST343Q02JA, ST343Q03JA, ST343Q04JA, ST343Q05JA, ST343Q06JA,
+            ST343Q07JA, ST343Q08JA, ST343Q09JA, ST343Q10JA]
+    range: [1, 5]
+    reverse: [ST343Q02JA, ST343Q04JA, ST343Q05JA, ST343Q07JA, ST343Q10JA]
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook
+
+  c8_assertiveness:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: assertiveness / initiative
+    source: PISA ASSERAGR (ST305), adapted
+    prefix: C8_ST305.
+    items: [ST305Q01JA, ST305Q02JA_adjusted, ST305Q03JA, ST305Q04JA, ST305Q05JA, ST305Q06JA,
+            ST305Q07JA, ST305Q08JA, ST305Q09JA, ST305Q10JA]
+    range: [1, 5]
+    reverse: [ST305Q04JA, ST305Q07JA, ST305Q08JA]
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook
+
+  c8_assertiveness_grad:
+    block: C
+    role: lust_for_life
+    kind: gradient
+    concept: assertiveness gradient
+    parent: c8_assertiveness
+    items: [ZGL_C08_GRAD]
+    range: [1, 5]
+
+  c9_creative_environment:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: creative peer and family environment
+    source: PISA CREATFAM (ST336)
+    prefix: C9_ST336.
+    items: [ST336Q01JA, ST336Q03JA, ST336Q04JA, ST336Q05JA, ST336Q06JA, ST336Q07JA]
+    range: [1, 4]
+    reverse: []
+    reverse_status: inferred
+
+  c11_self_directed_learning:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: self-directed learning
+    source: PISA SDLEFF (ST355), adapted
+    prefix: C11_ST355.
+    items: [ST355Q03JA, ST355Q04JA, ST355Q05JA, ST355Q06JA, ST355Q07JA, ST355Q08JA]
+    range: [1, 4]
+    reverse: []
+    reverse_status: inferred
+
+  c11_self_directed_learning_grad:
+    block: C
+    role: lust_for_life
+    kind: gradient
+    concept: self-directed learning gradient
+    parent: c11_self_directed_learning
+    items: [ZGL_C11_GRAD]
+    range: [1, 4]
+
+  c12_perseverance:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: perseverance
+    source: PISA PERSEVAGR (ST307)
+    prefix: C12_ST307.
+    items: [ST307Q01JA, ST307Q02JA, ST307Q03JA, ST307Q04JA, ST307Q05JA, ST307Q06JA,
+            ST307Q07JA, ST307Q08JA, ST307Q09JA, ST307Q10JA]
+    range: [1, 5]
+    reverse: [ST307Q04JA, ST307Q06JA, ST307Q07JA, ST307Q10JA]
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook
+
+  c13_emotional_control:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: emotional control
+    source: PISA EMOCOAGR (ST313)
+    prefix: C13_ST313.
+    items: [ST313Q01JA, ST313Q02JA, ST313Q03JA, ST313Q04JA, ST313Q05JA, ST313Q06JA,
+            ST313Q07JA, ST313Q08JA, ST313Q09JA, ST313Q10JA]
+    range: [1, 5]
+    reverse: [ST313Q02JA, ST313Q03JA, ST313Q04JA, ST313Q06JA, ST313Q08JA, ST313Q09JA,
+              ST313Q10JA]
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook
+
+  c15_reflection:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: reflection vs impulsivity (high = reflective)
+    source: PISA ST309
+    prefix: C15_ST309.
+    items: [ST309Q01JA, ST309Q02JA, ST309Q03JA, ST309Q04JA, ST309Q05JA, ST309Q06JA,
+            ST309Q07JA, ST309Q08JA, ST309Q09JA, ST309Q10JA]
+    range: [1, 5]
+    reverse: [ST309Q02JA, ST309Q03JA, ST309Q07JA, ST309Q09JA]
+    reverse_status: inferred
+    reverse_source: wording (the handbook scales no index for this question)
+
+  c16_expected_degrees:
+    block: C
+    role: lust_for_life
+    kind: items
+    concept: expected degrees (1 yes, 2 no)
+    source: PISA ST327
+    prefix: C16_ST327.
+    items: [ST327C02JA_DE, ST327C03JA_DE, ST327C04JA_DE, ST327C05JA_DE, ST327C06JA_DE,
+            ST327C07JA_DE, ST327C08JA_DE, ST327C09JA_DE, ST327C10JA_DE, ST327C11JA_DE]
+    range: [1, 2]
+    missing_codes: ["3"]  # don't know
+
+  c18_education_expectations:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: education-path expectations
+    source: PISA ST324
+    prefix: C18_ST324.
+    items: [ST324Q02JA, ST324Q04JA, ST324Q05JA, ST324Q07JA, ST324Q10JA, ST324Q11JA,
+            ST324Q12JA, ST324Q13JA, ST324Q14JA]
+    range: [1, 4]
+    reverse: [ST324Q02JA, ST324Q05JA, ST324Q07JA, ST324Q10JA, ST324Q11JA]
+    reverse_status: inferred
+    reverse_source: wording (the handbook scales no index for this question)
+
+  c21_openness:
+    block: C
+    role: lust_for_life
+    kind: scale
+    concept: openness to the unknown
+    source: PISA ST140
+    prefix: C21_ST140.
+    items: [ST140_a, ST140_b, ST140_c, ST140_d, ST140_e, ST140_f, ST140_g, ST140_h]
+    range: [1, 4]
+    reverse: [ST140_b, ST140_e, ST140_h]
+    reverse_status: inferred
+    reverse_source: PISA 2022 scale handbook
+
+  c21_openness_grad:
+    block: C
+    role: lust_for_life
+    kind: gradient
+    concept: openness gradient
+    parent: c21_openness
+    items: [ZGL_C21_GRAD]
+    range: [1, 4]
+
+# Known codes that are not scored here. Patterns use shell wildcards. Free text never leaves
+# the private data root.
+unscored:
+  background: [ST001, ST003C01TA_DE, ST003C02TA_DE, ST004, ST005, ST007, ST021C01TA_DE, ST226,
+               ST230, ST255, ZGL_A1_2, ZGL_A4_SCHULART, "A9_ST006.*", "A12_ST008.*",
+               "A15_ST250.*", "A16_ST251.*"]
+  free_text: [ZGL_A1_1, ST019AC01_DE, ST019BC01_DE, ST019CC01_DE, ST022, ZGL_A22_2, ST329,
+              SYMBOL_1]
+  # B7 "other" activities: up to five free-text rows, each with its own frequency item.
+  dynamic: ["ZGL_B7_05*"]
+  # B21's not-applicable option.
+  flags: [SYMBOL_3]

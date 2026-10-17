@@ -95,6 +95,13 @@ acoustics:
 # Download: ZEITGEIST_DATABASE_URL=... uv run --extra zeitgeist \
 #     social-energy fetch-zeitgeist studies/dsa-2026/study.yaml
 
+# Survey scoring (social-energy score-survey): codes, scales and recoding rules, no item wording.
+survey:
+  codebook: survey_codebook.yaml
+  # Scales are scored only after research/analysis-plan.md is signed and frozen. score-survey
+  # refuses until this holds the freeze date and commit.
+  analysis_plan_frozen: null  # [unknown: when is the analysis plan signed off? set "<date> <commit>"]
+
 # How the explorer (social_energy.explorer) presents this study.
 explorer:
   # Display names. The official titles are not in the repo yet:
