@@ -10,7 +10,7 @@ Inputs and filters are those analyses' own, unchanged:
   which must have run first. Pairs are kept down to the study's person-tag RSSI threshold, so the
   explorer's close-range slider can range over everything the build kept.
 - Press episodes from ``self_report_context.press_episodes`` (``self_report`` consent).
-- Nodes: participants with ``beacons`` consent. Their course comes from the local roster.
+- Nodes: participants with ``beacons`` consent. Their course comes from the spine.
 
 The bundle is written to ``$SOCIAL_ENERGY_DATA/dsa-2026/derived/explorer/bundle/``. It carries no
 study IDs, but it is pseudonymised individual data about minors: team use only, never shared.
@@ -49,8 +49,7 @@ def main() -> None:
     participants = {p.ref for p in spine.people if p.role == "participant"}
     nodes = sorted(participants & {f"person:{p}" for p in spine.consented("beacons")})
     consented_sr = {f"person:{p}" for p in spine.consented("self_report")}
-    roster = next((layout.root / "context" / "personal").glob("*StudyIDs*.md"))
-    course = cp.course_of(roster)
+    course = cp.course_of(spine)
 
     tz = ZoneInfo(study.timezone)
     start = datetime.fromisoformat(f"{cp.FIRST_DAY} {ex.day_start}").replace(tzinfo=tz)
