@@ -221,7 +221,8 @@ def generate(spec: CampSpec, out_dir: Path) -> SyntheticCamp:
     dump("meta", {"study_id": "synthetic-camp", "timezone": spec.timezone})
     dump(
         "people",
-        [{"id": str(p), "role": "participant", "consent": ["beacons", "self_report"]}
+        [{"id": str(p), "role": "participant", "consent": ["beacons", "self_report"],
+          "course": course[p]}
          for p in spec.people],
     )  # fmt: skip
     dump(

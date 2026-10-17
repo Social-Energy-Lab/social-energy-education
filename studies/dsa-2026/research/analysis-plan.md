@@ -21,6 +21,16 @@ Unit: one row per participant with beacon and survey consent. Predictors are the
 | C3 | Lust for life also shows as more new ties. | block C composite | new close ties per day after the first two days | positive |
 | C4 | Being moved is more frequent for those who start more open. | blocks B and C (two tests) | self-reports per exposure hour (presses on wiped tags excluded from both sides of the rate) | positive |
 
+**How the outcomes are computed.** The definitions are code: `social_energy.outcomes` (toolkit, with hand-derived tests) and [`../analyses/outcomes.py`](../analyses/outcomes.py) (this study's settings and variants), which writes one row per participant and variant to `derived/analyses/outcomes/`. It reads beacon data only and never touches the survey. Operational choices the hypotheses above leave open, all `[inferred]` until signed:
+
+- *Close and tie.* A 5-minute bin is close when the pair's strongest reading in it is at least `close_rssi` (main −65 dBm); a pair is tied on a camp day (07:30–07:30) when its close minutes reach `min_minutes` (main 60). The minimum applies per pair and day. Ties are between participants with beacon consent only; staff are left out.
+- *Days.* Camp days 13–28 Aug; the 29 Aug stub (07:30–09:00) is left out. A day counts for a person when their tag was seen for at least an hour; ties on other days do not count for that person, so a tag that went silent does not read as an isolated day.
+- *C1* is the person's tie minutes per present day, averaged over present days (weighted degree, in minutes).
+- *C2* uses the same ties: tie minutes with participants of another course over tie minutes with participants whose course is known. It is reported next to the share expected if everyone present mixed at random, `(N − n_course) / (N − 1)` over the participants present on any day, and their difference. Course comes from the spine (`Spine.people_frame()`).
+- *C3* counts a pair's first tie, on a present day after the first two camp days (13 and 14 Aug, which set the baseline), for each side; divided by the person's present days after them.
+- *C4* counts press episodes (merged and accidental runs dropped as in the first analyses) per exposure hour, from the instruction (14 Aug 08:45) to the handover. Exposure is a 5-minute bin in which the tag was seen; bins in a lost window or an unsettled window leave both the presses and the hours, and a press counts only in an exposure bin. It needs both beacon and self-report consent, since the exposure comes from the beacon data.
+- *Lost windows* for C1–C3: a pair bin survives one partner's lost window when the other partner logged it (main); sensitivity 5 drops it for both.
+
 **Model.** Linear regression of each outcome on its predictor, with age and gender as covariates and standard errors clustered by course (network outcomes are not independent within a course). As a check that does not rest on those assumptions, a permutation test that shuffles survey rows across people within course.
 
 **Error control.** The confirmatory family is the five tests above (C4 counts twice). Holm correction at α = 0.05. Report every result, with standardised effect sizes and 95% intervals, whether or not it passes.
@@ -47,7 +57,7 @@ Every confirmatory result is rerun with:
 4. close-contact thresholds of −70 and −75 dBm, and minimum durations of 15 and 30 minutes;
 5. lost windows treated as missing for both partners rather than recovered from the partner's side.
 
-A result that flips under one of these is reported as fragile.
+A result that flips under one of these is reported as fragile. Variants 4 and 5 are computed by [`../analyses/outcomes.py`](../analyses/outcomes.py) (one change at a time: −70, −75 dBm at 60 min; 15, 30 min at −65 dBm; lost windows on both sides). Variants 1–3 need the beacon ingest rebuilt with a different window, the hand-split fill or no drift correction, and are not computed yet.
 
 ## Reporting
 
@@ -61,7 +71,7 @@ A result that flips under one of these is reported as fragile.
 |---|---|---|---|
 | C1–C4 | Survey composites: reverse-keying list, B19/B20 slider range | research team | `[unknown: open, see the survey-scoring plan]` |
 | C1–C4 | Spine: remaining open questions (return times, lost tags) | research team | open |
-| C2 | Course membership per participant | — | in the roster |
+| C2 | Course membership per participant | — | in the spine (`people.yaml`, `Spine.people_frame()`) |
 | sensitivity 1 | Whether 13 Aug 11:30–18:00 is usable | beacon team | `[unknown: asked 2026-10-17]` |
 | EDA | Device data and distribution plan | research team | open |
 

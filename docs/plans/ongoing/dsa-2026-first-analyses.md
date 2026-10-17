@@ -12,7 +12,7 @@
 - **Done:** three analyses under `studies/dsa-2026/analyses/` (`copresence_by_phase.py`, `self_report_context.py`, `beacon_diagnostics.py`); firmware answers from the beacon team written into [`../../context/instruments/beacons.md`](../../context/instruments/beacons.md); a meeting deck and two question docs built from the outputs (kept outside the repo). Numbers are in the private half: `dsa-2026/notes/beacon-analyses-2026-10-01.md`.
 - **Waiting elsewhere (not on Next):** the firmware team's experiment log (commands, base buttons, battery changes); sign-off on the analysis choices below by the research team; firmware documentation from the beacon team, which decides the previous-boot rule.
 - **Consent:** the beacon-consent ruling of 2026-09-22 was applied to the spine on 2026-10-01, and every analysis was rerun with it.
-- **Handoff:** run `uv run social-energy ingest-beacons studies/dsa-2026/study.yaml`, then `copresence_by_phase.py build` and `report`, then `beacon_diagnostics.py` (writes the lost windows), then `self_report_context.py` (`uv run --extra analysis python …`). All read through the spine and write only under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/`.
+- **Handoff:** run `uv run social-energy ingest-beacons studies/dsa-2026/study.yaml`, then `copresence_by_phase.py build` and `report`, then `beacon_diagnostics.py` (writes the lost windows), then `self_report_context.py` (`uv run --extra analysis python …`), then `outcomes.py` (`uv run python studies/dsa-2026/analyses/outcomes.py`; per-person C1–C4 for the main settings and sensitivities 4–5, beacon data only). All read through the spine and write only under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/`. Outcome numbers: `dsa-2026/notes/outcomes-2026-10-17.md` in the private half.
 
 ## Settings in use
 
@@ -44,14 +44,17 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 - **Redundancy recovers most co-presence.** While one tag is wiped its partners still log it, so co-presence counted from either side survives; only pair-time with both tags wiped is gone. Presses and two-sided measures cannot be recovered.
 - **Readout timestamps run late; tag clocks do not.** The PC stamp on a readout is minutes late, more after long transfers; dating each record from its power cycle's earliest anchor halves the typical mirrored offset. Per-tag clock bias against partners is seconds. Apparent offsets of minutes between mirrored records come from sparse sampling in eco mode, not from clocks.
 - **Battery voltage fades slowly** and matters less than restarts.
+- **Outcome stability (C1–C4, 2026-10-17).** Across the threshold, minimum-duration and lost-window variants, per-person close-contact strength and cross-course share keep nearly the same ranking of people; new ties per day does not, so a C3 result would likely be reported as fragile.
 - **The mixing on special days rarely sticks.** Ties first made on the excursion or rotation day come back on the following days far less often than ties made on ordinary days. This measures repeated time together, not acquaintance.
 
 ## Next steps
 
 While waiting on the research team (added 2026-10-17):
 
-- [ ] Outcome measures for the confirmatory tests in `../../../studies/dsa-2026/research/analysis-plan.md` (C1–C4): daily close-contact strength, cross-course share, new ties per day, press rate per exposure hour. Toolkit functions with hand-derived tests, computed on the beacon data only. Never joined to the survey before the plan is signed.
+- [x] Outcome measures for the confirmatory tests in `../../../studies/dsa-2026/research/analysis-plan.md` (C1–C4): daily close-contact strength, cross-course share, new ties per day, press rate per exposure hour. Toolkit functions with hand-derived tests, computed on the beacon data only. Never joined to the survey before the plan is signed. Done 2026-10-17: `social_energy.outcomes` and `studies/dsa-2026/analyses/outcomes.py`; operational choices written into the analysis plan as `[inferred]`.
 - [x] Person attributes (course, age, gender) live in the spine's `people.yaml` (2026-10-17, `docs/decisions/person-attributes-in-the-spine.md`). The analyses now read courses from there; the old roster parser lost the course of participants with a replacement tag. Co-presence rerun; the effect is in the private half and leaves the headlines unchanged.
+- [ ] Outcome sensitivities 1–3 of the analysis plan: rebuild the ingest and the co-presence bins with the window from 13 Aug 11:30 (once the beacon team confirms it is usable), with the unsettled readouts filled from the hand split, and with `clock_rate_ppm: 0`, each into its own derived folder, then point `outcomes.py` at it. The pre-drift run kept only the reports, not the pair bins.
+- [ ] Ask the research team about C3 before sign-off: per-person new ties rank people very differently under the pre-specified threshold variants (see below).
 - [ ] Acoustics: agree the feature set with the research team (frequency and level features only, per the ethics approval) and a WAV deletion date; then rerun the extraction with `--delete-wavs`. The WAVs are kept until then.
 - [ ] Material for the research-group presentation on 2026-11-03: descriptive beacon results, acoustics against press density (exploratory), the analysis plan.
 
