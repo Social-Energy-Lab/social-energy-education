@@ -154,6 +154,30 @@ class Spine:
 
     # ---- vectorised queries ------------------------------------------------
 
+    def people_frame(self) -> pl.DataFrame:
+        """One row per person, keyed by ``entity`` (``person:<id>``), with role and attributes."""
+        return pl.DataFrame(
+            [
+                {
+                    "entity": p.ref,
+                    "id": p.id,
+                    "role": str(p.role),
+                    "course": p.course,
+                    "age": p.age,
+                    "gender": p.gender,
+                }
+                for p in self.people
+            ],
+            schema={
+                "entity": pl.String,
+                "id": pl.String,
+                "role": pl.String,
+                "course": pl.String,
+                "age": pl.Int64,
+                "gender": pl.String,
+            },
+        )
+
     def _intervals_frame(self, items: list[Interval], columns: dict[str, list]) -> pl.DataFrame:
         return pl.DataFrame(
             {

@@ -51,7 +51,8 @@ SPINE_README = """\
 # Local spine (never commit)
 
 Transcribe the field log here, using IDs only. Schema: social_energy/spine/models.py.
-- people.yaml       {id, role, consent: [beacons, self_report, eda, acoustics, survey, ...]}
+- people.yaml       {id, role, consent: [beacons, self_report, eda, acoustics, survey, ...],
+                     course?, age?, gender?}
 - assignments.yaml  {device: "beacon:74", entity: "person:74", start, end?}
 - exclusions.yaml   {target: "beacon:78" | "person:92", start, end?, reason}
 - events.yaml       {id, label, kind, start, end, locations: [...], tags: [...]}

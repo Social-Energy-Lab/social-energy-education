@@ -109,7 +109,7 @@ Ingest functions are pure: raw files in, canonical `polars` tables out. Suspicio
 
 ## Invariant 4: the spine resolves identity
 
-Raw tables speak in device IDs (`beacon:7`, `eda:SH07`). Only the **spine** (`social_energy.spine`) turns "device X at time t" into `person:<id>` or `location:<id>`. The spine covers people with consent per module, locations and zones, device assignments over time, programme events and exclusion windows. It lives locally under `$SOCIAL_ENERGY_DATA/<study>/spine/` as YAML. The repo ships its schema and synthetic examples only. Analyses must respect **consent per module** (`spine.consented("eda")`) and **exclusion windows** (`spine.flag_excluded`).
+Raw tables speak in device IDs (`beacon:7`, `eda:SH07`). Only the **spine** (`social_energy.spine`) turns "device X at time t" into `person:<id>` or `location:<id>`. The spine covers people with consent per module and the attributes analyses group or adjust by (course, age, gender), locations and zones, device assignments over time, programme events and exclusion windows. It lives locally under `$SOCIAL_ENERGY_DATA/<study>/spine/` as YAML. The repo ships its schema and synthetic examples only. Analyses must respect **consent per module** (`spine.consented("eda")`) and **exclusion windows** (`spine.flag_excluded`).
 
 ## Layout
 

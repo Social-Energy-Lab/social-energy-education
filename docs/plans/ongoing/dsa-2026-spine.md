@@ -40,6 +40,7 @@ All output is local. The repo only receives tooling improvements and instrument-
 - [x] Get the study-ID list from Mahdi (local, never committed) — arrived 2026-09-21 with consent per module, the location-tag roster, staff and sleeping rooms
 - [x] `init-spine`; review the seeded location assignments against moves and damage in the field log (give location tags `end` dates or reassign them)
 - [x] Transcribe tag assignments and replacements — the five the roster documents are in; the field log may hold more
+- [x] Person attributes (course, age, gender) copied from the roster into `people.yaml` by a one-off local script beside the spine (2026-10-17); see `docs/decisions/person-attributes-in-the-spine.md`
 - [ ] Transcribe exclusions (lost/found, battery changes, tags taken off, departures, withdrawals) — the roster's are in, the field log's are not
 - [ ] Transcribe EDA device ↔ person per session day (needs the distribution plan; Mahdi will supply it later, no date yet)
 - [ ] Transcribe the programme and KüA events with locations

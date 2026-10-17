@@ -238,20 +238,13 @@ MIN_GROUP = 5
 BLUE, ORANGE, GRAY = "#2a78d6", "#eb6834", "#8a8984"
 
 
-def course_of(roster: Path) -> dict[str, str]:
-    """Study ID → course, read from the local roster conversion (never leaves the machine)."""
-    courses: dict[str, str] = {}
-    section = None
-    for line in roster.read_text(encoding="utf-8").splitlines():
-        if line.startswith("## "):
-            section = line[3:].strip()
-        if section not in ("Students", "Teachers and organizers") or not line.startswith("|"):
-            continue
-        cells = [c.strip() for c in line.strip("|").split("|")]
-        sid = re.sub(r"\D", "", cells[0])
-        if sid and re.fullmatch(r"1\.\d", cells[3 if section == "Students" else 1]):
-            courses[f"person:{sid}"] = cells[3 if section == "Students" else 1]
-    return courses
+def course_of(spine: Spine) -> dict[str, str]:
+    """Entity → course, from the local spine (``people.yaml``)."""
+    return {
+        r["entity"]: r["course"]
+        for r in spine.people_frame().iter_rows(named=True)
+        if r["course"] is not None
+    }
 
 
 def load_all(prefix: str) -> pl.DataFrame:
@@ -271,8 +264,7 @@ def report() -> None:
     layout = paths.study(STUDY)
     spine = Spine.load(layout.spine)
     out = out_dir()
-    roster = next((layout.root / "context" / "personal").glob("*StudyIDs*.md"))
-    course = course_of(roster)
+    course = course_of(spine)
     participants = {p.ref for p in spine.people if p.role == "participant"}
     days = [FIRST_DAY + timedelta(d) for d in range((LAST_DAY - FIRST_DAY).days)]  # 13-28
 
