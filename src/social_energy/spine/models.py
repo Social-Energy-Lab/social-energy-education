@@ -47,6 +47,14 @@ class Person(_Model):
     id: str
     role: Role
     consent: frozenset[Module] = Field(default_factory=frozenset)
+    #: Attributes the analyses need as covariates or groupings, copied from the study's roster.
+    #: They are quasi-identifiers together, which is why they live only in the local spine.
+    #: ``course`` is the group a person spends the programme's formal time in (a course leader's
+    #: own course); ``age`` is in whole years at the start of the field phase; ``gender`` is the
+    #: roster's code, kept verbatim.
+    course: str | None = None
+    age: int | None = None
+    gender: str | None = None
 
     @property
     def ref(self) -> str:

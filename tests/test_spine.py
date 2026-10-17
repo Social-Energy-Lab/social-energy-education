@@ -236,3 +236,38 @@ def test_unassigned_flag_does_not_excuse_a_stringified_null(spine_dir):
     _dump(spine_dir, "exclusions.yaml", doc)
     with pytest.raises(SpineError, match=re.escape("beacon:None")):
         Spine.load(spine_dir)
+
+
+def test_person_attributes_are_optional_and_typed(spine_dir):
+    people = yaml.safe_load((spine_dir / "people.yaml").read_text())
+    people[0] |= {"course": "1.2", "age": 16, "gender": "f"}
+    _dump(spine_dir, "people.yaml", people)
+    spine = Spine.load(spine_dir)
+    assert (spine.people[0].course, spine.people[0].age, spine.people[0].gender) == ("1.2", 16, "f")
+    assert (spine.people[1].course, spine.people[1].age, spine.people[1].gender) == (None,) * 3
+
+
+def test_a_misspelt_person_attribute_is_rejected(spine_dir):
+    people = yaml.safe_load((spine_dir / "people.yaml").read_text())
+    people[0]["kurs"] = "1.2"
+    _dump(spine_dir, "people.yaml", people)
+    with pytest.raises(SpineError, match=r"people\.yaml"):
+        Spine.load(spine_dir)
+
+
+def test_people_frame_has_one_row_per_person_keyed_by_entity(spine_dir):
+    people = yaml.safe_load((spine_dir / "people.yaml").read_text())
+    people[0] |= {"course": "1.2", "age": 16, "gender": "f"}
+    people[1] |= {"course": "1.3"}
+    _dump(spine_dir, "people.yaml", people)
+    frame = Spine.load(spine_dir).people_frame()
+    assert frame.columns == ["entity", "id", "role", "course", "age", "gender"]
+    assert frame.to_dicts() == [
+        {"entity": "person:201", "id": "201", "role": "participant",
+         "course": "1.2", "age": 16, "gender": "f"},
+        {"entity": "person:202", "id": "202", "role": "participant",
+         "course": "1.3", "age": None, "gender": None},
+        {"entity": "person:L1", "id": "L1", "role": "course_leader",
+         "course": None, "age": None, "gender": None},
+    ]  # fmt: skip
+    assert frame.schema["age"] == pl.Int64
