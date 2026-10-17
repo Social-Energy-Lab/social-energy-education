@@ -51,7 +51,7 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 While waiting on the research team (added 2026-10-17):
 
 - [ ] Outcome measures for the confirmatory tests in `../../../studies/dsa-2026/research/analysis-plan.md` (C1–C4): daily close-contact strength, cross-course share, new ties per day, press rate per exposure hour. Toolkit functions with hand-derived tests, computed on the beacon data only. Never joined to the survey before the plan is signed.
-- [ ] Decide where person attributes (course, age, gender, from the roster) live: the spine has no place for them, and C2 needs course membership.
+- [x] Person attributes (course, age, gender) live in the spine's `people.yaml` (2026-10-17, `docs/decisions/person-attributes-in-the-spine.md`). The analyses now read courses from there; the old roster parser lost the course of participants with a replacement tag. Co-presence rerun; the effect is in the private half and leaves the headlines unchanged.
 - [ ] Acoustics: agree the feature set with the research team (frequency and level features only, per the ethics approval) and a WAV deletion date; then rerun the extraction with `--delete-wavs`. The WAVs are kept until then.
 - [ ] Material for the research-group presentation on 2026-11-03: descriptive beacon results, acoustics against press density (exploratory), the analysis plan.
 
