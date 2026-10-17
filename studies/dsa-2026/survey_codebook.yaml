@@ -49,7 +49,7 @@ renames:
   C1A_SWE.SWE_05_resonance:
     to: C1A_SWE.SWE_05
     status: inferred
-    note: "[inferred] same matrix row under an earlier key: form version 16 carries it in place of SWE_05, and the draft that used this key lists the same item"
+    note: "[inferred] same matrix row under an earlier key: form version 16 carries it in place of SWE_05"
   C1A_SWE.SWE_06_resonance:
     to: C1A_SWE.SWE_06
     status: inferred
