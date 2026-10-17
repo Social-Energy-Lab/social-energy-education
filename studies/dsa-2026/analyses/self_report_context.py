@@ -70,12 +70,20 @@ def local(s: str) -> pl.Expr:
 
 
 def lost_bins(layout: paths.StudyLayout, spine: Spine) -> pl.DataFrame | None:
-    """Person and 5-minute bin inside a tag's lost window, or None if none were computed."""
-    path = layout.derived / "analyses" / "beacon-diagnostics" / "lost_windows.parquet"
-    if not path.exists():
+    """Person and 5-minute bin the tag could not report, or None if none were computed.
+
+    Two sources from beacon_diagnostics: lost windows (a restart wiped what the tag held) and
+    unsettled windows (a readout whose tag ID could not be repaired: both candidates).
+    """
+    d = layout.derived / "analyses" / "beacon-diagnostics"
+    found = [
+        d / f for f in ("lost_windows.parquet", "unsettled_windows.parquet") if (d / f).exists()
+    ]
+    if not found:
         return None
+    windows = pl.concat([pl.read_parquet(f).select("beacon", "start", "end") for f in found])
     w = spine.resolve(
-        pl.read_parquet(path), device_col="beacon", time_col="start", kind="beacon", out="entity"
+        windows, device_col="beacon", time_col="start", kind="beacon", out="entity"
     ).filter(pl.col("entity").is_not_null())
     return (
         w.with_columns(
@@ -135,9 +143,9 @@ def main() -> None:
 
     presses, qa = press_episodes(layout, spine, participants, consented)
 
-    # Rate per person-hour seen, by phase, for participants whose tag was read at all. Time inside
-    # a lost window (a restart wiped what the tag held) is not exposure: a press there could not
-    # have been recorded, though others still saw the tag. Windows come from beacon_diagnostics.
+    # Rate per person-hour seen, by phase, for participants whose tag was read at all. A bin the
+    # tag could not report (lost after a restart, or in a readout whose ID stayed unsettled) counts
+    # in neither the presses nor the hours. Windows come from beacon_diagnostics.
     seen = cp.load_all("seen").filter(pl.col("entity").is_in(consented & participants))
     lost = lost_bins(layout, spine)
     if lost is not None:
@@ -145,16 +153,18 @@ def main() -> None:
         seen = seen.join(lost, on=["entity", "bin"], how="anti")
         qa["seen_bins_outside_lost_windows"] = seen.height
         qa["presses_inside_lost_windows"] = presses.join(lost, on=["entity", "bin"]).height
+    # Only the rate drops those bins; the context analyses below keep every valid press.
+    counted = presses if lost is None else presses.join(lost, on=["entity", "bin"], how="anti")
     hours = seen.group_by("phase").agg((pl.len() / 12).alias("person_hours"))
     rate = (
-        presses.group_by("phase")
+        counted.group_by("phase")
         .agg(pl.len().alias("presses"))
         .join(hours, on="phase")
         .with_columns((pl.col("presses") / pl.col("person_hours") * 10).alias("per_10_hours"))
         .sort(pl.col("phase").replace_strict(cp.PHASE_ORDER, list(range(len(cp.PHASE_ORDER)))))
     )
     daily = (
-        presses.group_by("day")
+        counted.group_by("day")
         .agg(pl.len().alias("presses"), pl.col("entity").n_unique().alias("pressers"))
         .sort("day")
     )
