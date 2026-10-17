@@ -22,6 +22,7 @@ from pathlib import Path
 
 import polars as pl
 
+from .cycles import real_seconds
 from .ingest import BeaconConfig, ingest_logs_to
 
 OFFSET = 48  # the bug's ID shift: "0"-"9" stand for 0-9 or 48-57
@@ -165,7 +166,11 @@ def votes_from_tables(out: Path, config: BeaconConfig) -> pl.DataFrame:
         .select("readout_key", "observed", "uptime_s")
         .collect()
         .join(amb_readouts, on="readout_key")
-        .with_columns((pl.col("anchor") + pl.duration(seconds=pl.col("uptime_s"))).alias("t_own"))
+        .with_columns(
+            (pl.col("anchor") + real_seconds(pl.col("uptime_s"), config.clock_rate_ppm)).alias(
+                "t_own"
+            )
+        )
         .select("readout_key", "header", "observed", "t_own")
     )
     witnesses = (

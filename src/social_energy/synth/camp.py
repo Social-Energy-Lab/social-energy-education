@@ -44,6 +44,8 @@ class CampSpec:
     lost: tuple[int, float, float] | None = (47, 2.0, 4.0)
     # hours after start before which the logger prints IDs 48..57 as "0".."9"
     id_bug_until_h: float | None = 7.0
+    # every tag's uptime counter runs this many parts per million fast against real time
+    clock_rate_ppm: float = 0.0
 
 
 @dataclass
@@ -140,7 +142,7 @@ def generate(spec: CampSpec, out_dir: Path) -> SyntheticCamp:
 
     def uptime(beacon: int, t: datetime) -> int:
         boot = max(b for b in boots[beacon] if b <= t)
-        return int((t - boot).total_seconds())
+        return int((t - boot).total_seconds() * (1 + spec.clock_rate_ppm * 1e-6))
 
     # ---- simulate scans ---------------------------------------------------------------
     records: dict[int, list[tuple[datetime, str]]] = {b: [] for b in person_beacons}

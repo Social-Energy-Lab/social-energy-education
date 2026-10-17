@@ -146,7 +146,10 @@ def _sha256(path: Path) -> str:
 def extract_directory(
     wav_dir: Path, out_dir: Path, config: AcousticsConfig, *, delete_wavs: bool
 ) -> pl.DataFrame:
-    """Extract features for every WAV in ``wav_dir``; optionally delete each verified WAV.
+    """Extract features for every WAV under ``wav_dir``; optionally delete each verified WAV.
+
+    WAVs in subfolders (one per day, as AudioMoth deliveries come) are found too; each feature file
+    keeps its WAV's folder under ``out_dir``, and the manifest names WAVs by their relative path.
 
     A WAV is deleted only after its feature file has been written, read back, and
     found to have the expected number of windows. Every file gets a manifest row
@@ -155,12 +158,14 @@ def extract_directory(
     wav_dir, out_dir = Path(wav_dir), Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
-    for wav in sorted(p for p in wav_dir.iterdir() if p.suffix.lower() == ".wav"):
-        row = {"wav": wav.name, "wav_sha256": "", "windows": 0, "deleted": False, "error": ""}
+    for wav in sorted(p for p in wav_dir.rglob("*") if p.is_file() and p.suffix.lower() == ".wav"):
+        rel = wav.relative_to(wav_dir)
+        row = {"wav": rel.as_posix(), "wav_sha256": "", "windows": 0, "deleted": False, "error": ""}
         try:
             row["wav_sha256"] = _sha256(wav)
             features = extract_features(wav, config)
-            target = out_dir / f"{wav.stem}.parquet"
+            target = out_dir / rel.with_suffix(".parquet")
+            target.parent.mkdir(parents=True, exist_ok=True)
             features.write_parquet(target)
             reread = pl.read_parquet(target)
             header = _read_header(wav)

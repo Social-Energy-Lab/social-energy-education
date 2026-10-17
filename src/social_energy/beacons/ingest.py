@@ -27,7 +27,7 @@ from pathlib import Path
 
 import polars as pl
 
-from .cycles import power_cycles
+from .cycles import power_cycles, real_seconds
 
 # One or more commas after the ID: a hand-edited log can carry a doubled one.
 LINE_RE = r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),ID: ([^,]*),+(.*)$"
@@ -79,6 +79,9 @@ class BeaconConfig:
     # a peak this many times the other candidate's settles a split count.
     witness_peak_s: int = 10
     witness_min_peak_ratio: float = 3.0
+    # Tags' uptime counters run this many parts per million fast against the logger clock
+    # (``cycles.estimate_clock_rate``). Records are dated as boot + uptime / (1 + rate).
+    clock_rate_ppm: float = 0.0
 
 
 @dataclass
@@ -171,7 +174,7 @@ def _assign_readouts(rows: pl.DataFrame, gap_s: int) -> pl.DataFrame:
     )
 
 
-def _readout_table(rows: pl.DataFrame) -> pl.DataFrame:
+def _readout_table(rows: pl.DataFrame, clock_rate_ppm: float = 0.0) -> pl.DataFrame:
     readouts = (
         rows.group_by("readout_key", maintain_order=True)
         .agg(
@@ -189,7 +192,7 @@ def _readout_table(rows: pl.DataFrame) -> pl.DataFrame:
         .drop("_pc_any")
     )
     return readouts.with_columns(
-        (pl.col("pc_time") - pl.duration(seconds=pl.col("current_timer"))).alias("anchor"),
+        (pl.col("pc_time") - real_seconds(pl.col("current_timer"), clock_rate_ppm)).alias("anchor"),
         pl.col("header_id").cast(pl.Int64, strict=False).alias("beacon"),
     )
 
@@ -230,6 +233,7 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
                 "beacon", pl.col("pc_time").alias("ts"), pl.col("current_timer").alias("timer")
             ),
             restart_margin_s=config.restart_margin_s,
+            clock_rate_ppm=config.clock_rate_ppm,
         )
         .select("beacon", "cycle_start")
         .unique()
@@ -295,9 +299,9 @@ def _add_boot_context(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFr
         pl.col("pc_time").alias("ts"),
         pl.col("current_timer").alias("timer"),
     )
-    cyc = power_cycles(anchored, restart_margin_s=config.restart_margin_s).select(
-        "readout_key", "restart", "cycle", "cycle_start"
-    )
+    cyc = power_cycles(
+        anchored, restart_margin_s=config.restart_margin_s, clock_rate_ppm=config.clock_rate_ppm
+    ).select("readout_key", "restart", "cycle", "cycle_start")
     starts = (
         cyc.join(anchored.select("readout_key", "beacon"), on="readout_key")
         .group_by("beacon", "cycle")
@@ -334,7 +338,9 @@ def _add_boot_context(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFr
 # ---- record tables -------------------------------------------------------------
 
 
-def _resolve_boots(records: pl.DataFrame, uptime_col: str) -> pl.DataFrame:
+def _resolve_boots(
+    records: pl.DataFrame, uptime_col: str, clock_rate_ppm: float = 0.0
+) -> pl.DataFrame:
     """Decide which boot each record's uptime belongs to, and compute its time.
 
     Within one readout, records come out in recording order, so a drop in uptime marks
@@ -377,7 +383,7 @@ def _resolve_boots(records: pl.DataFrame, uptime_col: str) -> pl.DataFrame:
     )
     return records.with_columns(
         (pl.col("_boots_back") > 0).alias("pre_reboot"),
-        (anchor + pl.duration(seconds=pl.col(uptime_col))).alias("t"),
+        (anchor + real_seconds(pl.col(uptime_col), clock_rate_ppm)).alias("t"),
     ).drop("_seg", "_last_seg", "_no_current", "_boots_back")
 
 
@@ -484,6 +490,7 @@ def _records(
             .rename({"_observed": "observed", "_uptime_c": "uptime_s", "_rssi": "rssi"})
             .with_columns(_invalid_value(config)),
             "uptime_s",
+            config.clock_rate_ppm,
         ),
         config).select(
         "beacon", "observed", "rssi", "t", "uptime_s", "readout_seq", *FLAGS,
@@ -494,6 +501,7 @@ def _records(
         _resolve_boots(
             data.filter(pl.col("kind") == "self_report").rename({"_uptime_s": "uptime_s"}),
             "uptime_s",
+            config.clock_rate_ppm,
         ),
         config).select(
         "beacon", "t", "uptime_s", "readout_seq", *FLAGS, "readout_key", "source", "line_no",
@@ -501,11 +509,12 @@ def _records(
     )  # fmt: skip
 
     eco = data.filter(pl.col("kind") == "eco")
-    eco = _resolve_boots(eco, "_enter").rename({"t": "t_enter"})
+    eco = _resolve_boots(eco, "_enter", config.clock_rate_ppm).rename({"t": "t_enter"})
     eco = eco.with_columns(
-        (pl.col("t_enter") + pl.duration(seconds=pl.col("_leave") - pl.col("_enter"))).alias(
-            "t_leave"
-        ),
+        (
+            pl.col("t_enter")
+            + real_seconds(pl.col("_leave") - pl.col("_enter"), config.clock_rate_ppm)
+        ).alias("t_leave"),
         pl.col("t_enter").alias("t"),
     )
     eco_sessions = _finish(eco, config).select(
@@ -569,7 +578,7 @@ def _contact_counts(contacts: pl.DataFrame) -> dict[str, int]:
 def ingest_logs(paths: Iterable[Path], config: BeaconConfig) -> BeaconTables:
     """Ingest logger files in memory. For a whole camp, see ``ingest_logs_to``."""
     lines, parsed = _parse(paths, config)
-    readouts = _readouts(_readout_table(parsed), config)
+    readouts = _readouts(_readout_table(parsed, config.clock_rate_ppm), config)
     contacts, self_reports, eco, headerless = _records(
         parsed, readouts.select(READOUT_CONTEXT), config
     )
@@ -609,7 +618,7 @@ def ingest_logs_to(paths: Iterable[Path], config: BeaconConfig, out: Path) -> di
         lines, parsed = _parse([path], config)
         for kind, n in _kind_counts(lines).items():
             kinds[kind] = kinds.get(kind, 0) + n
-        readout_rows.append(_readout_table(parsed))
+        readout_rows.append(_readout_table(parsed, config.clock_rate_ppm))
         parsed.filter(pl.col("kind").is_in(RECORD_KINDS)).write_parquet(
             work / f"parsed_{i}.parquet"
         )

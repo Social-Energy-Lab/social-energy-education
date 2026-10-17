@@ -33,10 +33,13 @@ from social_energy.beacons import (
     read_deliveries,
 )
 from social_energy.spine import Spine
+from social_energy.study import StudyConfig
 
 SLUG = "beacon-diagnostics"
 #: Uptime this far behind the elapsed wall time means the tag restarted `[inferred]`.
 RESTART_MARGIN_S = 3600
+# The ingest dates records with this rate; cycles computed here must use the same one.
+CLOCK_RATE_PPM = StudyConfig.load(cp.STUDY_YAML).beacon_config().clock_rate_ppm
 #: Days whose tags were healthy, used wherever a "typical day" is needed.
 TYPICAL = [date(2026, 8, d) for d in range(14, 24)]
 INK, INK2 = "#0b0b0b", "#52514e"
@@ -53,6 +56,40 @@ def our_table(name: str) -> pl.DataFrame:
     return pl.read_parquet(paths.study(cp.STUDY).derived / "beacons" / f"{name}.parquet")
 
 
+def unsettled_windows(readouts: pl.DataFrame) -> pl.DataFrame:
+    """Per readout the ID repair left ambiguous, the span its data covers, for both candidates.
+
+    A readout printed as ``n`` carries tag ``n``'s or tag ``n + 48``'s records since that tag's
+    previous readout; which, the repair could not settle. So the span runs from the earlier of the
+    two candidates' previous readouts to this one, and counts as unobserved for both: a one-sided
+    measure there would be credited to the wrong tag, or missed on the right one.
+    """
+    amb = readouts.filter(pl.col("id_status") == "ambiguous").select(
+        "readout_key", pl.col("header_id").cast(pl.Int64).alias("n"), "pc_time"
+    )
+    rows = []
+    for key, n, end in amb.iter_rows():
+        earlier = readouts.filter(
+            pl.col("beacon").is_in([n, n + 48])
+            & (pl.col("pc_time") < end)
+            & (pl.col("readout_key") != key)
+        )
+        prev = [earlier.filter(pl.col("beacon") == b)["pc_time"].max() for b in (n, n + 48)]
+        known = [p for p in prev if p is not None]
+        start = min(known) if len(known) == 2 else None
+        for b in (n, n + 48):
+            rows.append({"beacon": b, "start": start, "end": end, "readout_key": key})
+    utc = pl.Datetime("us", "UTC")
+    table = pl.DataFrame(
+        rows, schema={"beacon": pl.Int64, "start": utc, "end": utc, "readout_key": pl.String}
+    )
+    # A candidate never read out before has no previous readout: its span starts with the record.
+    first = readouts["pc_time"].min()
+    return table.with_columns(pl.col("start").fill_null(first)).filter(
+        pl.col("end") > pl.col("start")
+    )
+
+
 def anchors() -> pl.DataFrame:
     """Every readout with a clock anchor and a settled ID, with its power cycle."""
     r = our_table("readouts").filter(
@@ -61,7 +98,7 @@ def anchors() -> pl.DataFrame:
     found = r.select(
         "beacon", pl.col("pc_time").alias("ts"), pl.col("current_timer").alias("timer")
     )
-    return power_cycles(found, restart_margin_s=RESTART_MARGIN_S)
+    return power_cycles(found, restart_margin_s=RESTART_MARGIN_S, clock_rate_ppm=CLOCK_RATE_PPM)
 
 
 def resets(cycles: pl.DataFrame) -> pl.DataFrame:
@@ -523,6 +560,7 @@ def main() -> None:
     raw_logs = sorted((paths.study(cp.STUDY).raw / "beacons" / "Logs").glob("*.log"))
     windows = lost_windows(cycles, read_deliveries(raw_logs, cp.TZ))
     windows.write_parquet(out / "lost_windows.parquet")
+    unsettled_windows(our_table("readouts")).write_parquet(out / "unsettled_windows.parquet")
     rs = all_resets.filter(pl.col("beacon").is_in(list(person_tags)))
     lw = windows.filter(pl.col("beacon").is_in(list(person_tags))).with_columns(
         pl.col("start", "end").dt.convert_time_zone(cp.TZ)

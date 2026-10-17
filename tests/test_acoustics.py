@@ -65,6 +65,20 @@ def test_directory_extraction_keeps_wavs_by_default(tmp_path, wav):
     assert pl.read_parquet(out / "20260814_082000.parquet").height == 10
 
 
+def test_wavs_in_day_folders_are_found_and_keep_their_folder(tmp_path):
+    # AudioMoth deliveries keep one folder per day; two days can reuse a file name.
+    for day in ("20260813", "20260814"):
+        (tmp_path / day).mkdir()
+        write_wav(tmp_path / day / "20260814_082000.WAV", np.zeros(SR * 2), SR, comment=None)
+    out = tmp_path / "features"
+    manifest = extract_directory(tmp_path, out, AcousticsConfig(window_s=1.0), delete_wavs=False)
+    assert sorted(manifest["wav"].to_list()) == [
+        "20260813/20260814_082000.WAV", "20260814/20260814_082000.WAV",
+    ]  # fmt: skip
+    assert (out / "20260813" / "20260814_082000.parquet").exists()
+    assert (out / "20260814" / "20260814_082000.parquet").exists()
+
+
 def test_directory_extraction_deletes_only_after_verified_features(tmp_path, wav):
     out = tmp_path / "features"
     manifest = extract_directory(tmp_path, out, AcousticsConfig(), delete_wavs=True)
