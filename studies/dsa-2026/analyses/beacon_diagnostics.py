@@ -33,10 +33,13 @@ from social_energy.beacons import (
     read_deliveries,
 )
 from social_energy.spine import Spine
+from social_energy.study import StudyConfig
 
 SLUG = "beacon-diagnostics"
 #: Uptime this far behind the elapsed wall time means the tag restarted `[inferred]`.
 RESTART_MARGIN_S = 3600
+# The ingest dates records with this rate; cycles computed here must use the same one.
+CLOCK_RATE_PPM = StudyConfig.load(cp.STUDY_YAML).beacon_config().clock_rate_ppm
 #: Days whose tags were healthy, used wherever a "typical day" is needed.
 TYPICAL = [date(2026, 8, d) for d in range(14, 24)]
 INK, INK2 = "#0b0b0b", "#52514e"
@@ -61,7 +64,7 @@ def anchors() -> pl.DataFrame:
     found = r.select(
         "beacon", pl.col("pc_time").alias("ts"), pl.col("current_timer").alias("timer")
     )
-    return power_cycles(found, restart_margin_s=RESTART_MARGIN_S)
+    return power_cycles(found, restart_margin_s=RESTART_MARGIN_S, clock_rate_ppm=CLOCK_RATE_PPM)
 
 
 def resets(cycles: pl.DataFrame) -> pl.DataFrame:

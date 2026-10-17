@@ -56,7 +56,7 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 - [x] Readouts still ambiguous after witnesses (2026-10-17, Álvaro): excluded, not filled from the hand split. Their evidence is a split count with no timing peak; the hand label always equals that majority, so it adds no independent confidence. They stay in the tables, flagged `id_ambiguous`.
 - [ ] Exposure for those readouts: an excluded readout's interval is data missing for one of its two candidate tags, but which one is unknown. Count it as a lost window for both candidates in one-sided measures (press rates), so their exposure is not overstated.
 - [x] Estimate timer drift per power cycle from the lower edge of `delay_s` against uptime (2026-10-17): about +20 s/day on every cleanly fitted cycle; see the instrument doc.
-- [ ] Correct dating for drift in the toolkit: date each cycle along its fitted minimum-delay line (boot time and rate), and fall back to the camp-wide rate where a cycle's fit is poor. Test with a synthetic camp whose clocks run at a known rate; then rerun the analyses and compare press-to-event alignment and mirrored-contact offsets.
+- [x] Correct dating for drift (2026-10-17): one camp-wide rate (`clock_rate_ppm` in `study.yaml`, from `estimate_clock_rate`), tested on a synthetic camp whose clocks run at a known rate. Rerun and comparison in the private half.
 - [x] Ingest the whole camp file by file (`ingest_logs_to`); co-presence, self-reports and diagnostics all read it.
 - [x] Press rates: remove each tag's lost windows from the exposure, since a press on a wiped tag cannot be recovered.
 - [x] Flag lost windows per tag in a table the analyses can join (`lost_windows.parquet`), so one-sided measures can be restricted to unaffected time.

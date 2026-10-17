@@ -6,15 +6,20 @@ start is constant, except that the PC stamps late (after long transfers, by minu
 ever rises above the cycle's true start. The cycle's earliest implied start is therefore the best
 estimate of when it began.
 
+If the tags' counters run fast by ``clock_rate_ppm``, one uptime second is ``1 / (1 + rate)`` real
+seconds, so the boot a readout implies is readout time minus ``timer / (1 + rate)``. Without that
+the implied start sinks a little with every readout, and the earliest one is no longer the boot.
+
 A restart shows as uptime falling behind the wall time elapsed since the tag's previous anchor by
-more than a margin. Everything the tag held in RAM since that previous readout is gone, so the
-lost window runs from the previous readout to the restart. Part of it may survive in flash, which
-makes the window an upper bound (see docs/context/instruments/beacons.md).
+more than a margin. Every contact the tag held since that previous readout is gone (a restart also
+clears contact flash), so the lost window runs from the previous readout to the restart (see
+docs/context/instruments/beacons.md).
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
+from itertools import pairwise
 from pathlib import Path
 
 import polars as pl
@@ -59,7 +64,16 @@ def read_clock_anchors(paths: Iterable[Path], timezone: str) -> pl.DataFrame:
     )
 
 
-def power_cycles(anchors: pl.DataFrame, *, restart_margin_s: int) -> pl.DataFrame:
+def real_seconds(timer: pl.Expr, clock_rate_ppm: float) -> pl.Expr:
+    """Tag uptime seconds as real time, for a counter running ``clock_rate_ppm`` fast."""
+    if not clock_rate_ppm:
+        return pl.duration(seconds=timer)
+    return pl.duration(milliseconds=(timer * (1000 / (1 + clock_rate_ppm * 1e-6))).round())
+
+
+def power_cycles(
+    anchors: pl.DataFrame, *, restart_margin_s: int, clock_rate_ppm: float = 0.0
+) -> pl.DataFrame:
     """Add each anchor's power cycle to a table of ``beacon``, ``ts``, ``timer``.
 
     New columns: ``implied`` (ts - timer), ``restart`` (this anchor follows a restart),
@@ -72,7 +86,7 @@ def power_cycles(anchors: pl.DataFrame, *, restart_margin_s: int) -> pl.DataFram
     return (
         anchors.sort("beacon", "ts", "timer")
         .with_columns(
-            (pl.col("ts") - pl.duration(seconds=pl.col("timer"))).alias("implied"),
+            (pl.col("ts") - real_seconds(pl.col("timer"), clock_rate_ppm)).alias("implied"),
             restart.fill_null(False).alias("restart"),
             prev("ts").alias("prev_ts"),
         )
@@ -163,3 +177,82 @@ def lost_windows(cycles: pl.DataFrame, deliveries: pl.DataFrame | None = None) -
             .drop("_w", "_d")
         )
     return windows.filter(pl.col("end") > pl.col("start"))
+
+
+def _lower_hull(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    hull: list[tuple[float, float]] = []
+    for p in points:
+        while len(hull) >= 2:
+            (x1, y1), (x2, y2) = hull[-2], hull[-1]
+            if (x2 - x1) * (p[1] - y1) - (y2 - y1) * (p[0] - x1) > 0:
+                break
+            hull.pop()
+        hull.append(p)
+    return hull
+
+
+def _min_delay_slope(timer: list[float], lag: list[float]) -> tuple[float, float] | None:
+    """Slope and intercept of the line under every (timer, lag) that minimises the summed gap.
+
+    Stamp delays only ever add, so the true clock relation is the lower edge of the points. The
+    line under all points with the least total gap above it runs along the lower convex hull, on
+    the edge that spans the mean timer (minimum-delay skew estimate; Moon et al., 1999).
+    """
+    hull = _lower_hull(sorted(set(zip(timer, lag, strict=True))))
+    mean = sum(timer) / len(timer)
+    for (x0, y0), (x1, y1) in pairwise(hull):
+        if x0 <= mean <= x1 and x1 > x0:
+            slope = (y1 - y0) / (x1 - x0)
+            return slope, y0 - slope * x0
+    return None
+
+
+def estimate_clock_rate(
+    readouts: pl.DataFrame,
+    *,
+    restart_margin_s: int,
+    min_readouts: int = 6,
+    min_span_s: int = 86_400,
+    max_gap_s: float = 10.0,
+) -> dict[str, object]:
+    """Camp-wide timer drift from the readouts' clock anchors, in parts per million (fast > 0).
+
+    ``readouts`` needs ``beacon``, ``pc_time`` and ``current_timer`` (an ingest's readout table).
+    Per power cycle with at least ``min_readouts`` anchors over ``min_span_s`` of uptime, the
+    implied start's lower edge (``_min_delay_slope``) sinks by ``rate`` seconds per uptime second.
+    A cycle counts only if a quarter of its anchors lie within ``max_gap_s`` of that line; fewer
+    clean anchors give a slope that measures stamp delays, not the clock. Returns the median rate
+    over the clean cycles, how many there were, and the per-cycle table.
+    """
+    anchors = readouts.filter(
+        pl.col("current_timer").is_not_null() & pl.col("beacon").is_not_null()
+    ).select("beacon", pl.col("pc_time").alias("ts"), pl.col("current_timer").alias("timer"))
+    cyc = power_cycles(anchors, restart_margin_s=restart_margin_s).with_columns(
+        ((pl.col("ts") - pl.col("cycle_start")).dt.total_seconds() - pl.col("timer")).alias("lag")
+    )
+    rows = []
+    for (beacon, cycle), g in cyc.group_by(["beacon", "cycle"]):
+        timer = g["timer"].cast(pl.Float64).to_list()
+        lag = g["lag"].cast(pl.Float64).to_list()
+        if len(timer) < min_readouts or max(timer) - min(timer) < min_span_s:
+            continue
+        fit = _min_delay_slope(timer, lag)
+        if fit is None:
+            continue
+        slope, intercept = fit
+        gaps = sorted(y - (intercept + slope * x) for x, y in zip(timer, lag, strict=True))
+        rows.append(
+            {"beacon": beacon, "cycle": cycle, "readouts": len(timer), "ppm": -slope * 1e6,
+             "gap_q25_s": gaps[len(gaps) // 4], "clean": gaps[len(gaps) // 4] <= max_gap_s}
+        )  # fmt: skip
+    table = pl.DataFrame(
+        rows,
+        schema={"beacon": pl.Int64, "cycle": pl.Int64, "readouts": pl.Int64, "ppm": pl.Float64,
+                "gap_q25_s": pl.Float64, "clean": pl.Boolean},
+    )  # fmt: skip
+    clean = table.filter(pl.col("clean"))
+    return {
+        "ppm": clean["ppm"].median() if clean.height else None,
+        "cycles_used": clean.height,
+        "cycles": table,
+    }

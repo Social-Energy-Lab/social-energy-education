@@ -135,6 +135,7 @@ class StudyConfig:
             witness_min_share=float(section.get("witness_min_share", 0.9)),
             witness_peak_s=int(section.get("witness_peak_s", 10)),
             witness_min_peak_ratio=float(section.get("witness_min_peak_ratio", 3.0)),
+            clock_rate_ppm=float(section.get("clock_rate_ppm", 0.0)),
         )
 
     def survey_config(self) -> SurveyConfig:
