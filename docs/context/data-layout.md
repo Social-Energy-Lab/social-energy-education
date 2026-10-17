@@ -71,6 +71,13 @@ uv run social-energy fetch-zeitgeist studies/<id>/study.yaml
 
 The command only reads. It drops test calls, pilot testers and empty users, and never selects identity columns. It writes `EXPORT.md` (row counts for everything dropped) and `SHA256SUMS` in each folder. Re-running it overwrites the export with the platform's current state, so check the counts in `EXPORT.md` against the previous run.
 
+**Survey ingest and scoring.** `social-energy ingest-survey` writes `derived/survey/{items,respondents}.parquet` and `qa.json`. `social-energy score-survey` reads them with the codebook named by `survey.codebook` in `study.yaml` and writes `derived/survey/scoring/{scores,reliability,submissions}.parquet` and `qa.json`. It refuses until `survey.analysis_plan_frozen` is set in `study.yaml`. The team's study-ID correction table is a CSV with the columns `respondent,typed,study_id` (each row sets `respondent`, the platform user UUID, or `typed`, the typed value). It lives under the study's data root and `local.yaml` names it, relative to that root:
+
+```yaml
+survey:
+  study_id_corrections: spine/survey-study-id-corrections.csv
+```
+
 ## Rules
 
 - **`raw/` is read-only once imported.** Never edit, rename or clean files inside it. Keep the original file and folder names: they carry device clocks and sequence numbers. Junk (OS files, accidental sub-minute recordings with no speech) may be left out at import, but only after checking it and listing each excluded file, with its checksum and the reason, in `IMPORT.md`. Nothing is removed silently, and nothing is removed later without the same record.
