@@ -1,6 +1,6 @@
 # Instrument: structured questionnaire (SurveyJS)
 
-Status: **ingest built (`social_energy.survey`); scoring not built yet.** This doc is the spec for them. It describes the **short version implemented in SurveyJS** for DSA 2026 (implementation basis dated 2026-08-05). It lists item codes, response formats and sources. The wording of the study's *own* items (codes `ZGL_*`, `RSWE_*`, `*_GRAD`, `SYMBOL_*`) is unpublished instrument work and stays in the private context library. PISA items are published (PISA 2022 German scale handbook, Müller et al. 2025).
+Status: **ingest and scoring built (`social_energy.survey`, `social-energy ingest-survey` / `score-survey`), with the DSA 2026 codebook in `studies/dsa-2026/survey_codebook.yaml`. Scoring has not been run on real data:** scales are scored only after the analysis plan is frozen, and the reverse-keying list and the B19/B20 range wait on the research team. This doc is the spec for them. It describes the **short version implemented in SurveyJS** for DSA 2026 (implementation basis dated 2026-08-05). It lists item codes, response formats and sources. The wording of the study's *own* items (codes `ZGL_*`, `RSWE_*`, `*_GRAD`, `SYMBOL_*`) is unpublished instrument work and stays in the private context library. PISA items are published (PISA 2022 German scale handbook, Müller et al. 2025).
 
 ## Design
 
@@ -85,7 +85,7 @@ Scale abbreviations: **agree4** = 1 strongly disagree … 4 strongly agree; **ag
 
 **Long version only** (not implemented at DSA 2026): parental occupation (A10/A13), digital devices (A17), types of books (A19), creative school climate (B5), classroom discipline (B6), empathy (B9), teacher feedback (B13), growth mindset (C2), creativity by domain (C4), stress resistance (C14), curiosity (C20).
 
-## Scoring spec (for the future `social_energy.survey`)
+## Scoring spec (`social_energy.survey`)
 
 - **Export (DSA 2026):** the survey ran inside zeitgeist-platform right after the AI interview. Local file: `$SOCIAL_ENERGY_DATA/<id>/raw/survey/zeitgeist/<agent_name>/responses.jsonl` (downloaded together with the interviews by `social-energy fetch-zeitgeist`), one object per respondent, keyed by the platform user UUID. Each object carries two views of the answers:
   - `responses`: flat `{item_code: value}`. Matrix rows are already flattened to `BLOCK_SCALE.ITEM` keys (e.g. `B1_ST034.ST034Q01TA`). Standalone items use their bare code (`ST004`, `ZGL_A1_1`).
@@ -98,16 +98,23 @@ Scale abbreviations: **agree4** = 1 strongly disagree … 4 strongly agree; **ag
   - The one `pre` item is a `number` item with a platform-generated question ID, holding the study ID typed before the interview. The study names it in `study.yaml` (`survey.zeitgeist.study_id_item`).
   - `surveys_resolved_at` is ISO 8601 with a UTC offset. **It is not a submission time.** In the DSA 2026 export every respondent carries the same value to within a few seconds, weeks after the survey ran, which is the signature of a bulk rewrite on the platform. The real answering times are not in the export. Treat a survey record as untimed: resolve it to a person through its account, never by timestamp, and never use it to order respondents or to place an answer inside the programme. `[unknown: can the platform still supply the original submission times?]`
   - Ingest: `social-energy ingest-survey` → `derived/survey/{items,respondents}.parquet` + `qa.json` (`social_energy.survey`). Scoring goes through an explicit codebook (below).
-- **Codebook:** `studies/<id>/survey_codebook.yaml`. It holds item code → block, construct, scale range, direction, reverse flag, non-substantive codes and gradient flag, and **no item wording** for own items.
-- **Recoding:**
-  - harmonise reversed scales (B1, B12) so that high = more of the construct;
-  - reverse-key negatively worded items (confirmed list);
-  - map non-substantive codes to missing (B4a = 6, B7 = 6/7, C16 = 3, `SYMBOL_2_7`);
+- **Codebook:** `studies/<id>/survey_codebook.yaml`, named by `survey.codebook` in `study.yaml`. It groups export codes (matrix rows as `BLOCK_SCALE.ITEM`) into **scales** (averaged), **gradients** (scored alone, with a parent scale) and **item sets** (recoded, not averaged). Each group has a block and role (A background, B trust in life, C lust for life), a range, whether it is printed in reverse, its reverse-keyed items, its non-substantive codes and coded values. Old form-version codes map to current ones under `renames`. Known codes that are not scored (background, free text) are listed under `unscored`. It holds **no item wording**. Anything not confirmed by the research team carries a status (`inferred`, `unknown`), every scoring run lists those entries, and every score row says whether it is `provisional`.
+- **Validation:** `validate_against` reports export codes the codebook does not know and codebook entries never seen in the export. In the DSA 2026 export both lists are empty, apart from the private study-ID question.
+- **Recoding**, in this order:
+  - map non-substantive codes to missing (B4a "don't know", which arrives as the code `ZGL_B4_01`, not 6; B7 = 6/7; C16 = 3; `SYMBOL_2_6` and `_7`). Out-of-range values are also missing, and are counted in the QA;
+  - coded options become numbers where they are levels (`SYMBOL_2` is one item whose options arrive as the codes `SYMBOL_2_1`…`_7`, with 1–5 as frequency levels);
+  - harmonise reversed scales (B1, B12, and the B12 add-ons) so that high = more of the construct;
+  - reverse-key negatively worded items. The reverse list is judged **after** harmonising. The candidates in the tables above agree with the reversed items the PISA 2022 scale handbook lists for B1, B8, B10, B11, C6, C7, C8, C12, C13 and C21. For B1 the handbook names the complementary items against the printed order, which is the same recoding. For B12 it reverses all four items, which is the harmonising flip. C15, C18 and B15 (`APSI_6`) rest on wording alone, because the handbook scales no index for them. The list stays `[inferred]` until the research team confirms it;
   - structural skips (A21, A4 text, B21 frequency) are not missing-at-random.
-- **Scale scores:** item means with a minimum-items rule. Report reliability (α/ω), and check dimensionality for adapted and own scales (R-SWE, B15, C5, B16 add-ons) before using a score. PISA indices are IRT-scaled (WLE) in PISA itself, so our means are **not** comparable to published PISA indices.
-- **Gradient items** (`*_GRAD`, `GRADIENT_variable_*`) are analysed separately, never inside the parent scale. A14 (now vs at 30) gives a mobility/aspiration gradient; C16/C17 make it concrete.
+- **Subscales** `[inferred]`: B16 is scored as positive affect, negative affect (the handbook's reversed items) and the three own add-ons. C5 is scored as positive and negative feelings.
+- **Old codes:** `GRADIENT_variable_C11/C21` → `ZGL_C11_GRAD/ZGL_C21_GRAD`, and `SWE_05–07_resonance` → `SWE_05–07` `[inferred]`. Form version 16 carries the old codes in place of the new ones, never both on one record. If a record ever carries both codes, the current one wins and the QA counts a conflict.
+- **Scale scores:** the item mean, valid only from `ceil(0.5 × items)` valid answers unless a group sets `min_items` `[inferred]`; PISA scales its indices from three valid answers. One row per respondent per scale and gradient, with `n_items` used. Report reliability (Cronbach's α, and McDonald's ω from a one-factor principal-axis model of the correlations, which can differ slightly from a CFA ω). Both are computed on complete cases of the kept submissions. Check dimensionality for adapted and own scales (R-SWE, B15, C5, B16 add-ons) before using a score. PISA indices are IRT-scaled (WLE) in PISA itself, so our means are **not** comparable to published PISA indices.
+- **Gradient items** (`ZGL_B15_GRAD`, `ZGL_C1A_GRAD`, `RSWE_GRADIENT`, `ZGL_C08_GRAD`, `ZGL_C11_GRAD`, `ZGL_C21_GRAD`) are scored separately, never inside the parent scale. A14 (now vs at 30) gives a mobility/aspiration gradient; C16/C17 make it concrete.
+- **Study IDs:** whitespace is removed and letters are upper-cased. A local correction table, kept in the private data root and never in the repo, overrides a record's ID by respondent or by typed value (see `docs/context/data-layout.md`). For repeat submissions, ties after `surveys_resolved_at` go to the later line of the export.
+- **Gate:** `score-survey` refuses until `survey.analysis_plan_frozen` is set in `study.yaml`. Scales are scored only after the analysis plan is signed and frozen.
 - **Known inconsistencies to resolve:**
-  - B19/B20 slider range (1–10 implemented vs 0–10 in the full version);
+  - B19/B20 slider range (1–10 implemented vs 0–10 in the full version). The export holds 1–10 only, which fits either;
+  - the R-SWE gradient is `RSWE_GRAD` in the implementation basis and `RSWE_GRADIENT` in the export (the codebook uses the export's code);
   - B12 resonance item code (`ZGL_B12_02_Resonanz` in the implementation vs `_01_` in the full version);
   - `GRADIENT_variable` without suffix in the long-version C20;
   - "none" exclusivity in A9/A12;
