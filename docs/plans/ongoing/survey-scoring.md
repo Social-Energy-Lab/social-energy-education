@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** blocked:confirmed reverse-keying list and the live B19/B20 slider range (_team/questions.md #7–8) (recheck 2026-10-30)
-**Next:** write `studies/dsa-2026/survey_codebook.yaml` from `docs/context/instruments/survey.md` (codes and scales only, no own-item wording), including how old-version codes map to current ones (`GRADIENT_variable_C11` → `ZGL_C11_GRAD`, `SWE_0n_resonance` → ?).
+**Next:** build the codebook and the scoring code now, with the reverse-keying list and the B19/B20 range as codebook entries to fill in, so the gate's answers are a fill-in and a rerun (2026-10-17). Do not join scores to beacon outcomes before the analysis plan (`studies/dsa-2026/research/analysis-plan.md`) is signed and frozen. Start by writing `studies/dsa-2026/survey_codebook.yaml` from `docs/context/instruments/survey.md` (codes and scales only, no own-item wording), including how old-version codes map to current ones (`GRADIENT_variable_C11` → `ZGL_C11_GRAD`, `SWE_0n_resonance` → ?).
 
 **Goal:** `social_energy.survey` flattens a SurveyJS export into one row per respondent and computes validated scale scores from a public codebook.
 

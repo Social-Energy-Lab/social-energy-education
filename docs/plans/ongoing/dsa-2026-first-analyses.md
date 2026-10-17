@@ -48,6 +48,14 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 
 ## Next steps
 
+While waiting on the research team (added 2026-10-17):
+
+- [ ] Outcome measures for the confirmatory tests in `../../../studies/dsa-2026/research/analysis-plan.md` (C1–C4): daily close-contact strength, cross-course share, new ties per day, press rate per exposure hour. Toolkit functions with hand-derived tests, computed on the beacon data only. Never joined to the survey before the plan is signed.
+- [ ] Decide where person attributes (course, age, gender, from the roster) live: the spine has no place for them, and C2 needs course membership.
+- [ ] Acoustics: agree the feature set with the research team (frequency and level features only, per the ethics approval) and a WAV deletion date; then rerun the extraction with `--delete-wavs`. The WAVs are kept until then.
+- [ ] Material for the research-group presentation on 2026-11-03: descriptive beacon results, acoustics against press density (exploratory), the analysis plan.
+
+
 - [x] Ingest: date records as (power cycle's earliest implied start + uptime); previous-boot records must precede the restart (else `implausible_time`); headerless readouts are their own readouts; presses compared against `Output/` and switched to our ingest.
 - [x] Ingest: trust the hand-split `_cleaned` logs; repair the rest of the logger ID bug against power cycles.
 - [x] Run our repair on the original (uncleaned) logs and compare with the hand split. Done 2026-10-17 on the Nextcloud delivery: the ingest now reads the raw logs and repairs IDs itself (anchors, then partners' witnesses); the hand split is a benchmark. Results in the private half (`dsa-2026/notes/beacon-guide-check-2026-10-17.md`).
