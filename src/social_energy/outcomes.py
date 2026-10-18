@@ -30,7 +30,8 @@ The measures:
 * **Partners per day** (C3-style, no burn-in): distinct partners tied on the person's present
   days, per present day.
 * **Event rate** (C4-style): events per exposure hour, with removed bins (e.g. lost windows) taken
-  out of both the events and the hours.
+  out of both the events and the hours. Exposure is either the bins a tag was heard in or, with
+  :func:`worn_bins`, the bins it was assigned to the person.
 
 Every threshold is the study's choice and is passed in.
 """
@@ -38,9 +39,13 @@ Every threshold is the study's choice and is passed in.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import polars as pl
+
+if TYPE_CHECKING:
+    from social_energy.spine import Spine
 
 
 def camp_day(t: pl.Expr, *, timezone: str, day_start: timedelta) -> pl.Expr:
@@ -64,6 +69,30 @@ def windows_to_bins(
         .select(key, "bin")
         .unique()
     )
+
+
+def worn_bins(
+    spine: Spine, *, kind: str, start: datetime, end: datetime, bin_minutes: int
+) -> pl.DataFrame:
+    """``entity``, ``bin``: the bins in ``[start, end)`` in which a person wore a ``kind`` device.
+
+    A bin belongs to whoever wore the device at the bin's start, and is left out when its start
+    falls in an exclusion window of the device or of that person. Devices fixed in a location do
+    not count. Lost and unsettled windows are the caller's to remove (``event_rate(removed=)``).
+    """
+    devices = sorted({a.device for a in spine.assignments if a.device_kind == kind})
+    # Every bin of every device, then resolved: the spine owns who wore what when.
+    grid = pl.datetime_range(
+        start, end, interval=f"{bin_minutes}m", closed="left", time_zone="UTC", eager=True
+    )
+    keys = pl.DataFrame(
+        {"device_key": [d.split(":", 1)[1] for d in devices]}, schema={"device_key": pl.String}
+    )
+    bins = keys.join(grid.alias("bin").to_frame(), how="cross")
+    bins = spine.resolve(bins, device_col="device_key", time_col="bin", kind=kind, out="entity")
+    bins = bins.filter(pl.col("entity").str.starts_with("person:"))
+    bins = spine.flag_excluded(bins, device_col="device_key", time_col="bin", kind=kind, out="_x")
+    return bins.filter(~pl.col("_x")).select("entity", "bin").unique().sort("entity", "bin")
 
 
 def drop_pair_bins(pairs: pl.DataFrame, removed: pl.DataFrame) -> pl.DataFrame:

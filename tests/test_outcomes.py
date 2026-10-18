@@ -21,9 +21,11 @@ from social_energy.outcomes import (
     event_rate,
     present_days,
     windows_to_bins,
+    worn_bins,
 )
 from social_energy.presence import copresence
 from social_energy.spine import Spine
+from social_energy.spine.models import Assignment, Exclusion, Location, Person
 from social_energy.synth import CampSpec, generate
 
 UTC = ZoneInfo("UTC")
@@ -301,6 +303,44 @@ def test_event_rate_drops_removed_bins_from_both_events_and_hours():
     # Without removals the 10:07 event and the bin count again: 3 / (4 / 12) = 9 per hour.
     plain = event_rate(events, exposure, people=["e1"], bin_minutes=5)
     assert plain["events_per_hour"].to_list() == [pytest.approx(9.0)]
+
+
+def test_worn_bins_follow_the_assignments_less_exclusions():
+    """Exposure as worn time: bins in [10:00, 10:30) whose start falls in a person's assignment of
+    a beacon, less those whose start falls in an exclusion of the device or the person.
+
+    person:1 wears beacon:1 10:00-10:17, then beacon:3 from 10:17: bins 10:00-10:15 by beacon:1,
+    10:20 and 10:25 by beacon:3; the person's exclusion 10:25-10:26 takes 10:25 → 5 bins.
+    person:2 wears beacon:2 from 10:05 (assigned 09:00-09:50 before, outside the window); the
+    device's exclusion 10:10-10:20 takes 10:10 and 10:15 → 10:05, 10:20, 10:25.
+    beacon:9 is fixed in a location: not a person, no bins. eda:1 is another kind: ignored.
+    """
+    a = Assignment
+    spine = Spine(
+        study_id="test",
+        timezone="UTC",
+        people=(Person(id="1", role="participant"), Person(id="2", role="participant")),
+        locations=(Location(id="L", label="room", zone="z", kind="room"),),
+        assignments=(
+            a(device="beacon:1", entity="person:1", start=_t(10, 0), end=_t(10, 17)),
+            a(device="beacon:3", entity="person:1", start=_t(10, 17)),
+            a(device="beacon:2", entity="person:2", start=_t(9, 0), end=_t(9, 50)),
+            a(device="beacon:2", entity="person:2", start=_t(10, 5)),
+            a(device="beacon:9", entity="location:L", start=_t(9, 0)),
+            a(device="eda:1", entity="person:2", start=_t(9, 0)),
+        ),
+        events=(),
+        exclusions=(
+            Exclusion(target="beacon:2", start=_t(10, 10), end=_t(10, 20), reason="off"),
+            Exclusion(target="person:1", start=_t(10, 25), end=_t(10, 26), reason="off"),
+        ),
+    )
+    got = worn_bins(spine, kind="beacon", start=_t(10, 0), end=_t(10, 30), bin_minutes=5)
+    assert got.columns == ["entity", "bin"]
+    assert got.sort("entity", "bin").rows() == [
+        *[("person:1", _t(10, m)) for m in (0, 5, 10, 15, 20)],
+        *[("person:2", _t(10, m)) for m in (5, 20, 25)],
+    ]
 
 
 def test_camp_day_starts_at_the_given_clock_time():
