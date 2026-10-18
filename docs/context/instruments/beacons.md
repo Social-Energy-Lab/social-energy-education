@@ -84,7 +84,7 @@ So an exclusion window on a tag does **not** remove that person from the dataset
 - `eco_sessions`: `beacon`, `t_enter`, `t_leave`, same flags.
 - `qa`: counts accounting for every input line.
 
-`ingest_logs` works in memory. For a whole camp, `ingest_logs_to` (behind `social-energy ingest-beacons`) gives the same tables one log at a time and writes contacts per local day as `contacts/<YYYY-MM-DD>.parquet`, with `contacts/unplaced.parquet` for records it cannot date.
+`ingest_logs` works in memory. For a whole camp, `ingest_logs_to` (behind `social-energy ingest-beacons`) gives the same tables one log at a time and writes contacts per local day as `contacts/<YYYY-MM-DD>.parquet`, with `contacts/unplaced.parquet` for records it cannot date. Every ingest path refuses logs that still name a device listed under `beacons.purged_devices` in the study's private `local.yaml` (see [`../data-layout.md`](../data-layout.md#purging-a-device)).
 
 ## The upstream `Output/` tables
 

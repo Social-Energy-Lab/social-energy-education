@@ -81,6 +81,12 @@ class StudyConfig:
                     f"{path}: {section}.zeitgeist.{key} names a private deployment and must "
                     f"live in $SOCIAL_ENERGY_DATA/<study-id>/local.yaml, not in the public repo."
                 )
+        if (raw.get("beacons") or {}).get("purged_devices") is not None:
+            raise ValueError(
+                f"{path}: beacons.purged_devices says whose records were removed, a fact about a "
+                f"person's consent: it must live in $SOCIAL_ENERGY_DATA/<study-id>/local.yaml, "
+                f"not in the public repo."
+            )
         roster = path.parent / "locations.yaml"
         locations = (
             yaml.safe_load(roster.read_text(encoding="utf-8")) or [] if roster.exists() else []
@@ -144,7 +150,13 @@ class StudyConfig:
             witness_peak_s=int(section.get("witness_peak_s", 10)),
             witness_min_peak_ratio=float(section.get("witness_min_peak_ratio", 3.0)),
             clock_rate_ppm=float(section.get("clock_rate_ppm", 0.0)),
+            purged_devices=self.purged_devices(),
         )
+
+    def purged_devices(self) -> tuple[int, ...]:
+        """Devices removed from the raw logs by ruling: ``beacons.purged_devices`` in local.yaml."""
+        section = self.local.get("beacons") or {}
+        return tuple(int(d) for d in section.get("purged_devices") or ())
 
     def survey_scoring_config(self) -> SurveyScoringConfig:
         """Codebook and gate from ``study.yaml``; the study-ID correction table from local.yaml.
