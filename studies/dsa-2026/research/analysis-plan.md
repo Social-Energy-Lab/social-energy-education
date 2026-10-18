@@ -1,6 +1,6 @@
 # Analysis plan: DSA 2026 (draft for the research team)
 
-**Status:** draft proposal, 2026-10-17. Nothing here is agreed until the research team signs it off: `[inferred]` throughout. Once agreed, the plan is frozen (date and commit recorded below) **before the survey scales are scored**.
+**Status:** draft proposal, 2026-10-17; analysis choices set by Álvaro on 2026-10-18 (provisional, revisable until the freeze). Nothing here is agreed until the research team signs it off: `[inferred]` throughout. Once agreed, the plan is frozen (date and commit recorded below) **before the survey scales are scored**.
 
 Builds on [`questions.md`](questions.md) (which questions this phase can speak to) and [`constructs.md`](constructs.md) (how the survey blocks map to trust and lust for life). The framing follows [`../../../docs/context/project.md`](../../../docs/context/project.md): we describe interactional, experiential and developmental *signatures* of social energy; we do not claim to measure it.
 
@@ -12,13 +12,20 @@ The survey baseline has not been scored. Any hypothesis that links baseline trus
 
 ## Confirmatory hypotheses (fixed before survey scoring)
 
-Unit: one row per participant with beacon and survey consent. Predictors are the baseline survey composites (block codes in [`constructs.md`](constructs.md)), standardised. Outcomes are computed over the observation window, outside each person's lost windows and exclusion windows.
+Unit: one row per participant with beacon and survey consent. Predictors are the baseline survey composites, standardised. Outcomes are computed over the observation window, outside each person's lost windows and exclusion windows.
+
+**Composites** (Álvaro, 2026-10-18). Each composite is the mean of a fixed core set of scale scores, each standardised first; a person needs a valid score on at least four of the six scales. The core sets keep the scales that describe the person's own relationships, stance and well-being, and leave out those that describe the school (climate hindrances B2, bullying B3, diversity practices B4, truancy B18) or are own, unvalidated items (B19, B20, R-SWE). Everything outside the core sets is exploratory.
+
+- **Trust in life (block B):** school belonging B1, trust B8, teacher–student relationship B11, family support B14, positive affect B16, life satisfaction B17.
+- **Lust for life (block C):** general self-efficacy C1a, creative self-efficacy C3, proactive learning C6, assertiveness C8, perseverance C12, openness to the unknown C21.
+
+Scale scoring rules (min items, subscales, reverse-keying) are in [`../survey_codebook.yaml`](../survey_codebook.yaml).
 
 | # | Hypothesis | Predictor | Outcome | Direction |
 |---|---|---|---|---|
 | C1 | People who start with more trust in life become more embedded in the academy's interaction network. | trust-in-life composite (block B) | mean daily strength in the close-contact network (minutes within `close_rssi`, contacts of at least `min_minutes`) | positive |
 | C2 | People who start with more lust for life / agency reach further across the academy. | lust-for-life composite (block C) | share of close-contact time with people outside one's own course | positive |
-| C3 | Lust for life also shows as more new ties. | block C composite | new close ties per day after the first two days | positive |
+| C3 | Lust for life also shows as more new ties. | block C composite | distinct close partners first tied after the first two days, over the whole camp, per present day (provisional; see the stability rule below) | positive |
 | C4 | Being moved is more frequent for those who start more open. | blocks B and C (two tests) | self-reports per exposure hour (presses on wiped tags excluded from both sides of the rate) | positive |
 
 **How the outcomes are computed.** The definitions are code: `social_energy.outcomes` (toolkit, with hand-derived tests) and [`../analyses/outcomes.py`](../analyses/outcomes.py) (this study's settings and variants), which writes one row per participant and variant to `derived/analyses/outcomes/`. It reads beacon data only and never touches the survey. Operational choices the hypotheses above leave open, all `[inferred]` until signed:
@@ -27,11 +34,12 @@ Unit: one row per participant with beacon and survey consent. Predictors are the
 - *Days.* Camp days 13–28 Aug; the 29 Aug stub (07:30–09:00) is left out. A day counts for a person when their tag was seen for at least an hour; ties on other days do not count for that person, so a tag that went silent does not read as an isolated day.
 - *C1* is the person's tie minutes per present day, averaged over present days (weighted degree, in minutes).
 - *C2* uses the same ties: tie minutes with participants of another course over tie minutes with participants whose course is known. It is reported next to the share expected if everyone present mixed at random, `(N − n_course) / (N − 1)` over the participants present on any day, and their difference. Course comes from the spine (`Spine.people_frame()`).
-- *C3* counts a pair's first tie, on a present day after the first two camp days (13 and 14 Aug, which set the baseline), for each side; divided by the person's present days after them.
+- *C3, stability rule* (Álvaro, 2026-10-18). The first definition (new ties per day) ranked people very differently under the threshold variants of sensitivity 4. A C3 definition stays confirmatory only if, across people, every pre-specified variant correlates at least 0.7 (Spearman) with the main one. If no candidate passes before the freeze, C3 moves to the exploratory tier and the confirmatory family shrinks to four tests.
+- *C3, first definition (kept for comparison)* counts a pair's first tie, on a present day after the first two camp days (13 and 14 Aug, which set the baseline), for each side; divided by the person's present days after them.
 - *C4* counts press episodes (merged and accidental runs dropped as in the first analyses) per exposure hour, from the instruction (14 Aug 08:45) to the handover. Exposure is a 5-minute bin in which the tag was seen; bins in a lost window or an unsettled window leave both the presses and the hours, and a press counts only in an exposure bin. It needs both beacon and self-report consent, since the exposure comes from the beacon data.
 - *Lost windows* for C1–C3: a pair bin survives one partner's lost window when the other partner logged it (main); sensitivity 5 drops it for both.
 
-**Model.** Linear regression of each outcome on its predictor, with age and gender as covariates and standard errors clustered by course (network outcomes are not independent within a course). As a check that does not rest on those assumptions, a permutation test that shuffles survey rows across people within course.
+**Model** (Álvaro, 2026-10-18). For C1–C3, linear regression of the outcome on its predictor with **course fixed effects** and HC3 robust standard errors; covariates age and gender, gender as one indicator (female vs not), since a category held by one person can neither be estimated nor reported. Clustered standard errors were the first idea, but six courses are too few clusters for them to be trusted, and fixed effects also absorb course size, which drives C2's expected share. For C4, a negative binomial model of the press count with log exposure hours as offset and the same covariates and fixed effects: presses are overdispersed counts over unequal exposure, and a plain rate gives short exposures too much weight. As a check that does not rest on these assumptions, a permutation test that shuffles survey rows across people within course.
 
 **Error control.** The confirmatory family is the five tests above (C4 counts twice). Holm correction at α = 0.05. Report every result, with standardised effect sizes and 95% intervals, whether or not it passes.
 
@@ -55,7 +63,9 @@ Every confirmatory result is rerun with:
 2. the readouts our ID repair leaves ambiguous filled from the beacon team's hand split;
 3. no drift correction;
 4. close-contact thresholds of −70 and −75 dBm, and minimum durations of 15 and 30 minutes;
-5. lost windows treated as missing for both partners rather than recovered from the partner's side.
+5. lost windows treated as missing for both partners rather than recovered from the partner's side;
+6. for C4, exposure as the time the tag was assigned to the person (minus exclusion, lost and unsettled windows) instead of the time it was heard;
+7. for C4, accidental runs defined as the beacon team described them, repeated pressing for about seven minutes, instead of 60 s or 8 presses.
 
 A result that flips under one of these is reported as fragile. Variants 4 and 5 are computed by [`../analyses/outcomes.py`](../analyses/outcomes.py) (one change at a time: −70, −75 dBm at 60 min; 15, 30 min at −65 dBm; lost windows on both sides). Variants 1–3 need the beacon ingest rebuilt with a different window, the hand-split fill or no drift correction, and are not computed yet.
 
@@ -69,7 +79,7 @@ A result that flips under one of these is reported as fragile. Variants 4 and 5 
 
 | Needed for | Item | Owner | State |
 |---|---|---|---|
-| C1–C4 | Survey composites: reverse-keying list, B19/B20 slider range | research team | `[unknown: open, see the survey-scoring plan]` |
+| C1–C4 | Survey composites: B19/B20 slider range (B19/B20 are outside the composites, so this no longer blocks them) | research team | `[unknown: open, see the survey-scoring plan]` |
 | C1–C4 | Spine: remaining open questions (return times, lost tags) | research team | open |
 | C2 | Course membership per participant | — | in the spine (`people.yaml`, `Spine.people_frame()`) |
 | sensitivity 1 | Whether 13 Aug 11:30–18:00 is usable | beacon team | `[unknown: asked 2026-10-17]` |

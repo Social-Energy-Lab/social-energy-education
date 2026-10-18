@@ -62,7 +62,7 @@ Sundays follow a different schedule (brunch, afternoon plenum). Spontaneous, unp
   - At the academy participants were told to **press once for ~3 s, until the tag glows red**, and — if they had pressed by accident — **to press again for ~3 s to take it back**.
   - The "not necessarily positive" clarification was given in the plenum on 14 Aug (08:45) and repeated on 15 Aug (09:00).
 - Treat presses before 14 Aug 08:45 separately.
-- **A second press shortly after a first one is a retraction, not a duplicate.** The pair cancels: drop both, flag them, and never merge them into one report. An earlier version of the field log said participants were told to press twice; the 20 Sep re-export corrects that, and the two readings imply opposite cleaning rules, so the correction matters. `[unknown: how long "directly afterwards" is — the instruction gives no window; the firmware's own repeat behaviour on a held button is a separate effect]`
+- **The cancel instruction is not applied in the analysis** (decided 2026-10-01, after the beacon team's answers). The firmware has no cancel press: a cancelling second press is an ordinary event seconds after the first, indistinguishable from a quick re-press. The only presses removed are **long repeated runs**, a tag pressed over and over in a bag; presses less than 60 s apart count as one moment. The rules and their settings are in `docs/plans/ongoing/dsa-2026-first-analyses.md` ("Accidental presses", "One press"). For the next field phases, the instruction and the firmware should agree (`docs/plans/ideas/next-field-phase-beacon-practice.md`).
 - Instrument-level caveats noted in the field log:
   - reactivity: concern that individual press counts might become visible to others;
   - accidental presses were reported;
