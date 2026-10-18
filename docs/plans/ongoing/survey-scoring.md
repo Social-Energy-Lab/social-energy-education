@@ -53,8 +53,8 @@ For the research team:
 
 For Álvaro:
 
-- `[unknown: keep the few old-code answers as their current codes, or set them aside?]` (`GRADIENT_variable_C11/C21` → `ZGL_C11/C21_GRAD`, `SWE_05–07_resonance` → `SWE_05–07`). The decided distribution check had too few answers for a verdict.
-- `[unknown: what alpha/omega counts as poor for the fatigue subscale?]` Belongs in the analysis plan.
+- Old-code answers count as their current codes (decided 2026-10-18; the distribution check had too few answers for a verdict).
+- Fatigue subscale: reported as a score only if Cronbach's alpha is at least 0.70, else item by item (decided 2026-10-18; also in the analysis plan).
 
 ## Tasks
 

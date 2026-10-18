@@ -19,7 +19,7 @@ Unit: one row per participant with beacon and survey consent. Predictors are the
 - **Trust in life (block B):** school belonging B1, trust B8, teacher–student relationship B11, family support B14, positive affect B16, life satisfaction B17.
 - **Lust for life (block C):** general self-efficacy C1a, creative self-efficacy C3, proactive learning C6, assertiveness C8, perseverance C12, openness to the unknown C21.
 
-Scale scoring rules (min items, subscales, reverse-keying) are in [`../survey_codebook.yaml`](../survey_codebook.yaml).
+Scale scoring rules (min items, subscales, reverse-keying) are in [`../survey_codebook.yaml`](../survey_codebook.yaml). An own or adapted subscale (the B16 fatigue items) is reported as a score only if Cronbach's alpha is at least 0.70, else item by item.
 
 | # | Hypothesis | Predictor | Outcome | Direction |
 |---|---|---|---|---|
@@ -79,7 +79,7 @@ A result that flips under one of these is reported as fragile. Variants 4 and 5 
 
 | Needed for | Item | Owner | State |
 |---|---|---|---|
-| C1–C4 | Survey composites: B19/B20 slider range (B19/B20 are outside the composites, so this no longer blocks them) | research team | `[unknown: open, see the survey-scoring plan]` |
+| C1–C4 | Survey composites | — | ready to score once the plan is frozen; reverse keys checked against the data (2026-10-18). The B19/B20 slider range is still open but they sit outside the composites |
 | C1–C4 | Spine: remaining open questions (return times, lost tags) | research team | open |
 | C2 | Course membership per participant | — | in the spine (`people.yaml`, `Spine.people_frame()`) |
 | sensitivity 1 | Whether 13 Aug 11:30–18:00 is usable | beacon team | `[unknown: asked 2026-10-17]` |

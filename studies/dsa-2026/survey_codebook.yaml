@@ -45,27 +45,28 @@ pending:
 # a record carrying both would keep the current code and count a conflict in the QA.
 # Check (check-survey, 2026-10-18): the old codes carry too few answers for the distribution
 # check's minimum, so the decided rule gave no verdict and every rename stays `inferred`.
-# [unknown: keep the few old-code answers as their current codes, or set them aside? (analyst)]
+# Decided (Álvaro, 2026-10-18): the old-code answers count as their current codes. The key
+# changed between form versions, the item did not, and setting the few answers aside gains nothing.
 renames:
   GRADIENT_variable_C11:
     to: ZGL_C11_GRAD
-    status: inferred
+    status: decided
     note: "[inferred] an earlier key, seen in the flat view of form version 16 only"
   GRADIENT_variable_C21:
     to: ZGL_C21_GRAD
-    status: inferred
+    status: decided
     note: "[inferred] an earlier key, seen in the flat view of form version 16 only"
   C1A_SWE.SWE_05_resonance:
     to: C1A_SWE.SWE_05
-    status: inferred
+    status: decided
     note: "[inferred] same matrix row under an earlier key, seen in form version 16 only"
   C1A_SWE.SWE_06_resonance:
     to: C1A_SWE.SWE_06
-    status: inferred
+    status: decided
     note: "[inferred] as SWE_05_resonance"
   C1A_SWE.SWE_07_resonance:
     to: C1A_SWE.SWE_07
-    status: inferred
+    status: decided
     note: "[inferred] as SWE_05_resonance"
 
 # Reverse keys: every scale's reverse_status is `confirmed_by_check`. On 2026-10-18
@@ -300,7 +301,7 @@ groups:
     range: [1, 5]
     reverse: []
     reverse_status: confirmed_by_check
-    note: "Its own subscale (decided, Álvaro, 2026-10-18). If its reliability is poor, report the three items one by one instead of the score. [unknown: what alpha/omega counts as poor? set in the analysis plan]"
+    note: "Its own subscale (decided, Álvaro, 2026-10-18). If its reliability is poor, report the three items one by one instead of the score. Poor means Cronbach's alpha below 0.70 (decided, Álvaro, 2026-10-18)."
 
   b17_life_satisfaction:
     block: B
