@@ -1,6 +1,6 @@
 # Instrument: structured questionnaire (SurveyJS)
 
-Status: **ingest and scoring built (`social_energy.survey`, `social-energy ingest-survey` / `score-survey`), with the DSA 2026 codebook in `studies/dsa-2026/survey_codebook.yaml`. Scoring has not been run on real data:** scales are scored only after the analysis plan is frozen, and the B19/B20 range waits on the research team. The reverse-keying list has been checked against the data (`social-energy check-survey`, see Pre-scoring checks below). This doc is the spec for them. It describes the **short version implemented in SurveyJS** for DSA 2026 (implementation basis dated 2026-08-05). It lists item codes, response formats and sources. The wording of the study's *own* items (codes `ZGL_*`, `RSWE_*`, `*_GRAD`, `SYMBOL_*`) is unpublished instrument work and stays in the private context library. PISA items are published (PISA 2022 German scale handbook, Müller et al. 2025).
+Status: **ingest and scoring built (`social_energy.survey`, `social-energy ingest-survey` / `score-survey`), with the DSA 2026 codebook in `studies/dsa-2026/survey_codebook.yaml`. Scoring has not been run on real data:** scales are scored only after the analysis plan is frozen. The reverse-keying list has been checked against the data (`social-energy check-survey`, see Pre-scoring checks below). This doc is the spec for them. It describes the **short version implemented in SurveyJS** for DSA 2026 (implementation basis dated 2026-08-05). It lists item codes, response formats and sources. The wording of the study's *own* items (codes `ZGL_*`, `RSWE_*`, `*_GRAD`, `SYMBOL_*`) is unpublished instrument work and stays in the private context library. PISA items are published (PISA 2022 German scale handbook, Müller et al. 2025).
 
 ## Design
 
@@ -58,8 +58,8 @@ Scale abbreviations: **agree4** = 1 strongly disagree … 4 strongly agree; **ag
 | B16 `ST826C01–09HA_DE`, `ZGL_B16_10–12` | subjective well-being (+ tired, listless, exhausted) | 9+3 | 1 never … 5 always (PISA uses 4) | PISA ST826 adapted + own | negative affects scored as own subscale |
 | B17 `ST016` | life satisfaction, "recent days" | 1 | slider 0–10 | PISA | — |
 | B18 `ST062Q01–03TA` | truancy / lateness, last two school weeks | 3 | 4-pt frequency | PISA | — |
-| B19 `ZGL_B19_1–7` | fear drivers (item by item, exploratory; no scale score) | 7 | slider **1–10** in implementation (0–10 in the full version) | own | — |
-| B20 `ZGL_B20_1–8` | sources of joy (item by item, exploratory; no scale score) | 8 | slider **1–10** in implementation (0–10 in the full version) | own | — |
+| B19 `ZGL_B19_1–7` | fear drivers (item by item, exploratory; no scale score) | 7 | slider **1–10** as implemented (0–10 in the full version); confirmed from the served form definition | own | — |
+| B20 `ZGL_B20_1–8` | sources of joy (item by item, exploratory; no scale score) | 8 | slider **1–10** as implemented (0–10 in the full version); confirmed from the served form definition | own | — |
 | B21 `SYMBOL_1`, `SYMBOL_2_1–7`, `SYMBOL_3` | something that gives strength (free text) + how often used / "not applicable" | 3 | text + 7 options | own | `SYMBOL_2_6`, `_2_7` are not frequency levels |
 
 ### C: Agency / lust for life
@@ -116,8 +116,8 @@ Scale abbreviations: **agree4** = 1 strongly disagree … 4 strongly agree; **ag
   - `version_equivalence`: per old/new code pair, the answer counts, a chi-square test of homogeneity and a Mann-Whitney U test; "equivalent" when neither rejects at 0.05, no verdict when either code has fewer than five answers.
   - Outputs go to `derived/survey/checks/`; results with numbers go to the private study notes only.
 - **Gate:** `score-survey` refuses until `survey.analysis_plan_frozen` is set in `study.yaml`. Scales are scored only after the analysis plan is signed and frozen.
+- **B19/B20 slider range: resolved.** The range is 1–10 as implemented (0–10 in the full version). Confirmed from the form definition the platform served (the agent's structured post-interview config, structuredVersion 18), checked 2026-10-18: every `ZGL_B19_*` and `ZGL_B20_*` slider runs from 1 to 10 (`ST016` from 0 to 10).
 - **Known inconsistencies to resolve:**
-  - B19/B20 slider range (1–10 implemented vs 0–10 in the full version). The export holds 1–10 only, which fits either;
   - the R-SWE gradient is `RSWE_GRAD` in the implementation basis and `RSWE_GRADIENT` in the export (the codebook uses the export's code);
   - B12 resonance item code (`ZGL_B12_02_Resonanz` in the implementation vs `_01_` in the full version);
   - `GRADIENT_variable` without suffix in the long-version C20;

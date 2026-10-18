@@ -37,9 +37,7 @@ decisions:
   - "Reverse-keying: the PISA 2022 scale handbook where it lists reversed items; where it is silent (C15, C18, APSI_6) the wording, confirmed by an empirical check (before reversal, a reversed item correlates negatively with the rest of its scale). Álvaro, 2026-10-18."
   - "Old form-version codes count as their current codes when the old code's answer distribution matches the current code's across form versions. Álvaro, 2026-10-18."
 
-pending:
-  - "[unknown: which B19/B20 slider range went live, 1-10 or 0-10?] The export holds 1-10 only, which fits either."
-  - "[unknown: was a post-academy wave fielded, and with which blocks?]"
+pending: []
 
 # Old form-version code -> current code. Both are never present on one record in the export;
 # a record carrying both would keep the current code and count a conflict in the QA.
@@ -334,8 +332,8 @@ groups:
     source: own
     items: [ZGL_B19_1, ZGL_B19_2, ZGL_B19_3, ZGL_B19_4, ZGL_B19_5, ZGL_B19_6, ZGL_B19_7]
     range: [1, 10]
-    range_status: inferred
-    note: "[unknown: which B19/B20 slider range went live, 1-10 or 0-10?]"
+    range_status: confirmed
+    note: "form definition served by the platform (structuredVersion 18), checked 2026-10-18"
 
   b20_joy_sources:
     block: B
@@ -346,8 +344,8 @@ groups:
     items: [ZGL_B20_1, ZGL_B20_2, ZGL_B20_3, ZGL_B20_4, ZGL_B20_5, ZGL_B20_6, ZGL_B20_7,
             ZGL_B20_8]
     range: [1, 10]
-    range_status: inferred
-    note: "[unknown: which B19/B20 slider range went live, 1-10 or 0-10?]"
+    range_status: confirmed
+    note: "form definition served by the platform (structuredVersion 18), checked 2026-10-18"
 
   b21_strength_frequency:
     block: B
