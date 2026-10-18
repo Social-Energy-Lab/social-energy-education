@@ -98,9 +98,18 @@ def lost_bins(layout: paths.StudyLayout, spine: Spine) -> pl.DataFrame | None:
 
 
 def press_episodes(
-    layout: paths.StudyLayout, spine: Spine, participants: set[str], consented: set[str]
+    layout: paths.StudyLayout,
+    spine: Spine,
+    participants: set[str],
+    consented: set[str],
+    *,
+    accidental_s: int = ACCIDENTAL_S,
+    accidental_n: int | None = ACCIDENTAL_N,
 ) -> tuple[pl.DataFrame, dict]:
-    """Self-report press episodes of consenting participants, with a QA count per filter."""
+    """Self-report press episodes of consenting participants, with a QA count per filter.
+
+    The accidental-run limits default to this study's; a sensitivity variant passes its own.
+    """
     ours = pl.read_parquet(layout.derived / "beacons" / "self_reports.parquet")
     raw = ours.filter(pl.col("ok")).select(pl.col("beacon").cast(pl.Int64), "t").unique()
     qa = {"rows": ours.height, "rows_ok_unique": raw.height}
@@ -115,8 +124,8 @@ def press_episodes(
     presses, merged = beacons.press_episodes(
         df.select("entity", "t"),
         chain_s=CHAIN_S,
-        accidental_s=ACCIDENTAL_S,
-        accidental_n=ACCIDENTAL_N,
+        accidental_s=accidental_s,
+        accidental_n=accidental_n,
         episode_s=EPISODE_S,
     )
     qa |= merged
