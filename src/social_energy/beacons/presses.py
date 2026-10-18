@@ -4,8 +4,9 @@ The firmware makes one self-report event per press held for at least 3 s, with n
 several events are several presses: a person pressing again (a second thought, or the cancel press
 participants were told about), or a tag pressed over and over in a bag, which yields a long run.
 A *chain* is a run of presses each within ``chain_s`` of the previous one; a chain
-lasting ``accidental_s`` or holding ``accidental_n`` presses is accidental and dropped. The
-remaining presses within ``episode_s`` of the previous one form one episode.
+lasting ``accidental_s`` or holding ``accidental_n`` presses is accidental and dropped
+(``accidental_n=None``: duration only). The remaining presses within ``episode_s`` of the
+previous one form one episode.
 
 The thresholds are the study's choice and are passed in.
 """
@@ -20,23 +21,19 @@ def press_episodes(
     *,
     chain_s: int,
     accidental_s: int,
-    accidental_n: int,
+    accidental_n: int | None,
     episode_s: int,
     entity_col: str = "entity",
 ) -> tuple[pl.DataFrame, dict[str, int]]:
     """Episodes as ``entity``, ``t`` (first press) and ``raw_presses``, plus a QA dict."""
     gap = pl.col("t").diff().over(entity_col).dt.total_seconds()
+    accidental = (pl.col("t").max() - pl.col("t").min()).dt.total_seconds() >= accidental_s
+    if accidental_n is not None:
+        accidental = accidental | (pl.len() >= accidental_n)
     df = (
         presses.sort(entity_col, "t")
         .with_columns((gap.fill_null(chain_s + 1) > chain_s).cum_sum().over(entity_col).alias("_c"))
-        .with_columns(
-            (
-                ((pl.col("t").max() - pl.col("t").min()).dt.total_seconds() >= accidental_s)
-                | (pl.len() >= accidental_n)
-            )
-            .over(entity_col, "_c")
-            .alias("_accidental")
-        )
+        .with_columns(accidental.over(entity_col, "_c").alias("_accidental"))
     )
     accidental = df.filter(pl.col("_accidental"))
     qa = {

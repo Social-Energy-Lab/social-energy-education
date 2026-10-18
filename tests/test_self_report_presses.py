@@ -72,3 +72,24 @@ def test_people_are_kept_apart():
     ep, qa = press_episodes(presses([("a", 0), ("b", 10), ("a", 30)]), **RULES)
     assert secs(ep) == [("a", 0, 2), ("b", 10, 1)]
     assert qa["pressers"] == 2
+
+
+def test_without_a_count_rule_only_the_duration_makes_a_run_accidental():
+    """The beacon team's bag example ran for minutes, so one variant drops a chain only when it
+    lasts ``accidental_s`` = 420 s and ignores how many presses it holds.
+
+    a: 10 presses 5 s apart (45 s) → under 420 s: one episode of 10 presses (the count rule would
+    have dropped it). b: presses every 15 s from 0 to 420 s, 29 presses lasting exactly 420 s →
+    accidental. c: the same run one press shorter (405 s) → not accidental; gaps of 15 s < 60 s
+    keep it one episode.
+    """
+    rules = {**RULES, "accidental_s": 420, "accidental_n": None}
+    a = [("a", s) for s in range(0, 50, 5)]
+    b = [("b", s) for s in range(0, 421, 15)]
+    c = [("c", s) for s in range(0, 406, 15)]
+    ep, qa = press_episodes(presses([*a, *b, *c]), **rules)
+    assert secs(ep) == [("a", 0, 10), ("c", 0, 28)]
+    assert (qa["accidental_chains"], qa["accidental_presses"]) == (1, 29)
+    # With the count rule back, a and c are dropped too.
+    ep, _ = press_episodes(presses([*a, *b, *c]), **{**rules, "accidental_n": 8})
+    assert ep.height == 0

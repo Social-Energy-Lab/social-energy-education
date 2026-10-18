@@ -13,12 +13,23 @@ research team signs the plan):
 * **C2** ``cross_share``: share of tie minutes with participants of another course (course from
   ``Spine.people_frame()`` only), with ``cross_share_expected``, the share if everyone present
   mixed at random, and ``cross_share_excess``, the difference.
-* **C3** ``new_ties_per_day``: ties a pair forms for the first time, on present days after the
-  first two camp days, per present day after them.
+* **C3**, three candidates while the plan's stability rule picks one (every variant must rank
+  people like the main one, Spearman at least 0.7):
+
+  * ``c3_partners``: distinct close partners whose first tie with the person (on the person's
+    present days) falls after the first two camp days, over the whole camp, per present day after
+    them. The plan's current wording.
+  * ``c3_partners_all``: distinct close partners over the whole camp, no burn-in, per present day.
+  * ``c3_daily``: the first definition, ties a pair forms for the first time, on present days after
+    the first two camp days, per present day after them. Kept for comparison.
+
 * **C4** ``presses_per_hour``: self-report press episodes per exposure hour. Exposure is a 5-minute
   bin in which the tag was seen; bins in a lost window or an unsettled window
   (``beacon_diagnostics.py``) leave both the presses and the hours. A press counts only in an
-  exposure bin.
+  exposure bin. ``c4_worn`` (sensitivity 6 of the plan) takes as exposure the bins in which the
+  tag was assigned to the person (spine assignments, a bin going to whoever wore the tag at its
+  start), less exclusion windows and the same lost and unsettled windows; presses are counted the
+  same way, only in those bins.
 
 Unit: participant. Filters, in order:
 
@@ -37,8 +48,10 @@ logged it (co-presence is counted from either side); the ``lost_both_sides`` var
 for both partners instead (sensitivity 5 of the plan).
 
 Variants (sensitivity 4 and 5 of the plan): ``main`` (-65 dBm, 60 min), ``rssi_-70``,
-``rssi_-75``, ``min_15``, ``min_30``, ``lost_both_sides``. Sensitivities 1 (window from 11:30),
-2 (hand-split fill) and 3 (no drift correction) need a rebuild of the ingest and are not here.
+``rssi_-75``, ``min_15``, ``min_30``, ``lost_both_sides``; and for C4 only (sensitivity 7),
+``accidental_7min``: a chain of presses is accidental only when it lasts at least 7 minutes, with
+no count rule (C1-C3 equal main in that row). Sensitivities 1 (window from 11:30), 2 (hand-split
+fill) and 3 (no drift correction) need a rebuild of the ingest and are not here.
 
 Run first: ``social-energy ingest-beacons``, ``copresence_by_phase.py build``,
 ``beacon_diagnostics.py``. Then:
@@ -46,7 +59,8 @@ Run first: ``social-energy ingest-beacons``, ``copresence_by_phase.py build``,
     uv run python studies/dsa-2026/analyses/outcomes.py
 
 Writes ``outcomes.parquet`` (one row per participant x variant), ``summary.csv`` (distributions
-only, groups under ``MIN_GROUP`` suppressed) and ``qa.json`` to
+only, groups under ``MIN_GROUP`` suppressed), ``rank_stability.csv`` (Spearman of each variant with
+main, per outcome) and ``qa.json`` (with C4's correlations with exposure) to
 ``$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/outcomes/``.
 """
 
@@ -71,6 +85,7 @@ from social_energy.outcomes import (
     event_rate,
     present_days,
     windows_to_bins,
+    worn_bins,
 )
 from social_energy.spine import Spine
 
@@ -82,22 +97,39 @@ DAYS = [cp.FIRST_DAY + timedelta(d) for d in range((cp.LAST_DAY - cp.FIRST_DAY).
 BURN_IN_DAYS = 2
 #: Main settings (dsa-2026-first-analyses plan): close at -65 dBm, a tie is an hour in a day.
 MAIN = {"close_rssi": cp.CLOSE_RSSI, "min_minutes": cp.TIE_MIN_BINS * BIN_MINUTES}
+#: Accidental press runs (C4): the main rule, and the beacon team's own example of a bag-pressed
+#: tag, minutes of repeated pressing, as a duration-only rule (sensitivity 7).
+PRESS_RULES = {
+    "main": {"accidental_s": srx.ACCIDENTAL_S, "accidental_n": srx.ACCIDENTAL_N},
+    "7min": {"accidental_s": 7 * 60, "accidental_n": None},
+}
+_M = {**MAIN, "lost_both_sides": False, "press": "main"}
 VARIANTS: dict[str, dict] = {
-    "main": {**MAIN, "lost_both_sides": False},
-    "rssi_-70": {**MAIN, "close_rssi": -70, "lost_both_sides": False},
-    "rssi_-75": {**MAIN, "close_rssi": -75, "lost_both_sides": False},
-    "min_15": {**MAIN, "min_minutes": 15, "lost_both_sides": False},
-    "min_30": {**MAIN, "min_minutes": 30, "lost_both_sides": False},
-    "lost_both_sides": {**MAIN, "lost_both_sides": True},
+    "main": _M,
+    "rssi_-70": {**_M, "close_rssi": -70},
+    "rssi_-75": {**_M, "close_rssi": -75},
+    "min_15": {**_M, "min_minutes": 15},
+    "min_30": {**_M, "min_minutes": 30},
+    "lost_both_sides": {**_M, "lost_both_sides": True},
+    "accidental_7min": {**_M, "press": "7min"},
 }
 OUTCOMES = [
     "strength_min_per_day",
     "cross_share",
     "cross_share_expected",
     "cross_share_excess",
-    "new_ties_per_day",
+    "c3_partners",
+    "c3_partners_all",
+    "c3_daily",
     "presses_per_hour",
+    "c4_worn",
 ]
+#: Measure columns from close_contact_outcomes, renamed for the study's C3 candidates.
+C3_NAMES = {
+    "new_ties_per_day": "c3_daily",
+    "new_partners_per_day": "c3_partners",
+    "partners_per_day": "c3_partners_all",
+}
 
 
 def removed_bins(layout: paths.StudyLayout, spine: Spine) -> pl.DataFrame:
@@ -142,6 +174,46 @@ def summarise(table: pl.DataFrame) -> pl.DataFrame:
                 }
             rows.append(row)
     return pl.DataFrame(rows, infer_schema_length=None)
+
+
+def rank_stability(table: pl.DataFrame) -> pl.DataFrame:
+    """Spearman of each variant with main per outcome, people with both values as units."""
+    main = table.filter(pl.col("variant") == "main")
+    rows = []
+    for variant in VARIANTS:
+        if variant == "main":
+            continue
+        v = table.filter(pl.col("variant") == variant)
+        for name in OUTCOMES:
+            both = main.select("entity", pl.col(name).alias("_m")).join(
+                v.select("entity", pl.col(name).alias("_v")), on="entity"
+            )
+            both = both.drop_nulls()
+            rho = (
+                both.select(pl.corr("_m", "_v", method="spearman")).item() if both.height else None
+            )
+            rows.append({"variant": variant, "outcome": name, "n": both.height, "spearman": rho})
+    return pl.DataFrame(rows, infer_schema_length=None)
+
+
+def c4_correlations(rate: pl.DataFrame) -> dict:
+    """C4 against its exposure, heard and worn, and the two C4s against each other."""
+    pairs = {
+        "heard_rate_vs_heard_hours": ("presses_per_hour", "exposure_hours"),
+        "worn_rate_vs_worn_hours": ("c4_worn", "exposure_hours_worn"),
+        "worn_rate_vs_heard_hours": ("c4_worn", "exposure_hours"),
+        "worn_rate_vs_heard_rate": ("c4_worn", "presses_per_hour"),
+        "worn_hours_vs_heard_hours": ("exposure_hours_worn", "exposure_hours"),
+    }
+    out = {}
+    for key, (x, y) in pairs.items():
+        d = rate.select(x, y).drop_nulls()
+        out[key] = {
+            "n": d.height,
+            "pearson": d.select(pl.corr(x, y)).item(),
+            "spearman": d.select(pl.corr(x, y, method="spearman")).item(),
+        }
+    return out
 
 
 def check_against_daily_network(ties: pl.DataFrame, present: pl.DataFrame) -> dict | None:
@@ -199,25 +271,62 @@ def main() -> None:
         "removed_bins": removed.height,
     }
 
-    # C4: presses and exposure from the instruction to the handover.
-    episodes, press_qa = srx.press_episodes(layout, spine, set(frame["entity"]), press_ok)
-    qa["presses"] = press_qa
+    # C4: presses and exposure from the instruction to the handover. Exposure heard (main) and
+    # worn (c4_worn), each for both accidental-run rules.
     lo, hi = srx.local(srx.INSTRUCTION), srx.local(cp.HANDOVER)
     exposure = seen.filter((pl.col("bin") >= lo) & (pl.col("bin") < hi))
-    rate = event_rate(
-        episodes.select("entity", "t"),
-        exposure,
-        people=sorted(press_ok & set(people)),
+    worn = worn_bins(
+        spine,
+        kind="beacon",
+        start=pl.select(lo).item(),
+        end=pl.select(hi).item(),
         bin_minutes=BIN_MINUTES,
-        removed=removed,
-    ).select(
-        "entity",
-        pl.col("exposure_hours"),
-        pl.col("events").alias("press_episodes"),
-        pl.col("events_per_hour").alias("presses_per_hour"),
     )
-    qa["press_episodes_counted"] = int(rate["press_episodes"].sum())
-    qa["press_episodes_outside_exposure"] = episodes.height - qa["press_episodes_counted"]
+    raters = sorted(press_ok & set(people))
+    rates = {}
+    for rule, limits in PRESS_RULES.items():
+        episodes, press_qa = srx.press_episodes(
+            layout, spine, set(frame["entity"]), press_ok, **limits
+        )
+        events = episodes.select("entity", "t")
+        heard = event_rate(
+            events, exposure, people=raters, bin_minutes=BIN_MINUTES, removed=removed
+        )
+        on = event_rate(events, worn, people=raters, bin_minutes=BIN_MINUTES, removed=removed)
+        rates[rule] = heard.select(
+            "entity",
+            "exposure_hours",
+            pl.col("events").alias("press_episodes"),
+            pl.col("events_per_hour").alias("presses_per_hour"),
+        ).join(
+            on.select(
+                "entity",
+                pl.col("exposure_hours").alias("exposure_hours_worn"),
+                pl.col("events").alias("press_episodes_worn"),
+                pl.col("events_per_hour").alias("c4_worn"),
+            ),
+            on="entity",
+        )
+        counted = int(rates[rule]["press_episodes"].sum())
+        counted_worn = int(rates[rule]["press_episodes_worn"].sum())
+        qa[f"presses_{rule}"] = press_qa | {
+            "episodes_counted": counted,
+            "episodes_outside_exposure": episodes.height - counted,
+            "episodes_counted_worn": counted_worn,
+            "episodes_outside_worn": episodes.height - counted_worn,
+        }
+        qa[f"c4_correlations_{rule}"] = c4_correlations(rates[rule])
+    both = rates["main"].join(rates["7min"], on="entity", suffix="_7")
+    rated = both.drop_nulls(["presses_per_hour", "presses_per_hour_7"])
+    qa["c4_accidental_7min_vs_main"] = {
+        "people_with_changed_count": int(
+            (both["press_episodes"] != both["press_episodes_7"]).sum()
+        ),
+        "spearman": rated.select(
+            pl.corr("presses_per_hour", "presses_per_hour_7", method="spearman")
+        ).item(),
+        "spearman_worn": rated.select(pl.corr("c4_worn", "c4_worn_7", method="spearman")).item(),
+    }
 
     tables = []
     for name, v in VARIANTS.items():
@@ -229,9 +338,9 @@ def main() -> None:
             qa["check_daily_network"] = check_against_daily_network(ties, present)
         o = close_contact_outcomes(
             ties, present, people=people, days=DAYS, groups=groups, burn_in_days=BURN_IN_DAYS
-        )
+        ).rename(C3_NAMES)
         tables.append(
-            o.join(rate, on="entity", how="left").with_columns(
+            o.join(rates[v["press"]], on="entity", how="left").with_columns(
                 (pl.col("cross_share") - pl.col("cross_share_expected")).alias(
                     "cross_share_excess"
                 ),
@@ -239,6 +348,7 @@ def main() -> None:
                 pl.lit(v["close_rssi"]).alias("close_rssi"),
                 pl.lit(v["min_minutes"]).alias("min_minutes"),
                 pl.lit(v["lost_both_sides"]).alias("lost_both_sides"),
+                pl.lit(v["press"]).alias("accidental_rule"),
             )
         )
         qa[f"variant_{name}"] = {
@@ -247,7 +357,7 @@ def main() -> None:
             **{f"n_{k}": o[k].drop_nulls().len() for k in o.columns if k != "entity"},
         }
 
-    first = ["variant", "close_rssi", "min_minutes", "lost_both_sides", "entity"]
+    first = ["variant", "close_rssi", "min_minutes", "lost_both_sides", "accidental_rule", "entity"]
     table = pl.concat(tables, how="vertical_relaxed")
     rest = [c for c in table.columns if c not in first and c != "cross_share_excess"]
     at = rest.index("cross_share_expected") + 1
@@ -255,10 +365,13 @@ def main() -> None:
     table.write_parquet(out / "outcomes.parquet")
     summary = summarise(table)
     summary.write_csv(out / "summary.csv")
+    stability = rank_stability(table)
+    stability.write_csv(out / "rank_stability.csv")
     (out / "qa.json").write_text(json.dumps(qa, indent=2, default=str), encoding="utf-8")
     with pl.Config(tbl_rows=100, tbl_cols=20):
         print(json.dumps(qa, indent=2, default=str))
         print(summary)
+        print(stability.pivot("variant", index="outcome", values="spearman"))
 
 
 if __name__ == "__main__":

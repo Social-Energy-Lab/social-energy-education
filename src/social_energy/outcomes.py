@@ -21,10 +21,17 @@ The measures:
   with partners of a known group, with the share expected if everyone present mixed at random:
   ``(N - n_g) / (N - 1)``, ``N`` people present with a known group, ``n_g`` of them in the
   person's own group (the person included).
-* **New ties per day** (C3-style): ties a pair forms for the first time, on days after the first
-  ``burn_in_days``, per present day after them.
+* **New ties per day** (C3-style, first definition): ties a pair forms for the first time, on days
+  after the first ``burn_in_days``, per present day after them.
+* **New partners per day** (C3-style): distinct partners whose first tie *with the person*, on the
+  person's own present days, falls after the first ``burn_in_days``, counted over all days, per
+  present day after them. Unlike the first definition, a pair's tie on a day one side was absent
+  does not use up that side's first meeting.
+* **Partners per day** (C3-style, no burn-in): distinct partners tied on the person's present
+  days, per present day.
 * **Event rate** (C4-style): events per exposure hour, with removed bins (e.g. lost windows) taken
-  out of both the events and the hours.
+  out of both the events and the hours. Exposure is either the bins a tag was heard in or, with
+  :func:`worn_bins`, the bins it was assigned to the person.
 
 Every threshold is the study's choice and is passed in.
 """
@@ -32,9 +39,13 @@ Every threshold is the study's choice and is passed in.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import polars as pl
+
+if TYPE_CHECKING:
+    from social_energy.spine import Spine
 
 
 def camp_day(t: pl.Expr, *, timezone: str, day_start: timedelta) -> pl.Expr:
@@ -58,6 +69,30 @@ def windows_to_bins(
         .select(key, "bin")
         .unique()
     )
+
+
+def worn_bins(
+    spine: Spine, *, kind: str, start: datetime, end: datetime, bin_minutes: int
+) -> pl.DataFrame:
+    """``entity``, ``bin``: the bins in ``[start, end)`` in which a person wore a ``kind`` device.
+
+    A bin belongs to whoever wore the device at the bin's start, and is left out when its start
+    falls in an exclusion window of the device or of that person. Devices fixed in a location do
+    not count. Lost and unsettled windows are the caller's to remove (``event_rate(removed=)``).
+    """
+    devices = sorted({a.device for a in spine.assignments if a.device_kind == kind})
+    # Every bin of every device, then resolved: the spine owns who wore what when.
+    grid = pl.datetime_range(
+        start, end, interval=f"{bin_minutes}m", closed="left", time_zone="UTC", eager=True
+    )
+    keys = pl.DataFrame(
+        {"device_key": [d.split(":", 1)[1] for d in devices]}, schema={"device_key": pl.String}
+    )
+    bins = keys.join(grid.alias("bin").to_frame(), how="cross")
+    bins = spine.resolve(bins, device_col="device_key", time_col="bin", kind=kind, out="entity")
+    bins = bins.filter(pl.col("entity").str.starts_with("person:"))
+    bins = spine.flag_excluded(bins, device_col="device_key", time_col="bin", kind=kind, out="_x")
+    return bins.filter(~pl.col("_x")).select("entity", "bin").unique().sort("entity", "bin")
 
 
 def drop_pair_bins(pairs: pl.DataFrame, removed: pl.DataFrame) -> pl.DataFrame:
@@ -120,7 +155,8 @@ def close_contact_outcomes(
     Only ties between two of ``people`` on one of ``days`` count, and only on the person's
     present days. Columns: ``entity``, ``days_present``, ``strength_min_per_day``,
     ``close_minutes``, ``cross_minutes``, ``cross_share``, ``cross_share_expected``,
-    ``days_after_burn_in``, ``new_ties``, ``new_ties_per_day``. A measure without a denominator
+    ``days_after_burn_in``, ``new_ties``, ``new_ties_per_day``, ``new_partners``,
+    ``new_partners_per_day``, ``partners``, ``partners_per_day``. A measure without a denominator
     (no present day, no group, no tie minutes with a known group) is null.
     """
     days = sorted(set(days))
@@ -190,6 +226,13 @@ def close_contact_outcomes(
         .agg(pl.len().alias("days_after_burn_in"))
     )
 
+    # C3 by partner: each person's first tie with each partner, on the person's present days.
+    met = ends.group_by("entity", "other").agg(pl.col("day").min())
+    partners = met.group_by("entity").agg(
+        pl.len().alias("partners"),
+        pl.col("day").is_in(after).sum().alias("new_partners"),
+    )
+
     has_group = pl.col("entity").is_in(pool["entity"].implode())
     return (
         who.join(strength, on="entity", how="left")
@@ -197,8 +240,11 @@ def close_contact_outcomes(
         .join(expected, on="entity", how="left")
         .join(after_days, on="entity", how="left")
         .join(new, on="entity", how="left")
+        .join(partners, on="entity", how="left")
         .with_columns(
             pl.col("days_present").fill_null(0),
+            pl.col("partners").fill_null(0),
+            pl.col("new_partners").fill_null(0),
             pl.col("days_after_burn_in").fill_null(0),
             pl.col("new_ties").fill_null(0),
             pl.when(has_group).then(pl.col("cross_minutes").fill_null(0)).alias("cross_minutes"),
@@ -210,6 +256,12 @@ def close_contact_outcomes(
             pl.when(pl.col("days_after_burn_in") > 0)
             .then(pl.col("new_ties") / pl.col("days_after_burn_in"))
             .alias("new_ties_per_day"),
+            pl.when(pl.col("days_after_burn_in") > 0)
+            .then(pl.col("new_partners") / pl.col("days_after_burn_in"))
+            .alias("new_partners_per_day"),
+            pl.when(pl.col("days_present") > 0)
+            .then(pl.col("partners") / pl.col("days_present"))
+            .alias("partners_per_day"),
         )
         .select(
             "entity",
@@ -222,6 +274,10 @@ def close_contact_outcomes(
             "days_after_burn_in",
             "new_ties",
             "new_ties_per_day",
+            "new_partners",
+            "new_partners_per_day",
+            "partners",
+            "partners_per_day",
         )
     )
 
