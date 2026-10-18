@@ -12,44 +12,53 @@
 # in `reverse` (worded against the construct, judged AFTER that flip) is flipped. Both flips
 # are min + max - x.
 #
-# Status: `confirmed` (research team), `inferred` (from documents, not confirmed), `unknown`.
-# Everything below that the research team has not confirmed says so, and every scoring run
-# lists it (Codebook.pending, qa.json "pending"). The questions to answer are under `pending`.
+# Status: `confirmed` (research team), `decided` (the analyst's decision, listed under
+# `decisions` with who and when; it can be revised), `confirmed_by_check` (a rule an empirical
+# check agreed with: `social-energy check-survey`, social_energy.survey.checks), `inferred`
+# (from documents, not confirmed), `unknown`. The first three are settled; every scoring run
+# lists the rest (Codebook.pending, qa.json "pending"). The questions still open for the
+# research team are under `pending`.
 
 title: DSA 2026 baseline survey
-version: 1
+version: 2
 roles: {A: background, B: trust_in_life, C: lust_for_life}
 
-# A scale score needs valid answers on at least ceil(min_share x items) of its items, unless a
-# group sets min_items. [inferred] Proposed default; PISA scales its indices only for students
-# with at least three valid answers.
+# A scale score needs at least max(3, ceil(0.5 x k)) valid items, capped at k (k = items in
+# the scale), unless a group sets min_items. PISA scales its indices from three valid answers.
 min_share: 0.5
-min_share_status: inferred
+min_items_floor: 3
+min_share_status: decided
+
+decisions:
+  - "Min items: a scale score needs max(3, ceil(0.5 x k)) valid items, capped at k. Álvaro, 2026-10-18."
+  - "B16 and C5: positive and negative affect subscales only; no PISA single index. Álvaro, 2026-10-18."
+  - "B16 add-ons (tired, listless, exhausted): their own fatigue subscale; if its reliability is poor it is reported item by item. Álvaro, 2026-10-18."
+  - "B19 and B20: read item by item, exploratory only; never in a scale score or composite. Álvaro, 2026-10-18."
+  - "Reverse-keying: the PISA 2022 scale handbook where it lists reversed items; where it is silent (C15, C18, APSI_6) the wording, confirmed by an empirical check (before reversal, a reversed item correlates negatively with the rest of its scale). Álvaro, 2026-10-18."
+  - "Old form-version codes count as their current codes when the old code's answer distribution matches the current code's across form versions. Álvaro, 2026-10-18."
 
 pending:
-  - "[unknown: confirm the reverse-keying list: every scale's `reverse` below, including the scales with none]"
   - "[unknown: which B19/B20 slider range went live, 1-10 or 0-10?] The export holds 1-10 only, which fits either."
-  - "[unknown: do the old form-version codes in `renames` stand for the same items, on the same response format, as their current codes?]"
-  - "[unknown: is a scale score valid from half its items (min_share 0.5), or should a stricter rule apply?]"
-  - "[unknown: B16 and C5 are split into positive and negative affect subscales; should the PISA single index (negative items reversed) be scored as well?]"
-  - "[unknown: do the B16 add-ons (tired, listless, exhausted) form their own subscale, or join negative affect?]"
-  - "[unknown: are B19 (fear drivers) and B20 (sources of joy) meant as scales, or read item by item?]"
+  - "[unknown: was a post-academy wave fielded, and with which blocks?]"
 
 # Old form-version code -> current code. Both are never present on one record in the export;
 # a record carrying both would keep the current code and count a conflict in the QA.
+# Check (check-survey, 2026-10-18): the old codes carry too few answers for the distribution
+# check's minimum, so the decided rule gave no verdict and every rename stays `inferred`.
+# [unknown: keep the few old-code answers as their current codes, or set them aside? (analyst)]
 renames:
   GRADIENT_variable_C11:
     to: ZGL_C11_GRAD
     status: inferred
-    note: "[inferred] form version 16 only, in the flat view; renamed in later versions"
+    note: "[inferred] an earlier key, seen in the flat view of form version 16 only"
   GRADIENT_variable_C21:
     to: ZGL_C21_GRAD
     status: inferred
-    note: "[inferred] form version 16 only, in the flat view; renamed in later versions"
+    note: "[inferred] an earlier key, seen in the flat view of form version 16 only"
   C1A_SWE.SWE_05_resonance:
     to: C1A_SWE.SWE_05
     status: inferred
-    note: "[inferred] same matrix row under an earlier key: form version 16 carries it in place of SWE_05"
+    note: "[inferred] same matrix row under an earlier key, seen in form version 16 only"
   C1A_SWE.SWE_06_resonance:
     to: C1A_SWE.SWE_06
     status: inferred
@@ -59,6 +68,10 @@ renames:
     status: inferred
     note: "[inferred] as SWE_05_resonance"
 
+# Reverse keys: every scale's reverse_status is `confirmed_by_check`. On 2026-10-18
+# check-survey found, on the kept submissions, every reversed item correlating negatively and
+# every other item non-negatively with the rest of its scale keyed as listed here (items with
+# no variance give no verdict). Aggregates are in the private study notes, not here.
 groups:
   # --- A: background (recoded, not averaged) ------------------------------------------------
   a14_social_status:
@@ -82,7 +95,7 @@ groups:
     range: [1, 4]
     printed_reversed: true
     reverse: [ST034Q01TA, ST034Q04TA, ST034Q06TA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook; it lists Q02, Q03, Q05 against the printed order, the same recoding net of the flip
 
   b2_climate_hindrance:
@@ -96,7 +109,7 @@ groups:
             SC061Q09, SC061Q10, SC061Q11]
     range: [1, 4]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   b3_bullying:
     block: B
@@ -109,7 +122,7 @@ groups:
             ST038Q09JA, ST038Q10JA, ST038Q11JA]
     range: [1, 4]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   b4a_diversity_practices:
     block: B
@@ -122,7 +135,7 @@ groups:
     range: [1, 5]
     missing_codes: [ZGL_B4_01, "6"]  # "don't know": a code in the export, option 6 in the spec
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   b4b_discrimination:
     block: B
@@ -146,7 +159,7 @@ groups:
     range: [1, 5]
     missing_codes: ["6", "7"]  # not offered / cannot join
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   b8_trust:
     block: B
@@ -159,7 +172,7 @@ groups:
             ST315Q07JA, ST315Q08JA, ST315Q09JA, ST315Q10JA]
     range: [1, 5]
     reverse: [ST315Q01JA, ST315Q05JA, ST315Q07JA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook
 
   b10_perspective_taking:
@@ -173,7 +186,7 @@ groups:
             ST303Q07JA, ST303Q08JA]
     range: [1, 5]
     reverse: [ST303Q05JA, ST303Q07JA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook
 
   b11_teacher_relationship:
@@ -187,7 +200,7 @@ groups:
             ST267Q07JA, ST267Q08JA]
     range: [1, 4]
     reverse: [ST267Q04JA, ST267Q08JA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook
 
   b12_teacher_support:
@@ -201,7 +214,7 @@ groups:
     range: [1, 4]
     printed_reversed: true  # the handbook reverses all four items: the same flip
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook
 
   b12_own_items:
@@ -226,7 +239,7 @@ groups:
             ST300Q07JA, ST300Q08JA, ST300Q09JA, ST300Q10JA]
     range: [1, 5]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   b15_identity:
     block: B
@@ -239,7 +252,7 @@ groups:
             APSI_7, APSI_8]
     range: [1, 5]
     reverse: [APSI_6_adjusted]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: wording
 
   b15_identity_grad:
@@ -261,7 +274,7 @@ groups:
     items: [ST826C01HA_DE, ST826C03HA_DE, ST826C05HA_DE, ST826C07HA_DE, ST826C09HA_DE]
     range: [1, 5]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook (its reversed items are the negative subscale)
 
   b16_negative_affect:
@@ -274,7 +287,7 @@ groups:
     items: [ST826C02HA_DE, ST826C04HA_DE, ST826C06HA_DE, ST826C08HA_DE]
     range: [1, 5]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   b16_fatigue:
     block: B
@@ -286,7 +299,8 @@ groups:
     items: [ZGL_B16_10, ZGL_B16_11, ZGL_B16_12]
     range: [1, 5]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
+    note: "Its own subscale (decided, Álvaro, 2026-10-18). If its reliability is poor, report the three items one by one instead of the score. [unknown: what alpha/omega counts as poor? set in the analysis plan]"
 
   b17_life_satisfaction:
     block: B
@@ -307,33 +321,31 @@ groups:
     items: [ST062Q01TA, ST062Q02TA, ST062Q03TA]
     range: [1, 4]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
+  # B19 and B20 are read item by item, exploratory only, and never enter a scale score or a
+  # composite (decided, Álvaro, 2026-10-18).
   b19_fear_drivers:
     block: B
     role: trust_in_life
-    kind: scale
-    concept: fear drivers (own)
+    kind: items
+    concept: fear drivers (own; item by item, exploratory)
     source: own
     items: [ZGL_B19_1, ZGL_B19_2, ZGL_B19_3, ZGL_B19_4, ZGL_B19_5, ZGL_B19_6, ZGL_B19_7]
     range: [1, 10]
     range_status: inferred
-    reverse: []
-    reverse_status: inferred
     note: "[unknown: which B19/B20 slider range went live, 1-10 or 0-10?]"
 
   b20_joy_sources:
     block: B
     role: trust_in_life
-    kind: scale
-    concept: sources of joy (own)
+    kind: items
+    concept: sources of joy (own; item by item, exploratory)
     source: own
     items: [ZGL_B20_1, ZGL_B20_2, ZGL_B20_3, ZGL_B20_4, ZGL_B20_5, ZGL_B20_6, ZGL_B20_7,
             ZGL_B20_8]
     range: [1, 10]
     range_status: inferred
-    reverse: []
-    reverse_status: inferred
     note: "[unknown: which B19/B20 slider range went live, 1-10 or 0-10?]"
 
   b21_strength_frequency:
@@ -361,7 +373,7 @@ groups:
     items: [SWE_01, SWE_02, SWE_03, SWE_04, SWE_05, SWE_06, SWE_07, SWE_08, SWE_09, SWE_10]
     range: [1, 4]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   c1a_self_efficacy_grad:
     block: C
@@ -382,7 +394,7 @@ groups:
     items: [RSWE_01, RSWE_02, RSWE_03, RSWE_04, RSWE_05, RSWE_06]
     range: [1, 4]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   c1b_resonance_self_efficacy_grad:
     block: C
@@ -404,7 +416,7 @@ groups:
             ST334Q07JA, ST334Q08JA, ST334Q09JA, ST334Q10JA]
     range: [1, 4]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   c5_future_positive:
     block: C
@@ -416,7 +428,7 @@ groups:
     items: [ST836C02JA_DE, ST836C04JA_DE, ST836C06JA_DE, ST836C08JA_DE, ST836C10JA_DE]
     range: [1, 5]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   c5_future_negative:
     block: C
@@ -428,7 +440,7 @@ groups:
     items: [ST836C01JA_DE, ST836C03JA_DE, ST836C05JA_DE, ST836C07JA_DE, ST836C09JA_DE]
     range: [1, 5]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   c6_proactive_learning:
     block: C
@@ -441,7 +453,7 @@ groups:
             ST293Q07JA, ST293Q08JA, ST293Q09JA]
     range: [1, 5]
     reverse: [ST293Q04JA, ST293Q07JA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook
 
   c7_cooperation:
@@ -455,7 +467,7 @@ groups:
             ST343Q07JA, ST343Q08JA, ST343Q09JA, ST343Q10JA]
     range: [1, 5]
     reverse: [ST343Q02JA, ST343Q04JA, ST343Q05JA, ST343Q07JA, ST343Q10JA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook
 
   c8_assertiveness:
@@ -469,7 +481,7 @@ groups:
             ST305Q07JA, ST305Q08JA, ST305Q09JA, ST305Q10JA]
     range: [1, 5]
     reverse: [ST305Q04JA, ST305Q07JA, ST305Q08JA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook
 
   c8_assertiveness_grad:
@@ -491,7 +503,7 @@ groups:
     items: [ST336Q01JA, ST336Q03JA, ST336Q04JA, ST336Q05JA, ST336Q06JA, ST336Q07JA]
     range: [1, 4]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   c11_self_directed_learning:
     block: C
@@ -503,7 +515,7 @@ groups:
     items: [ST355Q03JA, ST355Q04JA, ST355Q05JA, ST355Q06JA, ST355Q07JA, ST355Q08JA]
     range: [1, 4]
     reverse: []
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
 
   c11_self_directed_learning_grad:
     block: C
@@ -525,7 +537,7 @@ groups:
             ST307Q07JA, ST307Q08JA, ST307Q09JA, ST307Q10JA]
     range: [1, 5]
     reverse: [ST307Q04JA, ST307Q06JA, ST307Q07JA, ST307Q10JA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook
 
   c13_emotional_control:
@@ -540,7 +552,7 @@ groups:
     range: [1, 5]
     reverse: [ST313Q02JA, ST313Q03JA, ST313Q04JA, ST313Q06JA, ST313Q08JA, ST313Q09JA,
               ST313Q10JA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook
 
   c15_reflection:
@@ -554,7 +566,7 @@ groups:
             ST309Q07JA, ST309Q08JA, ST309Q09JA, ST309Q10JA]
     range: [1, 5]
     reverse: [ST309Q02JA, ST309Q03JA, ST309Q07JA, ST309Q09JA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: wording (the handbook scales no index for this question)
 
   c16_expected_degrees:
@@ -580,7 +592,7 @@ groups:
             ST324Q12JA, ST324Q13JA, ST324Q14JA]
     range: [1, 4]
     reverse: [ST324Q02JA, ST324Q05JA, ST324Q07JA, ST324Q10JA, ST324Q11JA]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: wording (the handbook scales no index for this question)
 
   c21_openness:
@@ -593,7 +605,7 @@ groups:
     items: [ST140_a, ST140_b, ST140_c, ST140_d, ST140_e, ST140_f, ST140_g, ST140_h]
     range: [1, 4]
     reverse: [ST140_b, ST140_e, ST140_h]
-    reverse_status: inferred
+    reverse_status: confirmed_by_check
     reverse_source: PISA 2022 scale handbook
 
   c21_openness_grad:

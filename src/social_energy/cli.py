@@ -33,6 +33,12 @@ social-energy score-survey studies/<id>/study.yaml
     derived/survey/scoring/{scores,reliability,submissions}.parquet plus qa.json. Refuses
     until survey.analysis_plan_frozen is set: scales are scored only after the analysis
     plan is signed and frozen.
+
+social-energy check-survey studies/<id>/study.yaml
+    Run the pre-scoring checks on derived/survey/items.parquet (kept submissions only):
+    reverse-keying against item-rest correlations and old form-version codes against their
+    current codes. Writes derived/survey/checks/{reverse_keys,versions}.parquet plus
+    summary.json. Computes no scale score, so it does not wait for the freeze.
 """
 
 from __future__ import annotations
@@ -52,7 +58,15 @@ from . import paths, zeitgeist
 from .acoustics import AcousticsConfig, extract_directory
 from .beacons import ingest_with_witnesses
 from .study import StudyConfig
-from .survey import ingest_zeitgeist, load_codebook, load_corrections, score_survey
+from .survey import (
+    ingest_zeitgeist,
+    load_codebook,
+    load_corrections,
+    resolve_submissions,
+    reverse_key_check,
+    score_survey,
+    version_equivalence,
+)
 
 SPINE_README = """\
 # Local spine (never commit)
@@ -221,6 +235,47 @@ def score_survey_command(study: StudyConfig) -> int:
     return 0
 
 
+def check_survey(study: StudyConfig) -> int:
+    config = study.survey_scoring_config()
+    if config.codebook is None or not config.codebook.is_file():
+        print(f"No codebook: set survey.codebook in {study.path} (found {config.codebook}).")
+        return 1
+    layout = paths.study(study.study_id)
+    source = layout.derived / "survey"
+    if not (source / "items.parquet").is_file():
+        print(f"No {source / 'items.parquet'}: run ingest-survey first.")
+        return 1
+    items = pl.read_parquet(source / "items.parquet")
+    respondents = pl.read_parquet(source / "respondents.parquet")
+    corrections = load_corrections(config.corrections) if config.corrections else None
+    submissions = resolve_submissions(respondents, items, corrections)
+    codebook = load_codebook(config.codebook)
+    keys = reverse_key_check(items, codebook, submissions)
+    versions = version_equivalence(items, codebook, submissions)
+    out = source / "checks"
+    out.mkdir(parents=True, exist_ok=True)
+    keys.write_parquet(out / "reverse_keys.parquet")
+    versions.write_parquet(out / "versions.parquet")
+    summary = {
+        "kept_submissions": int((~submissions["duplicate_submission"]).sum()),
+        "reverse_keys": {
+            "items": keys.height,
+            "undefined": int(keys["agrees"].null_count()),
+            "disagree": keys.filter(pl.col("agrees") == False)  # noqa: E712
+            .select("group", "item", "finding")
+            .to_dicts(),
+        },
+        "versions": {
+            row["old"]: {"new": row["new"], "equivalent": row["equivalent"]}
+            for row in versions.iter_rows(named=True)
+        },
+    }
+    (out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print(json.dumps(summary, indent=2))
+    print(f"Wrote {out}")
+    return 0
+
+
 COMMANDS = {
     "init-spine": init_spine,
     "ingest-beacons": ingest_beacons,
@@ -228,6 +283,7 @@ COMMANDS = {
     "fetch-zeitgeist": fetch_zeitgeist,
     "ingest-survey": ingest_survey,
     "score-survey": score_survey_command,
+    "check-survey": check_survey,
 }
 
 
