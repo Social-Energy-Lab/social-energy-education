@@ -1,5 +1,12 @@
 """Structured questionnaire: platform export → canonical item and respondent tables → scores."""
 
+from .checks import (
+    chi_square_sf,
+    chi_square_test,
+    mann_whitney,
+    reverse_key_check,
+    version_equivalence,
+)
 from .codebook import Codebook, Group, Rename, load_codebook
 from .ingest import SurveyConfig, SurveyTables, ingest_zeitgeist
 from .score import (
@@ -25,16 +32,21 @@ __all__ = [
     "StudyIdCorrections",
     "SurveyConfig",
     "SurveyTables",
+    "chi_square_sf",
+    "chi_square_test",
     "cronbach_alpha",
     "ingest_zeitgeist",
     "load_codebook",
     "load_corrections",
+    "mann_whitney",
     "mcdonald_omega",
     "normalise_study_id",
     "recode",
     "reliability",
     "resolve_submissions",
+    "reverse_key_check",
     "score",
     "score_survey",
     "validate_against",
+    "version_equivalence",
 ]

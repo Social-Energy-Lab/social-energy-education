@@ -16,8 +16,14 @@ in reverse (``printed_reversed``) is flipped so that high means more of the cons
 each item in ``reverse`` (worded against the construct) is flipped. Both flips are
 ``min + max - x``.
 
-Anything the research team has not confirmed carries a status other than ``confirmed``;
-``Codebook.pending()`` lists those entries so a scoring run can say it is provisional.
+Minimum items: a scale score needs ``max(min_items_floor, ceil(min_share x k))`` valid items,
+capped at ``k`` (the items in the scale), unless the group sets ``min_items``.
+
+Statuses: ``confirmed`` (by the research team), ``decided`` (an analyst's decision, recorded
+with who and when under ``decisions``; it can be revised), ``confirmed_by_check`` (a rule that
+an empirical check in ``social_energy.survey.checks`` agreed with), ``inferred`` (from
+documents) and ``unknown``. The first three are settled; ``Codebook.pending()`` lists the
+others so a scoring run can say it is provisional.
 """
 
 from __future__ import annotations
@@ -30,7 +36,8 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-Status = Literal["confirmed", "inferred", "unknown"]
+Status = Literal["confirmed", "decided", "confirmed_by_check", "inferred", "unknown"]
+SETTLED: frozenset[str] = frozenset({"confirmed", "decided", "confirmed_by_check"})
 Kind = Literal["scale", "gradient", "items"]
 
 
@@ -91,10 +98,12 @@ class Group(_Strict):
     def reverse_codes(self) -> set[str]:
         return {self.prefix + item for item in self.reverse}
 
-    def min_items_required(self, min_share: float) -> int:
+    def min_items_required(self, min_share: float, floor: int = 1) -> int:
+        """``min_items`` if set, else ``max(floor, ceil(min_share x k))`` capped at ``k``."""
         if self.min_items is not None:
             return self.min_items
-        return max(1, math.ceil(min_share * len(self.items)))
+        k = len(self.items)
+        return min(k, max(floor, math.ceil(min_share * k)))
 
     def statuses(self) -> dict[str, Status | None]:
         return {"range_status": self.range_status, "reverse_status": self.reverse_status}
@@ -106,6 +115,8 @@ class Codebook(_Strict):
     roles: dict[str, str]
     min_share: float = Field(gt=0, le=1)
     min_share_status: Status
+    min_items_floor: int = Field(default=1, ge=1)
+    decisions: list[str] = Field(default_factory=list)
     renames: dict[str, Rename] = Field(default_factory=dict)
     groups: dict[str, Group]
     unscored: dict[str, list[str]] = Field(default_factory=dict)
@@ -155,31 +166,35 @@ class Codebook(_Strict):
         return [*self.item_index(), *self.renames, *self.unscored_patterns()]
 
     def pending(self) -> list[str]:
-        """Entries not confirmed by the research team, as ``path: status`` strings."""
+        """Entries not settled (see the module docstring), as ``path: status`` strings."""
         out = []
-        if self.min_share_status != "confirmed":
+        if self.min_share_status not in SETTLED:
             out.append(f"min_share_status: {self.min_share_status}")
         for old, rename in self.renames.items():
-            if rename.status != "confirmed":
+            if rename.status not in SETTLED:
                 out.append(f"renames.{old}: {rename.status}")
         for key, group in self.groups.items():
             for field, status in group.statuses().items():
-                if status not in (None, "confirmed"):
+                if status is not None and status not in SETTLED:
                     out.append(f"groups.{key}.{field}: {status}")
         return out
 
     def is_provisional(self, key: str) -> bool:
-        """True when a group's score rests on an unconfirmed entry."""
+        """True when a group's score rests on an entry that is not settled."""
         group = self.groups[key]
         if (
-            self.min_share_status != "confirmed"
+            self.min_share_status not in SETTLED
             and group.min_items is None
             and group.kind == "scale"
         ):
             return True
-        if any(s not in (None, "confirmed") for s in group.statuses().values()):
+        if any(s is not None and s not in SETTLED for s in group.statuses().values()):
             return True
-        return any(r.status != "confirmed" for r in self.renames.values() if r.to in group.codes)
+        return any(r.status not in SETTLED for r in self.renames.values() if r.to in group.codes)
+
+    def min_items_for(self, key: str) -> int:
+        """Valid items a score of group ``key`` needs (see the module docstring)."""
+        return self.groups[key].min_items_required(self.min_share, self.min_items_floor)
 
 
 def load_codebook(path: Path) -> Codebook:

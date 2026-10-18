@@ -281,7 +281,7 @@ def _score(recoded: pl.DataFrame, codebook: Codebook, people: pl.DataFrame) -> p
                 "kind": g.kind,
                 "concept": g.concept,
                 "n_expected": len(g.items),
-                "min_items": g.min_items_required(codebook.min_share),
+                "min_items": codebook.min_items_for(key),
                 "provisional": codebook.is_provisional(key),
             }
             for key, g in codebook.groups.items()
