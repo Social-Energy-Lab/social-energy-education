@@ -55,7 +55,9 @@ beacons:
     instruction_given: "2026-08-14 08:45"
     clarified_not_necessarily_positive: ["2026-08-14 08:45", "2026-08-15 09:00"]
     gesture: one long press of ~3 s, until the tag glows red
-    # A second long press directly afterwards takes an accidental report back; the pair cancels.
+    # What participants were told: a second long press directly afterwards takes an accidental
+    # report back. The firmware cannot tell it from a re-press, so the analyses do not apply it;
+    # only long repeated runs are removed (decided 2026-10-01).
     retraction: second long press directly afterwards
 
 eda:
