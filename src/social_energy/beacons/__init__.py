@@ -9,12 +9,19 @@ from .cycles import (
 )
 from .ingest import BeaconConfig, BeaconTables, ingest_logs, ingest_logs_to
 from .presses import press_episodes
-from .purge import PurgedDeviceError, check_purged, find_purged_lines, purge_devices
+from .purge import (
+    ManifestError,
+    PurgedDeviceError,
+    check_purged,
+    find_purged_lines,
+    purge_devices,
+)
 from .witness import decide, ingest_with_witnesses, votes_from_tables, witness_votes
 
 __all__ = [
     "BeaconConfig",
     "BeaconTables",
+    "ManifestError",
     "PurgedDeviceError",
     "check_purged",
     "decide",

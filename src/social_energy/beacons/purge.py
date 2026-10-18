@@ -74,22 +74,51 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _rewrite_manifest(folder: Path) -> None:
-    """Recompute every entry of ``folder/SHA256SUMS`` (same names, same order)."""
+class ManifestError(ValueError):
+    """``SHA256SUMS`` lists files that cannot be found, so it cannot be recomputed."""
+
+
+def _manifest_entries(manifest: Path) -> list[tuple[str, str | None, str | None]]:
+    """``(line, separator, name)`` per line; separator and name are None for a non-entry."""
+    out: list[tuple[str, str | None, str | None]] = []
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        sep = "  " if "  " in line else " *" if " *" in line else None
+        out.append((line, sep, line.split(sep, 1)[1] if sep else None))
+    return out
+
+
+def _manifest_base(folder: Path) -> Path | None:
+    """The folder the manifest's paths are relative to: ``folder`` itself or one below it.
+
+    A delivery may keep its ``SHA256SUMS`` above the tree its paths start from. Recomputing
+    against the wrong base would keep every old hash and still look done, so the base must
+    resolve every entry. None when there is no manifest.
+    """
     manifest = folder / MANIFEST
     if not manifest.is_file():
+        return None
+    names = [name for _, _, name in _manifest_entries(manifest) if name is not None]
+    for base in [folder, *sorted(p for p in folder.rglob("*") if p.is_dir())]:
+        if all((base / name).is_file() for name in names):
+            return base
+    missing = [name for name in names if not (folder / name).is_file()]
+    raise ManifestError(
+        f"{manifest} lists files that resolve from no folder under {folder}, e.g. "
+        f"{', '.join(missing[:3])}; fix the manifest before purging"
+    )
+
+
+def _rewrite_manifest(folder: Path, base: Path | None) -> None:
+    """Recompute every entry of ``folder/SHA256SUMS`` (same names, same order)."""
+    manifest = folder / MANIFEST
+    if base is None:
         logs = sorted(p for p in folder.rglob("*.log") if p.is_file())
         lines = [f"{_sha256(p)}  {p.relative_to(folder).as_posix()}" for p in logs]
     else:
-        lines = []
-        for entry in manifest.read_text(encoding="utf-8").splitlines():
-            if "  " not in entry and " *" not in entry:
-                lines.append(entry)
-                continue
-            sep = "  " if "  " in entry else " *"
-            name = entry.split(sep, 1)[1]
-            target = folder / name
-            lines.append(f"{_sha256(target)}{sep}{name}" if target.is_file() else entry)
+        lines = [
+            line if name is None else f"{_sha256(base / name)}{sep}{name}"
+            for line, sep, name in _manifest_entries(manifest)
+        ]
     manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -116,6 +145,7 @@ def purge_devices(
     if not apply or not counts:
         return counts
 
+    base = _manifest_base(folder)  # refuses before any file changes
     manifest, delivered = folder / MANIFEST, folder / AS_DELIVERED
     if manifest.is_file() and not delivered.exists():
         delivered.write_bytes(manifest.read_bytes())
@@ -127,7 +157,7 @@ def purge_devices(
             if not _named(line) & devices
         ]
         path.write_bytes(b"".join(kept))
-    _rewrite_manifest(folder)
+    _rewrite_manifest(folder, base)
 
     total = sum(counts.values())
     label = ", ".join(str(d) for d in sorted(devices))
@@ -140,9 +170,9 @@ def purge_devices(
         "",
         *[f"- `{name}`: {n}" for name, n in counts.items()],
         "",
-        f"The delivery's manifest is kept as `{AS_DELIVERED}`; `{MANIFEST}` matches the cleaned "
-        "files. The device is listed under `beacons.purged_devices` in `local.yaml`, so the ingest "
-        "refuses a re-import that restores the lines.",
+        f"The delivery's manifest is kept as `{AS_DELIVERED}`; `{MANIFEST}` was recomputed for "
+        "the cleaned files. List the device under `beacons.purged_devices` in `local.yaml` so the "
+        "ingest refuses a re-import that restores the lines.",
         "",
         "Ruling: [unknown: who ruled, when, and why]",
         "",
