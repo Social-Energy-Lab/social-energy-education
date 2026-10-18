@@ -21,8 +21,14 @@ The measures:
   with partners of a known group, with the share expected if everyone present mixed at random:
   ``(N - n_g) / (N - 1)``, ``N`` people present with a known group, ``n_g`` of them in the
   person's own group (the person included).
-* **New ties per day** (C3-style): ties a pair forms for the first time, on days after the first
-  ``burn_in_days``, per present day after them.
+* **New ties per day** (C3-style, first definition): ties a pair forms for the first time, on days
+  after the first ``burn_in_days``, per present day after them.
+* **New partners per day** (C3-style): distinct partners whose first tie *with the person*, on the
+  person's own present days, falls after the first ``burn_in_days``, counted over all days, per
+  present day after them. Unlike the first definition, a pair's tie on a day one side was absent
+  does not use up that side's first meeting.
+* **Partners per day** (C3-style, no burn-in): distinct partners tied on the person's present
+  days, per present day.
 * **Event rate** (C4-style): events per exposure hour, with removed bins (e.g. lost windows) taken
   out of both the events and the hours.
 
@@ -120,7 +126,8 @@ def close_contact_outcomes(
     Only ties between two of ``people`` on one of ``days`` count, and only on the person's
     present days. Columns: ``entity``, ``days_present``, ``strength_min_per_day``,
     ``close_minutes``, ``cross_minutes``, ``cross_share``, ``cross_share_expected``,
-    ``days_after_burn_in``, ``new_ties``, ``new_ties_per_day``. A measure without a denominator
+    ``days_after_burn_in``, ``new_ties``, ``new_ties_per_day``, ``new_partners``,
+    ``new_partners_per_day``, ``partners``, ``partners_per_day``. A measure without a denominator
     (no present day, no group, no tie minutes with a known group) is null.
     """
     days = sorted(set(days))
@@ -190,6 +197,13 @@ def close_contact_outcomes(
         .agg(pl.len().alias("days_after_burn_in"))
     )
 
+    # C3 by partner: each person's first tie with each partner, on the person's present days.
+    met = ends.group_by("entity", "other").agg(pl.col("day").min())
+    partners = met.group_by("entity").agg(
+        pl.len().alias("partners"),
+        pl.col("day").is_in(after).sum().alias("new_partners"),
+    )
+
     has_group = pl.col("entity").is_in(pool["entity"].implode())
     return (
         who.join(strength, on="entity", how="left")
@@ -197,8 +211,11 @@ def close_contact_outcomes(
         .join(expected, on="entity", how="left")
         .join(after_days, on="entity", how="left")
         .join(new, on="entity", how="left")
+        .join(partners, on="entity", how="left")
         .with_columns(
             pl.col("days_present").fill_null(0),
+            pl.col("partners").fill_null(0),
+            pl.col("new_partners").fill_null(0),
             pl.col("days_after_burn_in").fill_null(0),
             pl.col("new_ties").fill_null(0),
             pl.when(has_group).then(pl.col("cross_minutes").fill_null(0)).alias("cross_minutes"),
@@ -210,6 +227,12 @@ def close_contact_outcomes(
             pl.when(pl.col("days_after_burn_in") > 0)
             .then(pl.col("new_ties") / pl.col("days_after_burn_in"))
             .alias("new_ties_per_day"),
+            pl.when(pl.col("days_after_burn_in") > 0)
+            .then(pl.col("new_partners") / pl.col("days_after_burn_in"))
+            .alias("new_partners_per_day"),
+            pl.when(pl.col("days_present") > 0)
+            .then(pl.col("partners") / pl.col("days_present"))
+            .alias("partners_per_day"),
         )
         .select(
             "entity",
@@ -222,6 +245,10 @@ def close_contact_outcomes(
             "days_after_burn_in",
             "new_ties",
             "new_ties_per_day",
+            "new_partners",
+            "new_partners_per_day",
+            "partners",
+            "partners_per_day",
         )
     )
 
