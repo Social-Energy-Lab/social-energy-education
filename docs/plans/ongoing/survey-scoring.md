@@ -1,16 +1,16 @@
 # Survey ingest and scoring (SurveyJS → scale scores)
 
 **Priority:** high
-**Gate:** blocked:confirmed reverse-keying list and the live B19/B20 slider range (_team/questions.md #7–8) (recheck 2026-10-30)
-**Next:** fill the research team's answers into `studies/dsa-2026/survey_codebook.yaml` (the `pending` list: reverse keys, B19/B20 range, old-code mapping, min-items rule, subscales), flipping each answered entry's status to `confirmed`. Then, once the analysis plan is signed and frozen, set `survey.analysis_plan_frozen` in `study.yaml` and run `social-energy score-survey studies/dsa-2026/study.yaml`. Do not score before the freeze, and do not join scores to beacon outcomes before it either.
+**Gate:** blocked:the live B19/B20 slider range from the research team, and the analysis-plan freeze (recheck 2026-10-30)
+**Next:** Álvaro decides what to do with the few old-code answers (the renames stay `inferred`: the version check had too few answers for a verdict; private note `notes/survey-checks-2026-10-18.md`). Fill the B19/B20 range into `studies/dsa-2026/survey_codebook.yaml` when the team answers. Then, once the analysis plan is signed and frozen, set `survey.analysis_plan_frozen` in `study.yaml` and run `social-energy score-survey studies/dsa-2026/study.yaml`. Do not score before the freeze, and do not join scores to beacon outcomes before it either.
 
 **Goal:** `social_energy.survey` flattens a SurveyJS export into one row per respondent and computes validated scale scores from a public codebook.
 
 ## Handoff
 
-- **Branch:** `feat/survey-scoring` (not pushed; for review)
-- **Done:** ingest (`ingest_zeitgeist`, `ingest-survey`). Scoring: `social_energy.survey.codebook` (pydantic, `extra="forbid"`) and `social_energy.survey.score` (`validate_against`, `recode`, `resolve_submissions`, `score`, `reliability`, `score_survey`), and `social-energy score-survey`, which writes `derived/survey/scoring/{scores,reliability,submissions}.parquet` + `qa.json`. Tests: a golden fixture with hand-derived expectations, a synthetic oracle (`synth.survey.generate_scored_survey`), and the CLI and its gate; each was shown to fail under a deliberate mutation of the code. The DSA 2026 codebook covers every code in the real export, and every codebook code exists in it (checked 2026-10-17, codes only, nothing scored). Observed values fit every codebook range.
-- **Handoff:** answers from the research team go into the codebook only, never into the code. `score-survey` exits 3 until `survey.analysis_plan_frozen` is set. The study-ID correction table is private: a CSV under the data root, named in `local.yaml` (`docs/context/data-layout.md`). It waits on the team's mapping table (`ongoing/dsa-2026-spine.md`). Every score row carries `provisional` while any entry it rests on is unconfirmed.
+- **Branch:** `feat/survey-picks` (not pushed; for review). `feat/survey-scoring` merged (#6).
+- **Done:** ingest (`ingest_zeitgeist`, `ingest-survey`). Scoring: `social_energy.survey.codebook` (pydantic, `extra="forbid"`) and `social_energy.survey.score` (`validate_against`, `recode`, `resolve_submissions`, `score`, `reliability`, `score_survey`), and `social-energy score-survey`, which writes `derived/survey/scoring/{scores,reliability,submissions}.parquet` + `qa.json`. Tests: a golden fixture with hand-derived expectations, a synthetic oracle (`synth.survey.generate_scored_survey`), and the CLI and its gate; each was shown to fail under a deliberate mutation of the code. The DSA 2026 codebook covers every code in the real export, and every codebook code exists in it (checked 2026-10-17, codes only, nothing scored). Observed values fit every codebook range. Pre-scoring checks (2026-10-18): `social_energy.survey.checks` (`reverse_key_check`, `version_equivalence`) and `social-energy check-survey`, which writes `derived/survey/checks/{reverse_keys,versions}.parquet` + `summary.json` and computes no score, so it is not gated. Run on the real export: the reverse-keying list agreed with the data for every scale (all `reverse_status: confirmed_by_check`); the version check gave no verdict. Results with numbers in the private note only.
+- **Handoff:** answers from the research team go into the codebook only, never into the code. `score-survey` exits 3 until `survey.analysis_plan_frozen` is set. The study-ID correction table is private: a CSV under the data root, named in `local.yaml` (`docs/context/data-layout.md`). It waits on the team's mapping table (`ongoing/dsa-2026-spine.md`). Every score row carries `provisional` while any entry it rests on is not settled (`confirmed`, `decided` or `confirmed_by_check`).
 
 ## Context
 
@@ -33,17 +33,28 @@ The baseline questionnaire is the 1st-person anchor for trust in life / lust for
 - Block C (self-efficacy, self-regulation, motivation) is scored under **lust for life**, block B under **trust in life**, following the questionnaire's own block logic. Mahdi, 2026-09-20.
 - **Repeated submissions:** the same typed study ID on several respondent records is the same person re-submitting after a connection drop. Keep the most complete submission per study ID (ties → later `surveys_resolved_at`), flag the others `duplicate_submission`, drop nothing silently. Mahdi, 2026-09-20. Implemented: "most complete" counts non-empty answered items; a remaining tie goes to the later export line. Duplicates are still scored and flagged. Reliability and per-item missingness use the kept submissions only.
 
+Decided by Álvaro, 2026-10-18 (provisional, may be revised; recorded in the codebook's `decisions`):
+
+- **Min items:** a scale score needs at least max(3, ceil(0.5 × k)) valid items, capped at k (k = items in the scale). Codebook `min_items_floor: 3`, `min_share: 0.5`.
+- **B16 and C5:** positive and negative affect subscales only; no PISA single index.
+- **B16 add-ons** (tired, listless, exhausted): their own `fatigue` subscale; if its reliability is poor it is reported item by item.
+- **B19, B20:** read item by item, exploratory only; never in a scale score or composite (`kind: items`).
+- **Reverse-keying:** the PISA 2022 handbook where it lists reversed items; where it is silent (C15, C18, `APSI_6`) the wording, confirmed by an empirical check: before reversal, each reversed item correlates negatively with the rest of its scale. Checked 2026-10-18: agreed for every scale.
+- **Old form-version codes** count as their current codes if the old code's answer distribution matches the current code's across form versions. Checked 2026-10-18: too few old-code answers for a verdict; the renames stay `inferred`.
+
 ## Open questions
 
 The codebook's `pending` list is the authoritative copy of these; every scoring run prints it.
 
+For the research team:
+
 - `[unknown: was a post-academy wave fielded, and with which blocks?]`
 - `[unknown: which B19/B20 slider range went live (1–10 or 0–10)?]` The export only shows values 1–10 `[inferred: 1–10]`.
-- `[unknown: confirmed reverse-keying list from the PISA handbook]` The candidates agree with the handbook's reversed items wherever it lists them. C15, C18 and `APSI_6` rest on wording alone.
-- `[unknown: do the old form-version codes stand for the same items on the same response format?]` (`GRADIENT_variable_C11/C21` → `ZGL_C11/C21_GRAD`, `SWE_05–07_resonance` → `SWE_05–07`)
-- `[unknown: is half the items (min_share 0.5) the right minimum for a scale score?]`
-- `[unknown: score the PISA single B16/C5 index too, or only the positive/negative subscales? Do the B16 add-ons join negative affect?]`
-- `[unknown: are B19 and B20 scales, or read item by item?]`
+
+For Álvaro:
+
+- `[unknown: keep the few old-code answers as their current codes, or set them aside?]` (`GRADIENT_variable_C11/C21` → `ZGL_C11/C21_GRAD`, `SWE_05–07_resonance` → `SWE_05–07`). The decided distribution check had too few answers for a verdict.
+- `[unknown: what alpha/omega counts as poor for the fatigue subscale?]` Belongs in the analysis plan.
 
 ## Tasks
 
@@ -53,5 +64,8 @@ The codebook's `pending` list is the authoritative copy of these; every scoring 
 - [x] Scale scores with a min-items rule; reliability (α/ω) per scale
 - [x] Study-ID normalisation + local correction table (code; the team's mapping table has not arrived, see `ongoing/dsa-2026-spine.md`)
 - [x] De-duplicate by study ID: keep the most complete submission, flag the rest, account for both in the QA dict
-- [ ] Fill in the research team's answers; flip statuses to `confirmed`
+- [x] Record the analyst's decisions (2026-10-18): min-items floor, subscales, B19/B20 as items
+- [x] Pre-scoring checks: reverse keys (item-rest) and old codes (distributions), `check-survey`; run on the real export, statuses set, numbers in the private note
+- [ ] Old-code answers: Álvaro's call
+- [ ] B19/B20 range from the research team
 - [ ] After the freeze: set `survey.analysis_plan_frozen`, run `score-survey`, check reliability and dimensionality for the adapted and own scales (R-SWE, B15, C5, B16 add-ons); counts go to the private study notes only
