@@ -57,7 +57,7 @@ ACCIDENTAL_S = 60
 ACCIDENTAL_N = 8
 #: Presses by another close participant within this many minutes count as a shared moment.
 SHARED_MIN = 5
-LAST_GOOD_DAY = "2026-08-23"  # battery decay after this; see copresence_by_phase notes
+LAST_GOOD_DAY = "2026-08-23"  # own-record coverage drops 24-27 Aug; see copresence_by_phase
 
 
 def local(s: str) -> pl.Expr:
