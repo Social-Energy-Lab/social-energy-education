@@ -73,12 +73,12 @@ Sundays follow a different schedule (brunch, afternoon plenum). Spontaneous, unp
 
 Machine-readable in [`study.yaml`](study.yaml). In short:
 
-- **13 Aug 11:30:** all person and location tags installed as participants arrive.
+- **13 Aug 11:30:** all tags flashed; person tags handed out as participants arrive, ~14:00–17:30. Analyses start at 18:00.
 - **14 Aug ~10:20:** the logger failed to write for a few minutes (data stayed on the tags).
-- **14 Aug 21:00:** all tags reflashed to enable eco mode, which had been missing before.
+- **14 Aug 21:00:** a command switched on eco auto-detection for person tags, forgotten at flashing (not a reflash; settings persist across restarts). It also reached some main-hall and dining-hall location tags.
 - **15 Aug ~01:30–11:45:** several outdoor tags found inactive and activated.
 - **15 Aug:** logger script updated after corrupted output was noticed.
-- **15 Aug 17:45:** main-hall and hall–dining-corridor location tags reflashed **without** eco mode and with the accelerometer off.
+- **15 Aug 17:45:** main-hall and hall–dining-corridor location tags set back to **no** eco mode, accelerometer off.
 - **15 Aug 20:17:** upstream logger fix for the ID 48–57 bug, in use from 22:00 (log lines up to 22:00 are affected).
 - **16 Aug:** outdoor tags wrapped or removed for rain at times.
 - **18 Aug 16:10:** a location tag added to a course room that had none before (room 2.01).

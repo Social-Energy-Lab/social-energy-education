@@ -108,16 +108,24 @@ Checked against our ingest on DSA 2026 (2026-10-02): every disagreement is expla
 
 ## Open questions
 
-- `[unknown: which firmware commit was flashed on each tag at camp start, and exactly when did runtime settings change?]` The firmware defaults are readable from the upstream repo (`dsa.conf`, `dsa_runtime.conf`, `shared/common_include.h`) and its history dates the production values to 2026-08-08..15. What the repo cannot say is which build went on which tag and which control commands were sent during the camp.
+- `[unknown: which firmware commit was flashed on each tag at camp start?]` The only runtime setting changed during the camp was eco auto-detection (see below, 2026-10-19). The firmware defaults are readable from the upstream repo (`dsa.conf`, `dsa_runtime.conf`, `shared/common_include.h`) and its history dates the production values to 2026-08-08..15. What the repo cannot say is which build went on which tag and which control commands were sent during the camp.
 - `[unknown: what is room 0.08 (location tag 115)?]`
-- `[unknown: does the tag board run its timer on the 32 kHz crystal (LFXO) or the RC oscillator (LFRC)? The firmware sets no clock source, so it is the board default; the measured drift suggests RC.]` Its label is `[unknown]` in `studies/dsa-2026/locations.yaml`.
+- **Timer clock source** `[inferred: RC oscillator (LFRC)]`. The firmware sets no clock source and the beacon team does not know which one the board uses (2026-10-19). The drift settles it in practice: about 21 s/day, from the beacon team's own analysis and, independently, from our readout anchors (234.9 ppm, `clock_rate_ppm`); a 32 kHz crystal would drift tens of ppm, not hundreds. Do not ask again; the correction does not depend on the answer.
 
 Settled since (2026-10-17, the firmware team's processing guide, kept in the private library):
 
 - The delivery has `Original/` (raw logs, never modified) and `Logs/` (working copies with the ID correction). The correction used three witnesses per disputed readout: partners' `ID2` values, a matching implied start after the cutoff, and the first time partners saw each candidate.
 - The deployment window is 2026-08-13 18:00 to 2026-08-29 11:00 local. Setup and test activity outside it must be cut by the observation window. Development kits 252–254 are not participants; ID 255 is a device missing from the ID table.
-- The beacon firmware did not change during the deployment. `[unknown: the study log records all tags being reflashed for eco mode on 14 Aug 21:00; was that a command switching motion detection on?]`
-- Which commands were sent when, which base button was used, battery changes, exchanged tags and which IDs are location tags are in the firmware team's own experiment log. `[unknown: can we have the experiment log?]`
+- The beacon firmware did not change during the deployment.
+
+Settled since (2026-10-19, the beacon team's answers; do not ask again):
+
+- **Settings persist in flash** across restarts. A restart loses unread records, never settings.
+- **14 Aug 21:00 was a command, not a flash.** The only setting changed during the camp was switching on eco auto-detection (motion detection) for person tags: it had been left off for location tags at flashing, as intended, and forgotten for person tags. The study log's "reflashed" is the wrong word. No person tag has an eco session before that time. The command also reached location tags near where it was sent: the main-hall tags 134–142 each enter eco once at 21:15, until their eco was switched off again on 15 Aug 17:45, and the dining-hall tags 145 and 148 go on entering eco until 19 and 22 Aug `[unknown: were tags 145 and 148 left with eco auto-detection on?]`.
+- **Deployment on 13 Aug:** all tags were flashed at 11:30 and handed out as participants arrived, from about 14:00 to about 17:30. Before the last arrivals a tag on a participant cannot be told apart from one waiting at the desk, so data before the 18:00 observation window is not used, and no sensitivity analysis starts earlier.
+- **The experiment log** (commands sent, base button used) is with the research team, not the beacon team; ask there `[unknown: can we have the experiment log?]`.
+- `[unknown: how was the September Drive copy made (it is 0.8% shorter than the delivery)? the beacon team will check]`
+- `[unknown: was the logger off between 16:02 and 18:59 on 13 Aug? the logs have no lines then]`
 
 Settled since (2026-10-02, firmware team and the v1.0.0 release):
 

@@ -48,7 +48,7 @@ Read off <https://github.com/thofbaur/network-beacon_NRF54L15> rather than asked
 
 ## Instruments
 
-1. Beacons: which firmware build went on which tag at camp start (the defaults are in the repo; the per-tag flashing and the control commands sent during the camp are not), and the times of runtime setting changes.
+1. Beacons: which firmware build went on which tag at camp start (the defaults are in the repo; the per-tag flashing and the control commands sent during the camp are not), and the times of runtime setting changes. *Partly answered by the beacon team (2026-10-19): one build, flashed at 11:30 on 13 Aug; the only runtime change was the 14 Aug 21:00 command for eco auto-detection; settings persist across restarts. The command log is with the research team. See `docs/context/instruments/beacons.md`.*
 2. Beacons: what is room 0.08 (location tag 115)? Its label is `[unknown]` in `studies/dsa-2026/locations.yaml`.
 3. Beacons: what exactly did the `_cleaned` step remove from the six 13–15 Aug logs, which script did it, and do the uncleaned originals still exist? The upstream repo has no cleaning script, so it was done by hand or by something unpublished. (The field log ties the cleaning to the corrupted-logger incident of 15 Aug, so the *why* is settled; the *what* is not.)
 4. Beacons: at which commit was the delivered `Output/` produced? The current head is 2026-09-17; if it was an older build, the reboot-backlog retry may not have been in it.
