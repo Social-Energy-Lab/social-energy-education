@@ -59,7 +59,7 @@ Scale scoring rules (min items, subscales, reverse-keying) are in [`../survey_co
 
 Every confirmatory result is rerun with:
 
-1. the observation window from arrival (13 Aug 11:30) instead of 18:00;
+1. ~~the observation window from arrival (13 Aug 11:30)~~ dropped (2026-10-19): tags were handed out until ~17:30, and before then a worn tag cannot be told from one at the desk (beacon team);
 2. the readouts our ID repair leaves ambiguous filled from the beacon team's hand split;
 3. no drift correction;
 4. close-contact thresholds of −70 and −75 dBm, and minimum durations of 15 and 30 minutes;
@@ -82,7 +82,7 @@ A result that flips under one of these is reported as fragile. Variants 4 and 5 
 | C1–C4 | Survey composites | — | ready to score once the plan is frozen; nothing open on the survey side except the freeze (reverse keys checked against the data, B19/B20 range confirmed, 2026-10-18) |
 | C1–C4 | Spine: remaining open questions (return times, lost tags) | research team | open |
 | C2 | Course membership per participant | — | in the spine (`people.yaml`, `Spine.people_frame()`) |
-| sensitivity 1 | Whether 13 Aug 11:30–18:00 is usable | beacon team | `[unknown: asked 2026-10-17]` |
+| sensitivity 1 | Whether 13 Aug 11:30–18:00 is usable | beacon team | answered 2026-10-19: no; sensitivity 1 dropped |
 | EDA | Device data and distribution plan | research team | open |
 
 ## Sign-off

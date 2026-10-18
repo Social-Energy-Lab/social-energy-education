@@ -15,9 +15,9 @@ beacons:
   firmware_commit: null   # [unknown: commit flashed at arrival]
   valid_from: 2026-08-12  # plausibility window for record timestamps
   valid_to: 2026-08-29
-  # What the analyses count. Start: the beacon team's deployment start (processing guide); tags
-  # were on participants from 11:30, and arrival afternoon holds setup and test activity.
-  # `[unknown: confirm with the beacon team that 13 Aug 11:30-18:00 is not usable]`
+  # What the analyses count. Start: the beacon team's deployment start (processing guide). Tags
+  # were flashed at 11:30 and handed out as participants arrived, ~14:00 to ~17:30, and a tag on a
+  # participant cannot be told apart from one at the desk before then (beacon team, 2026-10-19).
   # End: tags handed back (stricter than the guide's 11:00).
   observation_window: {start: "2026-08-13 18:00:00", end: "2026-08-29 09:00:00"}
   # Logger printed beacon IDs 48-57 as "0"-"9" on lines stamped up to 22:00 that day (firmware
@@ -30,7 +30,8 @@ beacons:
   storage_full_count: 215000
   # Tags count fast against the logger clock: 234.9 ppm (20.3 s/day), the median minimum-delay
   # slope over the cleanly fitted power cycles (estimate_clock_rate, 2026-10-17). One rate for all
-  # tags: the clean cycles agree closely. [unknown: crystal or RC oscillator on the tag board?]
+  # tags: the clean cycles agree closely. The beacon team's own analysis gives ~21 s/day too
+  # (2026-10-19); a drift this large points to the RC oscillator, not the crystal [inferred].
   clock_rate_ppm: 234.9
   # We ingest the raw logs (the delivery's Original/) and repair the IDs ourselves: clock anchors
   # first, then partners' ID2 witnesses. The beacon team's hand split of 13-15 Aug
@@ -43,9 +44,9 @@ beacons:
   eco_scan: { window_ms: 100, period_s: 300, inactivity_timeout_s: 1800 }
   settings_changes:
     - at: "2026-08-14 21:00"
-      what: all tags reflashed with eco mode enabled (was missing before)
+      what: command switching on eco auto-detection for person tags (forgotten at flashing; not a reflash, beacon team 2026-10-19); it also reached main-hall tags 134-142 and dining-hall tags 145 and 148
     - at: "2026-08-15 17:45"
-      what: main-hall and hall-dining corridor location tags (134-142) reflashed with eco mode off and accelerometer off
+      what: main-hall and hall-dining corridor location tags (134-142) set back to eco off and accelerometer off
   logger_incidents:
     - at: "2026-08-14 10:20"
       what: logger did not write to file for a few minutes; data remained on tags
