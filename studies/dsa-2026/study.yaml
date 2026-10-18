@@ -124,5 +124,7 @@ explorer:
     - {start: "2026-08-18 07:30", end: "2026-08-19 07:30", text: excursion day}
     - {start: "2026-08-22 07:30", end: "2026-08-23 07:30", text: "rotation day: courses present to each other"}
   shade:
-    - {start: "2026-08-24 07:30", end: "2026-08-28 07:30", label: "tag batteries failing: fewer scans, not fewer encounters"}
+    # [inferred] 2026-10-18: own-record coverage drops on these days while contact rates and RSSI
+    # hold, so the cause is readouts lost or not taken, not battery-limited scanning.
+    - {start: "2026-08-24 07:30", end: "2026-08-28 07:30", label: "fewer tag-hours with the tag's own records (readouts lost or not taken), not fewer encounters [inferred 2026-10-18]"}
   defaults: {close_rssi: -65, min_minutes: 15, window_minutes: 120}

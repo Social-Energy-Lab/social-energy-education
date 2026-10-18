@@ -1,8 +1,8 @@
 # Survey ingest and scoring (SurveyJS → scale scores)
 
 **Priority:** high
-**Gate:** blocked:the live B19/B20 slider range from the research team, and the analysis-plan freeze (recheck 2026-10-30)
-**Next:** Álvaro decides what to do with the few old-code answers (the renames stay `inferred`: the version check had too few answers for a verdict; private note `notes/survey-checks-2026-10-18.md`). Fill the B19/B20 range into `studies/dsa-2026/survey_codebook.yaml` when the team answers. Then, once the analysis plan is signed and frozen, set `survey.analysis_plan_frozen` in `study.yaml` and run `social-energy score-survey studies/dsa-2026/study.yaml`. Do not score before the freeze, and do not join scores to beacon outcomes before it either.
+**Gate:** blocked:the analysis-plan freeze (recheck 2026-10-30)
+**Next:** nothing is open on the survey side: every codebook entry is settled and its `pending` list is empty (2026-10-18). Once the analysis plan is signed and frozen, set `survey.analysis_plan_frozen` in `study.yaml` and run `social-energy score-survey studies/dsa-2026/study.yaml`. Do not score before the freeze, and do not join scores to beacon outcomes before it either.
 
 **Goal:** `social_energy.survey` flattens a SurveyJS export into one row per respondent and computes validated scale scores from a public codebook.
 
@@ -48,8 +48,10 @@ The codebook's `pending` list is the authoritative copy of these; every scoring 
 
 For the research team:
 
+None open. Answered:
+
 - No post-academy wave was fielded (Álvaro, 2026-10-18): DSA 2026 has the baseline only.
-- `[unknown: which B19/B20 slider range went live (1–10 or 0–10)?]` The export only shows values 1–10 `[inferred: 1–10]`.
+- B19/B20 slider range: 1–10, as implemented. Confirmed from the form definition the platform served (structuredVersion 18), checked 2026-10-18; codebook `range_status: confirmed`.
 
 For Álvaro:
 
@@ -66,6 +68,6 @@ For Álvaro:
 - [x] De-duplicate by study ID: keep the most complete submission, flag the rest, account for both in the QA dict
 - [x] Record the analyst's decisions (2026-10-18): min-items floor, subscales, B19/B20 as items
 - [x] Pre-scoring checks: reverse keys (item-rest) and old codes (distributions), `check-survey`; run on the real export, statuses set, numbers in the private note
-- [ ] Old-code answers: Álvaro's call
-- [ ] B19/B20 range from the research team
+- [x] Old-code answers: count as their current codes (Álvaro, 2026-10-18)
+- [x] B19/B20 range: 1–10, confirmed from the served form definition (2026-10-18)
 - [ ] After the freeze: set `survey.analysis_plan_frozen`, run `score-survey`, check reliability and dimensionality for the adapted and own scales (R-SWE, B15, C5, B16 add-ons); counts go to the private study notes only

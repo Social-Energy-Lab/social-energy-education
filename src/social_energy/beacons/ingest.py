@@ -28,6 +28,7 @@ from pathlib import Path
 import polars as pl
 
 from .cycles import power_cycles, real_seconds
+from .purge import check_purged
 
 # One or more commas after the ID: a hand-edited log can carry a doubled one.
 LINE_RE = r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),ID: ([^,]*),+(.*)$"
@@ -82,6 +83,9 @@ class BeaconConfig:
     # Tags' uptime counters run this many parts per million fast against the logger clock
     # (``cycles.estimate_clock_rate``). Records are dated as boot + uptime / (1 + rate).
     clock_rate_ppm: float = 0.0
+    # Devices whose records were removed from the raw logs by ruling (private: from local.yaml).
+    # Any raw line naming one as ID or ID2 makes the ingest refuse (``beacons.purge``).
+    purged_devices: tuple[int, ...] = ()
 
 
 @dataclass
@@ -576,7 +580,12 @@ def _contact_counts(contacts: pl.DataFrame) -> dict[str, int]:
 
 
 def ingest_logs(paths: Iterable[Path], config: BeaconConfig) -> BeaconTables:
-    """Ingest logger files in memory. For a whole camp, see ``ingest_logs_to``."""
+    """Ingest logger files in memory. For a whole camp, see ``ingest_logs_to``.
+
+    Raises ``PurgedDeviceError`` if a line names one of ``config.purged_devices``.
+    """
+    paths = list(paths)
+    check_purged(paths, config.purged_devices)
     lines, parsed = _parse(paths, config)
     readouts = _readouts(_readout_table(parsed, config.clock_rate_ppm), config)
     contacts, self_reports, eco, headerless = _records(
@@ -604,12 +613,14 @@ def ingest_logs_to(paths: Iterable[Path], config: BeaconConfig, out: Path) -> di
     ``readouts.parquet``, ``self_reports.parquet``, ``eco_sessions.parquet`` and contacts per local
     day of ``t`` as ``contacts/<YYYY-MM-DD>.parquet`` (``contacts/unplaced.parquet`` for records
     with no time). Copies of a record share its time, so duplicates are settled within each day.
+    Raises ``PurgedDeviceError``, before writing anything, if a line names a purged device.
     """
+    paths = list(paths)
+    check_purged(paths, config.purged_devices)
     out = Path(out)
     work = out / "_work"
     (out / "contacts").mkdir(parents=True, exist_ok=True)
     work.mkdir(parents=True, exist_ok=True)
-    paths = list(paths)
 
     # 1. Each file alone: readout structure, line counts, parsed records kept on disk.
     kinds: dict[str, int] = {}

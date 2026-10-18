@@ -470,10 +470,11 @@ def report() -> None:
                 xytext=(0, -4),
                 textcoords="offset points",
             )
-        # Tags ran low on battery from 24 Aug: fewer scans, not fewer encounters.
+        # 24-27 Aug: fewer tag-hours carry the tag's own records (readouts lost or not taken), so
+        # ties undercount; per-hour contact rates and RSSI are unchanged [inferred].
         ax.axvspan(labels.index("24") - 0.5, labels.index("27") + 0.5, color="#f1f0ec", zorder=0)
         ax.annotate(
-            "batteries failing",
+            "fewer own records",
             (labels.index("24") - 0.4, 0.02),
             fontsize=8,
             xycoords=("data", "axes fraction"),

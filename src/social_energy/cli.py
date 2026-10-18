@@ -7,7 +7,13 @@ social-energy init-spine studies/<id>/study.yaml
 social-energy ingest-beacons studies/<id>/study.yaml
     Parse every .log under $SOCIAL_ENERGY_DATA/<id>/raw/beacons/, one file at a time, into
     $SOCIAL_ENERGY_DATA/<id>/derived/beacons/: readouts, self_reports and eco_sessions parquet,
-    contacts/<local day>.parquet, plus qa.json.
+    contacts/<local day>.parquet, plus qa.json. Refuses (exit 4) while any log names a device
+    listed under beacons.purged_devices in the study's private local.yaml.
+
+social-energy purge-device studies/<id>/study.yaml --device N [--dry-run | --apply]
+    Count the lines naming device N (as ID or ID2) in every .log under raw/beacons/. With --apply,
+    remove them, keep the delivery manifest as SHA256SUMS.as-delivered, recompute SHA256SUMS and
+    append the counts to raw/beacons/IMPORT.md. Dry run by default.
 
 social-energy extract-acoustics studies/<id>/study.yaml [--delete-wavs]
     AudioMoth WAVs under raw/audiomoth/<device>/ -> derived/acoustics/<device>/.
@@ -56,7 +62,7 @@ import yaml
 
 from . import paths, zeitgeist
 from .acoustics import AcousticsConfig, extract_directory
-from .beacons import ingest_with_witnesses
+from .beacons import PurgedDeviceError, check_purged, ingest_with_witnesses, purge_devices
 from .study import StudyConfig
 from .survey import (
     ingest_zeitgeist,
@@ -125,13 +131,50 @@ def ingest_beacons(study: StudyConfig) -> int:
     if not logs:
         print(f"No .log files under {layout.raw / 'beacons'}")
         return 1
+    config = study.beacon_config()
+    try:
+        check_purged(logs, config.purged_devices)  # before derived/ is touched
+    except PurgedDeviceError as err:
+        print(err)
+        return 4
     out = layout.derived / "beacons"
     if out.exists():
         shutil.rmtree(out)
-    qa = ingest_with_witnesses(logs, study.beacon_config(), out)
+    qa = ingest_with_witnesses(logs, config, out)
     (out / "qa.json").write_text(json.dumps(qa, indent=2), encoding="utf-8")
     print(json.dumps(qa, indent=2))
     print(f"Wrote {out}")
+    return 0
+
+
+def purge_device(study: StudyConfig, devices: list[int], apply: bool = False) -> int:
+    folder = paths.study(study.study_id).raw / "beacons"
+    if not devices:
+        print("Name the device to purge with --device N.")
+        return 2
+    if not folder.is_dir():
+        print(f"No {folder}")
+        return 1
+    label = ", ".join(str(d) for d in devices)
+    counts = purge_devices(folder, devices, apply=apply)
+    if not counts:
+        print(f"No line under {folder} names device {label}.")
+        return 0
+    verb = "Removed" if apply else "Dry run: would remove"
+    print(f"{verb} {sum(counts.values())} lines naming device {label} (as ID or ID2):")
+    for name, n in counts.items():
+        print(f"  {name}: {n}")
+    if not apply:
+        print("Nothing changed. Re-run with --apply to clean the files.")
+        return 0
+    print(f"Kept the delivery manifest as SHA256SUMS.as-delivered; recomputed SHA256SUMS; "
+          f"recorded the purge in {folder / 'IMPORT.md'} (fill in the ruling).")  # fmt: skip
+    missing = sorted(set(devices) - set(study.purged_devices()))
+    if missing:
+        print(
+            f"Add {', '.join(map(str, missing))} to beacons.purged_devices in "
+            f"$SOCIAL_ENERGY_DATA/{study.study_id}/local.yaml so a re-import is refused."
+        )
     return 0
 
 
@@ -317,6 +360,7 @@ def explore(study: StudyConfig, port: int = 8765, open_browser: bool = True) -> 
 
 
 COMMANDS["explore"] = explore
+COMMANDS["purge-device"] = purge_device
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -328,11 +372,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--port", type=int, default=8765, help="explore: port on 127.0.0.1")
     parser.add_argument("--no-browser", action="store_true", help="explore: do not open a browser")
+    parser.add_argument(
+        "--device", type=int, action="append", default=[], help="purge-device: device ID"
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--dry-run", action="store_true", help="purge-device: only count lines (the default)"
+    )
+    mode.add_argument("--apply", action="store_true", help="purge-device: remove the lines")
     args = parser.parse_args(argv)
     try:
         study = StudyConfig.load(args.study_yaml)
         if args.command == "extract-acoustics":
             return extract_acoustics(study, delete_wavs=args.delete_wavs)
+        if args.command == "purge-device":
+            return purge_device(study, args.device, apply=args.apply)
         if args.command == "explore":
             return explore(study, port=args.port, open_browser=not args.no_browser)
         return COMMANDS[args.command](study)

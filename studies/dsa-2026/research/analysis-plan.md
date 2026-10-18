@@ -79,7 +79,7 @@ A result that flips under one of these is reported as fragile. Variants 4 and 5 
 
 | Needed for | Item | Owner | State |
 |---|---|---|---|
-| C1–C4 | Survey composites | — | ready to score once the plan is frozen; reverse keys checked against the data (2026-10-18). The B19/B20 slider range is still open but they sit outside the composites |
+| C1–C4 | Survey composites | — | ready to score once the plan is frozen; nothing open on the survey side except the freeze (reverse keys checked against the data, B19/B20 range confirmed, 2026-10-18) |
 | C1–C4 | Spine: remaining open questions (return times, lost tags) | research team | open |
 | C2 | Course membership per participant | — | in the spine (`people.yaml`, `Spine.people_frame()`) |
 | sensitivity 1 | Whether 13 Aug 11:30–18:00 is usable | beacon team | `[unknown: asked 2026-10-17]` |
