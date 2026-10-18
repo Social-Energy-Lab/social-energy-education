@@ -48,7 +48,7 @@ The codebook's `pending` list is the authoritative copy of these; every scoring 
 
 For the research team:
 
-- `[unknown: was a post-academy wave fielded, and with which blocks?]`
+- No post-academy wave was fielded (Álvaro, 2026-10-18): DSA 2026 has the baseline only.
 - `[unknown: which B19/B20 slider range went live (1–10 or 0–10)?]` The export only shows values 1–10 `[inferred: 1–10]`.
 
 For Álvaro:

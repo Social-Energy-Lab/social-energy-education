@@ -56,7 +56,7 @@ Read off <https://github.com/thofbaur/network-beacon_NRF54L15> rather than asked
 6. AudioMoth: sample rate and gain, exact schedules per device per day, and do the WAVs still exist? (They must be deleted after feature extraction.)
 7. Survey: the **confirmed reverse-keying list**. The candidates in `docs/context/instruments/survey.md` are inferred from wording, and scoring needs the confirmed list.
 8. Survey: three form versions (16, 17, 18) were live. What changed between them? Do the old codes map one-to-one onto the new ones (`GRADIENT_variable_C11/C21` → `ZGL_C11_GRAD/ZGL_C21_GRAD`; what were `SWE_05–07_resonance`)? Did B19/B20 run as 1–10 sliders (the export shows only 1–10)?
-9. Survey and AI interviews: was a **post-academy wave** fielded (another platform agent), and with which blocks?
+9. ~~Survey and AI interviews: was a post-academy wave fielded?~~ No (Álvaro, 2026-10-18).
 10. Interviews: coding tool and export format (only if coded segments will be analysed alongside sensors).
 11. Future field phases: which tool will the on-site researcher use for a structured field log (laptop spreadsheet, phone form)?
 
