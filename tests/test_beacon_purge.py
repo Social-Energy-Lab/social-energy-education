@@ -21,11 +21,13 @@ import yaml
 from social_energy import cli
 from social_energy.beacons import (
     BeaconConfig,
+    ManifestError,
     PurgedDeviceError,
     find_purged_lines,
     ingest_logs,
     ingest_logs_to,
     ingest_with_witnesses,
+    purge_devices,
 )
 from social_energy.study import StudyConfig
 
@@ -211,3 +213,43 @@ def test_purge_device_apply_cleans_logs_and_records_it(tmp_path, monkeypatch, ca
     # A second purge keeps the first, as-delivered manifest.
     assert cli.main(["purge-device", str(path), "--device", "147", "--apply"]) == 0
     assert (raw / "SHA256SUMS.as-delivered").read_text(encoding="utf-8") == delivered
+
+
+def _manifest(folder: Path, base: Path) -> None:
+    lines = [
+        f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(base).as_posix()}"
+        for p in sorted(folder.rglob("*.log"))
+    ]
+    (folder / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_a_manifest_relative_to_a_subfolder_is_recomputed_there(tmp_path):
+    # A delivery whose SHA256SUMS sits above the folder its paths are relative to.
+    folder = tmp_path / "ref"
+    _logs(folder / "Data" / "raw")
+    _manifest(folder, base=folder / "Data")
+    purge_devices(folder, [14], apply=True)
+    for line in (folder / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
+        digest, name = line.split("  ", 1)
+        assert hashlib.sha256((folder / "Data" / name).read_bytes()).hexdigest() == digest
+    delivered = (folder / "SHA256SUMS.as-delivered").read_text(encoding="utf-8")
+    assert delivered != (folder / "SHA256SUMS").read_text(encoding="utf-8")
+
+
+def test_a_manifest_that_resolves_nowhere_is_refused_before_any_file_changes(tmp_path):
+    folder = tmp_path / "ref"
+    _logs(folder)
+    (folder / "SHA256SUMS").write_text("0" * 64 + "  elsewhere/a.log\n", encoding="utf-8")
+    with pytest.raises(ManifestError, match=r"elsewhere/a\.log"):
+        purge_devices(folder, [14], apply=True)
+    assert (folder / "a.log").read_text(encoding="utf-8") == A_LOG
+
+
+def test_the_record_does_not_claim_the_device_is_listed_in_local_yaml(tmp_path):
+    folder = tmp_path / "ref"
+    _logs(folder)
+    _manifest(folder, base=folder)
+    purge_devices(folder, [14], apply=True)
+    record = (folder / "IMPORT.md").read_text(encoding="utf-8")
+    assert "is listed under" not in record
+    assert "beacons.purged_devices" in record
