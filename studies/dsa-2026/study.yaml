@@ -103,7 +103,7 @@ survey:
   codebook: survey_codebook.yaml
   # Scales are scored only after research/analysis-plan.md is signed and frozen. score-survey
   # refuses until this holds the freeze date and commit.
-  analysis_plan_frozen: null  # [unknown: when is the analysis plan signed off? set "<date> <commit>"]
+  analysis_plan_frozen: "2026-10-19 109bc50"  # signed by Álvaro (analysis team)
 
 # How the explorer (social_energy.explorer) presents this study.
 explorer:
