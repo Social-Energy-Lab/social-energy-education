@@ -19,12 +19,14 @@ zeitgeist = ["psycopg[binary]>=3.2"]
 analysis = [
     "matplotlib>=3.11.2",
     "networkx>=3.7",
+    "statsmodels>=0.14",
 ]
 
 [dependency-groups]
 dev = [
   "pytest>=8",
   "ruff>=0.6",
+  "statsmodels>=0.14",
 ]
 
 [build-system]
