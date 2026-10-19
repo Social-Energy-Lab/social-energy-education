@@ -355,7 +355,8 @@ def main() -> None:
                 "episodes_outside_worn": episodes.height - counted_worn,
             }
             q[f"c4_correlations_{rule}"] = c4_correlations(r)
-    both = rates[(None, "main")].join(rates[(None, "7min")], on="entity", suffix="_7")
+    m = variants["main"]["ingest"]
+    both = rates[(m, "main")].join(rates[(m, "7min")], on="entity", suffix="_7")
     rated = both.drop_nulls(["presses_per_hour", "presses_per_hour_7"])
     qa["c4_accidental_7min_vs_main"] = {
         "people_with_changed_count": int(
