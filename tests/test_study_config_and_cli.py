@@ -1,5 +1,6 @@
 """Study config loading and the CLI that turns local raw data into derived tables."""
 
+import dataclasses
 import json
 from datetime import date, datetime
 from pathlib import Path
@@ -119,3 +120,44 @@ def test_explorer_phase_wraps_past_midnight():
     assert names[ex.phase_of(time(7, 29))] == "night"
     assert names[ex.phase_of(time(7, 30))] == "morning"
     assert names[ex.phase_of(time(23, 0))] == "late"
+
+
+def test_ingest_beacons_with_a_changed_config_writes_only_its_own_folder(tmp_path, monkeypatch):
+    # A camp whose tags count 500 ppm fast: dating with rate 0 instead moves its records.
+    data_root = tmp_path / "data-root"
+    camp = generate(CampSpec(clock_rate_ppm=500), data_root / "synthetic-camp")
+    monkeypatch.setenv("SOCIAL_ENERGY_DATA", str(data_root))
+    study = StudyConfig.load(_study_yaml(tmp_path, camp))
+    derived = data_root / "synthetic-camp" / "derived"
+    fast = dataclasses.replace(study.beacon_config(), clock_rate_ppm=500)
+    no_drift = dataclasses.replace(fast, clock_rate_ppm=0)
+
+    assert cli.ingest_beacons(study, fast, derived / "fast" / "beacons") == 0
+    before = pl.read_parquet(derived / "fast" / "beacons" / "contacts" / "*.parquet")
+    alt = derived / "sensitivity" / "no_drift" / "beacons"
+    assert cli.ingest_beacons(study, no_drift, alt) == 0
+    after = pl.read_parquet(derived / "fast" / "beacons" / "contacts" / "*.parquet")
+    assert after.equals(before)
+    moved = pl.read_parquet(alt / "contacts" / "*.parquet")
+    assert moved.height == before.height
+    late = moved.join(before, on=["source", "line_no"], suffix="_fast").filter(
+        pl.col("t").is_not_null() & pl.col("t_fast").is_not_null()
+    )
+    shift = (late["t"] - late["t_fast"]).dt.total_seconds().abs()
+    assert shift.max() > 1
+    assert shift.max() <= 500e-6 * late["uptime_s"].max() + 1  # rate x span of a power cycle
+    assert json.loads((alt / "qa.json").read_text())["contacts"] == moved.height
+
+
+def test_ingest_beacons_refuses_a_changed_config_in_the_main_folder(tmp_path, monkeypatch):
+    data_root = tmp_path / "data-root"
+    camp = generate(CampSpec(), data_root / "synthetic-camp")
+    monkeypatch.setenv("SOCIAL_ENERGY_DATA", str(data_root))
+    study = StudyConfig.load(_study_yaml(tmp_path, camp))
+    changed = dataclasses.replace(study.beacon_config(), clock_rate_ppm=0)
+    derived = data_root / "synthetic-camp" / "derived"
+    assert cli.ingest_beacons(study, changed) == 2
+    assert cli.ingest_beacons(study, changed, derived / "beacons") == 2
+    assert cli.ingest_beacons(study, changed, tmp_path / "elsewhere") == 2
+    assert not (derived / "beacons").exists()
+    assert not (tmp_path / "elsewhere").exists()
