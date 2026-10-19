@@ -148,6 +148,27 @@ class Spine:
                 return a.entity
         return None
 
+    def account_entities(self, kind: str) -> pl.DataFrame:
+        """Who holds each account of ``kind``, for records that carry no usable time.
+
+        A platform account (``zeitgeist:<uuid>``) belongs to one person for good; its interval
+        only orders a person's accounts. Records from such a platform cannot be placed in time,
+        so they are resolved by account: ``account`` (the key after ``kind:``) and ``entity``.
+        An account assigned to more than one entity cannot be resolved this way and gets a null
+        ``entity``; the caller decides what to do with it.
+        """
+        held: dict[str, set[str]] = {}
+        for a in self.assignments:
+            if a.device_kind == kind:
+                held.setdefault(a.device.split(":", 1)[1], set()).add(a.entity)
+        return pl.DataFrame(
+            {
+                "account": list(held),
+                "entity": [next(iter(e)) if len(e) == 1 else None for e in held.values()],
+            },
+            schema={"account": pl.String, "entity": pl.String},
+        )
+
     def consented(self, module: Module | str) -> set[str]:
         module = Module(module)
         return {p.id for p in self.people if module in p.consent}
