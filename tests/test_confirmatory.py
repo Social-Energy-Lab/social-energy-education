@@ -265,3 +265,16 @@ def test_flips():
 
 def test_suppress_below_five():
     assert suppress(4, 5) and not suppress(5, 5)
+
+
+@pytest.mark.parametrize("seed", [2, 38])
+def test_negbin_converges_on_small_samples_where_a_default_newton_run_diverges(seed):
+    # Found by search: statsmodels' default Newton run ends in NaN on both while reporting
+    # convergence, and Newton from the Poisson start still fails on seed 2.
+    small = generate_people(ConfirmatorySpec(n=75, groups=6, seed=seed, dispersion=0.5))
+    d = design(small.people, outcome="count", predictor="z_lust", covariates=["age", "female"],
+               fixed_effect="group", exposure="exposure")  # fmt: skip
+    fit = negbin(d)
+    assert fit.converged
+    assert all(math.isfinite(v) for v in (fit.estimate, fit.se, fit.p_two, fit.dispersion))
+    assert fit.dispersion > 0

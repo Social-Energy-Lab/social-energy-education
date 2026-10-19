@@ -208,6 +208,42 @@ def ols_hc3(d: Design, *, direction: int = 1, level: float = 0.95) -> Fit:
     )  # fmt: skip
 
 
+def _nb_fit(d: Design, start: np.ndarray | None):
+    """NB2 maximum likelihood that does not stop at a diverged Newton run.
+
+    Starts from a Poisson GLM (IRLS, which does not diverge) and dispersion 0.5 unless ``start``
+    is given; Newton first, then BFGS from the same start when Newton ends non-finite or
+    unconverged. Statsmodels' own default start can send Newton to NaN on small samples while
+    still reporting convergence.
+    """
+    import warnings
+
+    import statsmodels.api as sm
+    from statsmodels.discrete.discrete_model import NegativeBinomial
+
+    if d.offset is None:
+        raise ValueError("negbin needs an exposure offset")
+    _check(d)
+    model = NegativeBinomial(d.y, d.X, loglike_method="nb2", offset=d.offset)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        if start is None:
+            poisson = sm.GLM(d.y, d.X, family=sm.families.Poisson(), offset=d.offset).fit()
+            start = np.append(poisson.params, 0.5)
+        res = None
+        for method, maxiter in (("newton", 200), ("bfgs", 5000)):
+            res = model.fit(start_params=start, method=method, maxiter=maxiter, disp=0)
+            if _good(res):
+                break
+    return res
+
+
+def _good(res) -> bool:
+    return bool(res.mle_retvals.get("converged", False)) and bool(
+        np.isfinite(res.params).all() and np.isfinite(res.bse).all()
+    )
+
+
 def negbin(
     d: Design,
     *,
@@ -217,41 +253,22 @@ def negbin(
 ) -> Fit:
     """Negative binomial (NB2) of the count ``d.y`` with offset ``d.offset``; Wald inference.
 
-    ``start`` (coefficients then dispersion) speeds up repeated fits such as permutations.
+    ``start`` (coefficients then dispersion) speeds up repeated fits such as permutations. A fit
+    that does not converge to finite values is returned with ``converged`` false.
     """
-    import warnings
-
-    from statsmodels.discrete.discrete_model import NegativeBinomial
-
-    if d.offset is None:
-        raise ValueError("negbin needs an exposure offset")
-    _check(d)
-    model = NegativeBinomial(d.y, d.X, loglike_method="nb2", offset=d.offset)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        res = model.fit(start_params=start, method="newton", maxiter=200, disp=0)
-        if not res.mle_retvals.get("converged", False):
-            res = model.fit(start_params=start, method="bfgs", maxiter=2000, disp=0)
+    res = _nb_fit(d, start)
     b, se, p = float(res.params[1]), float(res.bse[1]), float(res.pvalues[1])
     lo, hi = (float(v) for v in res.conf_int(alpha=1 - level)[1])
     n, k = d.X.shape
     return Fit(
         "negbin", n, k, b, se, lo, hi, p, _one_sided(p, b, direction),
-        math.exp(b), math.exp(lo), math.exp(hi),
-        bool(res.mle_retvals.get("converged", False)), float(res.params[-1]),
+        math.exp(b), math.exp(lo), math.exp(hi), _good(res), float(res.params[-1]),
     )  # fmt: skip
 
 
 def negbin_params(d: Design) -> np.ndarray:
     """Fitted coefficients and dispersion, as ``start`` for further fits on the same design."""
-    import warnings
-
-    from statsmodels.discrete.discrete_model import NegativeBinomial
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        model = NegativeBinomial(d.y, d.X, loglike_method="nb2", offset=d.offset)
-        return np.asarray(model.fit(method="newton", maxiter=200, disp=0).params)
+    return np.asarray(_nb_fit(d, None).params)
 
 
 # --- error control --------------------------------------------------------------------------------

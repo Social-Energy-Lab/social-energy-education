@@ -403,7 +403,9 @@ def main() -> None:
     with pl.Config(tbl_rows=200, tbl_cols=30, fmt_str_lengths=60):
         print(json.dumps(qa, indent=2, default=str))
         print(reliability)
-        print(res_df)
+        print(res_df.select("test", "n", "estimate", "lo", "hi", "std_estimate", "std_lo",
+                            "std_hi", "p_one", "p_two", "p_one_holm", "perm_p_one", "converged",
+                            "fragile"))  # fmt: skip
         print(sens_df.select("variant", "test", "n", "estimate", "std_estimate", "p_one",
                              "p_one_holm", "significant", "flips"))  # fmt: skip
 
