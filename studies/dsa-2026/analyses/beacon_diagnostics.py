@@ -45,15 +45,15 @@ TYPICAL = [date(2026, 8, d) for d in range(14, 24)]
 INK, INK2 = "#0b0b0b", "#52514e"
 
 
-def out_dir() -> Path:
-    d = paths.study(cp.STUDY).derived / "analyses" / SLUG
+def out_dir(variant: str | None = None) -> Path:
+    d = cp.derived_root(variant) / "analyses" / SLUG
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def our_table(name: str) -> pl.DataFrame:
-    """A table of our ingest (``social-energy ingest-beacons``)."""
-    return pl.read_parquet(paths.study(cp.STUDY).derived / "beacons" / f"{name}.parquet")
+def our_table(name: str, variant: str | None = None) -> pl.DataFrame:
+    """A table of our ingest (``social-energy ingest-beacons``, or a sensitivity ingest)."""
+    return pl.read_parquet(cp.derived_root(variant) / "beacons" / f"{name}.parquet")
 
 
 def unsettled_windows(readouts: pl.DataFrame) -> pl.DataFrame:
@@ -90,15 +90,38 @@ def unsettled_windows(readouts: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def anchors() -> pl.DataFrame:
-    """Every readout with a clock anchor and a settled ID, with its power cycle."""
-    r = our_table("readouts").filter(
+def anchors(variant: str | None = None, clock_rate_ppm: float = CLOCK_RATE_PPM) -> pl.DataFrame:
+    """Every readout with a clock anchor and a settled ID, with its power cycle.
+
+    A sensitivity ingest passes its own ``variant`` and the clock rate it was dated with.
+    """
+    r = our_table("readouts", variant).filter(
         pl.col("current_timer").is_not_null() & (pl.col("id_status") != "ambiguous")
     )
     found = r.select(
         "beacon", pl.col("pc_time").alias("ts"), pl.col("current_timer").alias("timer")
     )
-    return power_cycles(found, restart_margin_s=RESTART_MARGIN_S, clock_rate_ppm=CLOCK_RATE_PPM)
+    return power_cycles(found, restart_margin_s=RESTART_MARGIN_S, clock_rate_ppm=clock_rate_ppm)
+
+
+def write_windows(
+    variant: str | None = None, clock_rate_ppm: float = CLOCK_RATE_PPM
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Write ``lost_windows.parquet`` and ``unsettled_windows.parquet`` for one ingest.
+
+    Lost windows: a restart wipes what the tag held, so a press or a one-sided measure inside one
+    cannot be observed and belongs outside the exposure. A readout can arrive without its header
+    (no anchor) and still drain the tag, so a window starts at the last delivery of records, not
+    only at the last anchor. Unsettled windows: ``unsettled_windows``.
+    """
+    out = out_dir(variant)
+    cycles = anchors(variant, clock_rate_ppm)
+    raw_logs = sorted((paths.study(cp.STUDY).raw / "beacons" / "Logs").glob("*.log"))
+    lost = lost_windows(cycles, read_deliveries(raw_logs, cp.TZ))
+    lost.write_parquet(out / "lost_windows.parquet")
+    unsettled = unsettled_windows(our_table("readouts", variant))
+    unsettled.write_parquet(out / "unsettled_windows.parquet")
+    return lost, unsettled
 
 
 def resets(cycles: pl.DataFrame) -> pl.DataFrame:
@@ -553,14 +576,8 @@ def main() -> None:
     # ---- 9. Restarts: how often tags reset, and how much unread data each reset wiped -----------
     cycles = anchors()
     all_resets = resets(cycles)
-    # The lost windows, for every tag, in a table other analyses join: a press or a one-sided
-    # measure inside one cannot be observed, so it belongs outside the exposure.
-    # A readout can arrive without its header (no anchor) and still drain the tag, so the window
-    # starts at the last delivery of records, not only at the last anchor.
-    raw_logs = sorted((paths.study(cp.STUDY).raw / "beacons" / "Logs").glob("*.log"))
-    windows = lost_windows(cycles, read_deliveries(raw_logs, cp.TZ))
-    windows.write_parquet(out / "lost_windows.parquet")
-    unsettled_windows(our_table("readouts")).write_parquet(out / "unsettled_windows.parquet")
+    # The lost and unsettled windows, for every tag, in tables other analyses join.
+    windows, _ = write_windows()
     rs = all_resets.filter(pl.col("beacon").is_in(list(person_tags)))
     lw = windows.filter(pl.col("beacon").is_in(list(person_tags))).with_columns(
         pl.col("start", "end").dt.convert_time_zone(cp.TZ)

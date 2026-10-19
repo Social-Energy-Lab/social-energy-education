@@ -16,6 +16,7 @@ from .purge import (
     find_purged_lines,
     purge_devices,
 )
+from .reference import reference_labels
 from .witness import decide, ingest_with_witnesses, votes_from_tables, witness_votes
 
 __all__ = [
@@ -36,6 +37,7 @@ __all__ = [
     "purge_devices",
     "read_clock_anchors",
     "read_deliveries",
+    "reference_labels",
     "votes_from_tables",
     "witness_votes",
 ]

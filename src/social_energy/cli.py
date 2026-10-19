@@ -62,7 +62,13 @@ import yaml
 
 from . import paths, zeitgeist
 from .acoustics import AcousticsConfig, extract_directory
-from .beacons import PurgedDeviceError, check_purged, ingest_with_witnesses, purge_devices
+from .beacons import (
+    BeaconConfig,
+    PurgedDeviceError,
+    check_purged,
+    ingest_with_witnesses,
+    purge_devices,
+)
 from .study import StudyConfig
 from .survey import (
     ingest_zeitgeist,
@@ -125,19 +131,34 @@ def init_spine(study: StudyConfig) -> int:
     return 0
 
 
-def ingest_beacons(study: StudyConfig) -> int:
+def ingest_beacons(
+    study: StudyConfig, config: BeaconConfig | None = None, out: Path | None = None
+) -> int:
+    """Ingest every raw log into ``derived/beacons/`` with the study's own settings.
+
+    A sensitivity analysis passes ``config`` (the study's settings with one change) and ``out``, a
+    folder of its own under ``derived/``; ``derived/beacons/`` only ever holds the study's settings,
+    so a changed config without its own ``out`` is refused (exit 2).
+    """
     layout = paths.study(study.study_id)
+    main_out = layout.derived / "beacons"
+    out = main_out if out is None else Path(out)
+    if config is not None and out.resolve() == main_out.resolve():
+        print(f"A changed beacon config needs its own output folder, not {main_out}.")
+        return 2
+    if not out.resolve().is_relative_to(layout.derived.resolve()):
+        print(f"The ingest writes under {layout.derived}, not {out}.")
+        return 2
     logs = sorted((layout.raw / "beacons").rglob("*.log"))
     if not logs:
         print(f"No .log files under {layout.raw / 'beacons'}")
         return 1
-    config = study.beacon_config()
+    config = study.beacon_config() if config is None else config
     try:
         check_purged(logs, config.purged_devices)  # before derived/ is touched
     except PurgedDeviceError as err:
         print(err)
         return 4
-    out = layout.derived / "beacons"
     if out.exists():
         shutil.rmtree(out)
     qa = ingest_with_witnesses(logs, config, out)

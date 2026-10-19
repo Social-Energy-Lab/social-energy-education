@@ -73,8 +73,16 @@ _WINDOW = StudyConfig.load(STUDY_YAML).raw["beacons"]["observation_window"]
 WINDOW_START, HANDOVER = str(_WINDOW["start"]), str(_WINDOW["end"])
 
 
-def out_dir() -> Path:
-    d = paths.study(STUDY).derived / "analyses" / SLUG
+def derived_root(variant: str | None = None) -> Path:
+    """Where an ingest and its analysis tables live: ``derived/`` for the main analysis, and
+    ``derived/sensitivity/<variant>/`` (same layout: ``beacons/``, ``analyses/``) for an ingest
+    rebuilt with one setting changed (``sensitivity_ingests.py``)."""
+    derived = paths.study(STUDY).derived
+    return derived if variant is None else derived / "sensitivity" / variant
+
+
+def out_dir(variant: str | None = None) -> Path:
+    d = derived_root(variant) / "analyses" / SLUG
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -151,14 +159,14 @@ def resolve_contacts(raw: pl.DataFrame, spine: Spine, qa: dict) -> pl.DataFrame:
     return df
 
 
-def contact_days(layout: paths.StudyLayout, upstream: bool):
+def contact_days(layout: paths.StudyLayout, upstream: bool, variant: str | None = None):
     """Per local day: ``YYYYMMDD``, contacts (observer, observed, rssi, t UTC) and a QA dict."""
     if upstream:
         for csv in sorted((layout.raw / "beacons" / "Output").glob("contacts_*.csv")):
             raw = read_upstream_contacts(csv)
             yield re.search(r"(\d{8})", csv.name).group(1), raw, {"rows": raw.height}
         return
-    for part in sorted((layout.derived / "beacons" / "contacts").glob("20*.parquet")):
+    for part in sorted((derived_root(variant) / "beacons" / "contacts").glob("20*.parquet")):
         rows = pl.read_parquet(part)
         raw = rows.filter(pl.col("ok")).select(
             pl.col("beacon").alias("observer"), "observed", "rssi", "t"
@@ -168,14 +176,17 @@ def contact_days(layout: paths.StudyLayout, upstream: bool):
         yield part.stem.replace("-", ""), raw, qa
 
 
-def build() -> None:
+def build(variant: str | None = None, upstream: bool | None = None) -> None:
+    """Pairs, rooms and seen bins per day. ``variant`` reads and writes that sensitivity ingest's
+    folders (``derived_root``); ``upstream`` defaults to the ``--upstream`` flag."""
     study = StudyConfig.load(STUDY_YAML)
     layout = paths.study(STUDY)
     spine = Spine.load(layout.spine)
     thr = study.raw["beacons"]["rssi_threshold_dbm"]
-    out = out_dir()
+    out = out_dir(variant)
+    upstream = "--upstream" in sys.argv if upstream is None else upstream
     qa_all = {}
-    for day, raw, qa in contact_days(layout, upstream="--upstream" in sys.argv):
+    for day, raw, qa in contact_days(layout, upstream, variant):
         df = resolve_contacts(raw, spine, qa)
         del raw
         persons = df.filter(
@@ -247,8 +258,8 @@ def course_of(spine: Spine) -> dict[str, str]:
     }
 
 
-def load_all(prefix: str) -> pl.DataFrame:
-    frames = [pl.read_parquet(p) for p in sorted(out_dir().glob(f"{prefix}_*.parquet"))]
+def load_all(prefix: str, variant: str | None = None) -> pl.DataFrame:
+    frames = [pl.read_parquet(p) for p in sorted(out_dir(variant).glob(f"{prefix}_*.parquet"))]
     return pl.concat(frames).with_columns(
         camp_day_expr(pl.col("bin")).alias("day"), phase_expr(pl.col("bin")).alias("phase")
     )
