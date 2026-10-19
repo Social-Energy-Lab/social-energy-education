@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** ready
-**Next:** the analysis plan is frozen (2026-10-19, commit 109bc50): score the survey, join it to the outcomes by study ID, run the confirmatory models and sensitivities 2–7, then refresh the deck for the 3 Nov presentation
+**Next:** the confirmatory tests ran on 2026-10-19 (`studies/dsa-2026/analyses/confirmatory.py`, results in the private notes only); refresh the deck for the 3 Nov presentation
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 
@@ -57,6 +57,7 @@ While waiting on the research team (added 2026-10-17):
 - [ ] Ask the research team about C3 before sign-off: per-person new ties rank people very differently under the pre-specified threshold variants (see below).
 - [x] C3 candidates against the plan's stability rule (2026-10-18): `outcomes.py` writes `c3_partners` (distinct partners first tied after the burn-in, per present day after it), `c3_partners_all` (distinct partners per present day, no burn-in) and `c3_daily` (the first definition), and `rank_stability.csv` with each variant's Spearman against main. None of the three passes the rule; `c3_partners` turns out to equal `c3_daily` on these data. Numbers in the private half.
 - [x] C3 moved to the exploratory tier (2026-10-18): no candidate passed the stability rule, so the confirmatory family is C1, C2 and C4 (twice). A candidate on whole-camp close time (a pair counts as partners once its cumulative close minutes reach the minimum) can still be explored.
+- [x] Confirmatory tests C1, C2, C4 (twice) as the frozen plan specifies (2026-10-19): `social_energy.confirmatory` (composites, OLS with course fixed effects and HC3, NB2 with an exposure offset, Holm, within-course permutation) and `studies/dsa-2026/analyses/confirmatory.py` (settings, every sensitivity variant, fragility). Choices the plan leaves open are named in the script's docstring; results and deviations in the private notes.
 - [x] C4 sensitivity 6, exposure as worn time (2026-10-18): `social_energy.outcomes.worn_bins` (spine assignments less exclusion windows) gives `c4_worn`, less lost and unsettled windows, presses counted the same way. The negative relation of the rate with exposure remains on worn time. Numbers in the private half.
 - [x] C4 sensitivity 7, accidental runs as the beacon team described them (2026-10-18): variant `accidental_7min`, a chain is accidental only when it lasts 7 minutes, no count rule (`press_episodes(accidental_n=None)`). C4 barely moves. Numbers in the private half.
 - [ ] Acoustics: agree the feature set with the research team (frequency and level features only, per the ethics approval) and a WAV deletion date; then rerun the extraction with `--delete-wavs`. The WAVs are kept until then. Proposal (2026-10-18): keep levels (Leq, L10/L50/L90, band levels) and spectral shape (centroid, flatness) at one-second resolution and nothing from which speech could be rebuilt; delete on a fixed date after the group agrees. The in-person interview audio is in the same position (ethics: delete after transcription; transcripts exist, the audio is still on disk).
