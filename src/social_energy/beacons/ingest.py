@@ -71,6 +71,10 @@ class BeaconConfig:
     # (readout_key, beacon) settled by partners' ID2 sightings (``beacons.witness``). Only for
     # readouts the clock anchors left ambiguous; their status becomes "witnessed".
     id_overrides: tuple[tuple[str, int], ...] = ()
+    # (readout_key, beacon) from an outside source, such as a hand-relabelled copy of the logs
+    # (``beacons.reference_labels``). Used only where anchors and witnesses both leave a readout
+    # ambiguous; its status becomes "fallback". Empty by default: a sensitivity choice, not repair.
+    id_fallback: tuple[tuple[str, int], ...] = ()
     # Witness repair (``beacons.witness``): how far apart (s) a contact and a partner's sighting may
     # be, how many votes a decision needs, and the share the winning candidate must hold.
     witness_tolerance_s: int = 300
@@ -212,7 +216,9 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
     to, since stamps only run late. The candidate with a cycle (from unambiguous readouts) that
     started at most ``restart_margin_s`` before it, and no more than ``anchor_tolerance_s`` after
     (the cycle's start is estimated from late stamps too), is the right one.
-    Logs matching ``ids_split_in`` were split by hand and are trusted.
+    Logs matching ``ids_split_in`` were split by hand and are trusted. A readout the anchors leave
+    open takes its ``id_overrides`` label (witnessed), else its ``id_fallback`` label, else stays
+    ambiguous.
     """
     if config.ambiguous_id_cutoff is None:
         return readouts.with_columns(pl.lit("ok").alias("id_status"))
@@ -245,6 +251,14 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
     early = timedelta(seconds=config.anchor_tolerance_s)
     late = timedelta(seconds=config.restart_margin_s)
     overrides = dict(config.id_overrides)
+    fallback = dict(config.id_fallback)
+
+    def unsettled(key: str, n: int) -> tuple[int, str]:
+        if key in overrides:
+            return overrides[key], "witnessed"
+        if key in fallback:
+            return fallback[key], "fallback"
+        return n, "ambiguous"
 
     fixed_beacon, status = [], []
     for row in readouts.iter_rows(named=True):
@@ -254,9 +268,9 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
             continue
         n = int(row["header_id"])
         if row["anchor"] is None:
-            witnessed = row["readout_key"] in overrides
-            fixed_beacon.append(overrides[row["readout_key"]] if witnessed else n)
-            status.append("witnessed" if witnessed else "ambiguous")
+            beacon, why = unsettled(row["readout_key"], n)
+            fixed_beacon.append(beacon)
+            status.append(why)
             continue
         matches = [
             candidate
@@ -270,12 +284,10 @@ def _repair_ids(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFrame:
         if len(matches) == 1:
             fixed_beacon.append(matches[0])
             status.append("ok" if matches[0] == n else "repaired")
-        elif row["readout_key"] in overrides:
-            fixed_beacon.append(overrides[row["readout_key"]])
-            status.append("witnessed")
         else:
-            fixed_beacon.append(n)
-            status.append("ambiguous")
+            beacon, why = unsettled(row["readout_key"], n)
+            fixed_beacon.append(beacon)
+            status.append(why)
     return readouts.with_columns(
         pl.Series("beacon", fixed_beacon, dtype=pl.Int64),
         pl.Series("id_status", status, dtype=pl.String),
@@ -560,6 +572,7 @@ def _qa(
         "ids_repaired": int((readouts["id_status"] == "repaired").sum()),
         "ids_ambiguous": int((readouts["id_status"] == "ambiguous").sum()),
         "ids_witnessed": int((readouts["id_status"] == "witnessed").sum()),
+        "ids_fallback": int((readouts["id_status"] == "fallback").sum()),
         "reboots": int(readouts["reboot_before"].sum()),
         "contacts_not_ok": contacts["not_ok"],
         "contacts_unplaced_in_time": contacts["unplaced"],

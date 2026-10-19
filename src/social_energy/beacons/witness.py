@@ -193,10 +193,12 @@ def ingest_with_witnesses(paths: Iterable[Path], config: BeaconConfig, out: Path
     """``ingest_logs_to`` plus witness repair; also writes ``id_witness.parquet``.
 
     That table holds every ambiguous readout of the first pass with its votes and the ``beacon`` the
-    votes settled (null where they did not).
+    votes settled (null where they did not). ``config.id_fallback`` is left out of the first pass,
+    so the votes and the witnesses behind them are the same with or without it; it applies in the
+    last pass, to the readouts the votes leave open.
     """
     paths, out = list(paths), Path(out)
-    qa = ingest_logs_to(paths, config, out)
+    qa = ingest_logs_to(paths, dataclasses.replace(config, id_fallback=()), out)
     if not qa["ids_ambiguous"]:
         return qa
     votes = votes_from_tables(out, config)
@@ -206,7 +208,7 @@ def ingest_with_witnesses(paths: Iterable[Path], config: BeaconConfig, out: Path
         min_share=config.witness_min_share,
         min_peak_ratio=config.witness_min_peak_ratio,
     ).select("readout_key", "beacon")
-    if settled.height:
+    if settled.height or config.id_fallback:
         overrides = tuple(zip(settled["readout_key"], settled["beacon"], strict=True))
         shutil.rmtree(out)
         qa = ingest_logs_to(paths, dataclasses.replace(config, id_overrides=overrides), out)
