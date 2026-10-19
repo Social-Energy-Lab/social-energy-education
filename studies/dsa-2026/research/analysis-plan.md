@@ -1,6 +1,6 @@
 # Analysis plan: DSA 2026 (draft for the research team)
 
-**Status:** draft proposal, 2026-10-17; analysis choices set by Álvaro on 2026-10-18 (provisional, revisable until the freeze). Nothing here is agreed until the research team signs it off: `[inferred]` throughout. Once agreed, the plan is frozen (date and commit recorded below) **before the survey scales are scored**.
+**Status:** **frozen 2026-10-19** at commit 109bc50, signed by Álvaro for the analysis team, before any survey scale was scored. Drafted 2026-10-17; analysis choices set by Álvaro on 2026-10-18. From here on the confirmatory part is fixed: any change is a reported deviation, and any added analysis is exploratory.
 
 Builds on [`questions.md`](questions.md) (which questions this phase can speak to) and [`constructs.md`](constructs.md) (how the survey blocks map to trust and lust for life). The framing follows [`../../../docs/context/project.md`](../../../docs/context/project.md): we describe interactional, experiential and developmental *signatures* of social energy; we do not claim to measure it.
 
@@ -87,5 +87,5 @@ A result that flips under one of these is reported as fragile. Variants 4 and 5 
 
 ## Sign-off
 
-- Agreed by: `[unknown: research team sign-off]`
-- Frozen at: `[unknown: date and commit]`
+- Agreed by: Álvaro (analysis team), 2026-10-19
+- Frozen at: 2026-10-19, commit 109bc50 (the plan's text as of that commit; this sign-off block is the only later edit)

@@ -1,8 +1,8 @@
 # DSA 2026: first analyses of co-presence, self-reports and beacon health
 
 **Priority:** high
-**Gate:** blocked:Mahdi answers the spine questions in the private open_questions.md (recheck 2026-10-30)
-**Next:** settle the spine questions only Mahdi can answer (listed in the private open_questions.md), then refresh the deck for the research-group presentation on 2026-11-03 (biweekly review before it)
+**Gate:** ready
+**Next:** the analysis plan is frozen (2026-10-19, commit 109bc50): score the survey, join it to the outcomes by study ID, run the confirmatory models and sensitivities 2–7, then refresh the deck for the 3 Nov presentation
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 
