@@ -271,3 +271,28 @@ def test_people_frame_has_one_row_per_person_keyed_by_entity(spine_dir):
          "course": None, "age": None, "gender": None},
     ]  # fmt: skip
     assert frame.schema["age"] == pl.Int64
+
+
+def test_account_entities_resolve_timeless_accounts(spine_dir):
+    assignments = yaml.safe_load((spine_dir / "assignments.yaml").read_text())
+    assignments += [
+        # person 201 held two accounts in turn; person 202 one
+        {"device": "zeitgeist:u-1", "entity": "person:201",
+         "start": "2026-08-01 00:00:00", "end": "2026-08-05 10:00:00"},
+        {"device": "zeitgeist:u-2", "entity": "person:201", "start": "2026-08-05 10:00:00"},
+        {"device": "zeitgeist:u-3", "entity": "person:202", "start": "2026-08-01 00:00:00"},
+    ]  # fmt: skip
+    _dump(spine_dir, "assignments.yaml", assignments)
+    accounts = Spine.load(spine_dir).account_entities("zeitgeist").sort("account")
+    assert accounts.rows() == [("u-1", "person:201"), ("u-2", "person:201"), ("u-3", "person:202")]
+
+
+def test_an_account_held_by_two_people_does_not_resolve(spine_dir):
+    assignments = yaml.safe_load((spine_dir / "assignments.yaml").read_text())
+    assignments += [
+        {"device": "zeitgeist:u-1", "entity": "person:201",
+         "start": "2026-08-01 00:00:00", "end": "2026-08-05 10:00:00"},
+        {"device": "zeitgeist:u-1", "entity": "person:202", "start": "2026-08-05 10:00:00"},
+    ]  # fmt: skip
+    _dump(spine_dir, "assignments.yaml", assignments)
+    assert Spine.load(spine_dir).account_entities("zeitgeist").rows() == [("u-1", None)]
