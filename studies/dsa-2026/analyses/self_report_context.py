@@ -105,12 +105,14 @@ def press_episodes(
     *,
     accidental_s: int = ACCIDENTAL_S,
     accidental_n: int | None = ACCIDENTAL_N,
+    variant: str | None = None,
 ) -> tuple[pl.DataFrame, dict]:
     """Self-report press episodes of consenting participants, with a QA count per filter.
 
     The accidental-run limits default to this study's; a sensitivity variant passes its own.
+    ``variant`` reads that sensitivity ingest instead of the main one (``cp.derived_root``).
     """
-    ours = pl.read_parquet(layout.derived / "beacons" / "self_reports.parquet")
+    ours = pl.read_parquet(cp.derived_root(variant) / "beacons" / "self_reports.parquet")
     raw = ours.filter(pl.col("ok")).select(pl.col("beacon").cast(pl.Int64), "t").unique()
     qa = {"rows": ours.height, "rows_ok_unique": raw.height}
     df = raw.filter((pl.col("t") >= local(INSTRUCTION)) & (pl.col("t") < local(cp.HANDOVER)))
