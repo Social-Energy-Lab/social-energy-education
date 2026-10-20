@@ -18,7 +18,7 @@ study's dates, rooms or thresholds.
 from __future__ import annotations
 
 import math
-from collections.abc import Hashable, Sequence
+from collections.abc import Hashable, Iterable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -194,37 +194,111 @@ def person_rates(
 # --- co-located co-events -------------------------------------------------------------------------
 
 
+class CloseIndex:
+    """The ``(person, bin_start, other)`` triples of "``person`` had ``other`` at close range in
+    the bin starting at ``bin_start``", indexed for vectorised look-up (shuffles query it many
+    times). Bin starts are integer multiples of ``bin_size``."""
+
+    def __init__(self, close: Iterable[tuple[Hashable, int, Hashable]], *, bin_size: int):
+        triples = list(close)
+        names = sorted({p for p, _, _ in triples} | {o for _, _, o in triples}, key=repr)
+        self.codes = {n: i for i, n in enumerate(names)}
+        self.n = max(len(names), 1)
+        self.bin_size = bin_size
+        if triples:
+            b = np.array([b for _, b, _ in triples], dtype=np.int64) // bin_size
+            self.b0, self.nb = int(b.min()), int(b.max() - b.min() + 1)
+            p = self.code([t[0] for t in triples])
+            o = self.code([t[2] for t in triples])
+            self.keys = np.unique(self._key(p, b, o))
+        else:
+            self.b0, self.nb, self.keys = 0, 1, np.empty(0, dtype=np.int64)
+
+    def code(self, entities: Sequence[Hashable]) -> np.ndarray:
+        return np.array([self.codes.get(e, -1) for e in entities], dtype=np.int64)
+
+    def _key(self, p: np.ndarray, b: np.ndarray, o: np.ndarray) -> np.ndarray:
+        return (p * self.n + o) * self.nb + (b - self.b0)
+
+    def contains_codes(self, p: np.ndarray, bins: np.ndarray, o: np.ndarray) -> np.ndarray:
+        """Like :meth:`contains`, with people already coded and bins as bin starts."""
+        b = np.asarray(bins, dtype=np.int64) // self.bin_size
+        valid = (p >= 0) & (o >= 0) & (b >= self.b0) & (b < self.b0 + self.nb)
+        out = np.zeros(len(p), dtype=bool)
+        if self.keys.size and valid.any():
+            k = self._key(p[valid], b[valid], o[valid])
+            pos = np.clip(np.searchsorted(self.keys, k), 0, self.keys.size - 1)
+            out[valid] = self.keys[pos] == k
+        return out
+
+    def contains(self, person: Sequence[Hashable], bins: Sequence[int], other) -> np.ndarray:
+        """For each query: did ``person`` have ``other`` close in the bin starting at ``bins``?"""
+        return self.contains_codes(self.code(person), np.asarray(bins), self.code(other))
+
+
+@dataclass(frozen=True)
+class EventPairs:
+    """Pairs of events by different people within a window: input positions of the earlier
+    (``first``) and later (``second``) event, the gap in seconds, and whether the two people were
+    close in the bin of either event. Equal times keep input order."""
+
+    first: np.ndarray
+    second: np.ndarray
+    gap: np.ndarray
+    close: np.ndarray
+
+
+def co_event_pairs(
+    entity: Sequence[Hashable],
+    t: Sequence[int],
+    close: CloseIndex | set[tuple[Hashable, int, Hashable]],
+    *,
+    window: int,
+    bin_size: int,
+) -> EventPairs:
+    """Every pair of events by different people at most ``window`` seconds apart.
+
+    ``t`` is in integer seconds; ``close`` holds ``(person, bin_start, other)`` for every bin
+    (``bin_start = t - t % bin_size``) in which ``person`` had ``other`` at close range, as a set
+    or a prebuilt :class:`CloseIndex`. A pair is close when the two were close in the bin of
+    either event.
+    """
+    if not isinstance(close, CloseIndex):
+        close = CloseIndex(close, bin_size=bin_size)
+    t = np.asarray(t, dtype=np.int64)
+    order = np.argsort(t, kind="mergesort")
+    ts = t[order]
+    names = {e: i for i, e in enumerate(dict.fromkeys(entity))}
+    ent = np.array([names[e] for e in entity], dtype=np.int64)[order]
+    code = close.code(list(entity))[order]
+    n = len(ts)
+    hi = np.searchsorted(ts, ts + window, side="right")
+    counts = hi - np.arange(n) - 1
+    total = int(counts.sum())
+    a = np.repeat(np.arange(n), counts)
+    start = np.repeat(np.cumsum(counts) - counts, counts)
+    b = a + 1 + (np.arange(total) - start)
+    keep = ent[a] != ent[b]
+    a, b = a[keep], b[keep]
+    ba, bb = ts[a] - ts[a] % bin_size, ts[b] - ts[b] % bin_size
+    is_close = close.contains_codes(code[a], ba, code[b]) | close.contains_codes(
+        code[b], bb, code[a]
+    )
+    return EventPairs(order[a], order[b], ts[b] - ts[a], is_close)
+
+
 def co_events(
     entity: Sequence[Hashable],
     t: Sequence[int],
-    close: set[tuple[Hashable, int, Hashable]],
+    close: CloseIndex | set[tuple[Hashable, int, Hashable]],
     *,
     window: int,
     bin_size: int,
 ) -> tuple[int, int]:
     """Pairs of events by different people within ``window`` of each other, and how many of them
-    had the two people close.
-
-    ``t`` is in integer seconds; ``close`` holds ``(person, bin_start, other)`` for every bin
-    (``bin_start = t - t % bin_size``) in which ``person`` had ``other`` at close range. A pair
-    counts as close when the two were close in the bin of either event. Returns
-    ``(pairs_close, pairs_any)``.
-    """
-    t = np.asarray(t, dtype=np.int64)
-    order = np.argsort(t, kind="mergesort")
-    ts = t[order]
-    es = [entity[i] for i in order]
-    pairs_any = pairs_close = 0
-    for i in range(len(ts)):
-        j = i + 1
-        while j < len(ts) and ts[j] - ts[i] <= window:
-            if es[j] != es[i]:
-                pairs_any += 1
-                bi, bj = ts[i] - ts[i] % bin_size, ts[j] - ts[j] % bin_size
-                if (es[i], bi, es[j]) in close or (es[j], bj, es[i]) in close:
-                    pairs_close += 1
-            j += 1
-    return pairs_close, pairs_any
+    had the two people close (:func:`co_event_pairs`). Returns ``(pairs_close, pairs_any)``."""
+    p = co_event_pairs(entity, t, close, window=window, bin_size=bin_size)
+    return int(p.close.sum()), len(p.gap)
 
 
 def shuffle_events(
@@ -275,3 +349,82 @@ def null_compare(observed: float, null: Sequence[float], *, level: float = 0.95)
         float((z >= observed).mean()),
         len(z),
     )
+
+
+# --- group moments, who goes first, ratios clustered by day ---------------------------------------
+
+
+def group_sizes(entity: Sequence[Hashable], first: np.ndarray, second: np.ndarray) -> np.ndarray:
+    """Distinct people in each connected component of events joined by the pairs
+    ``(first[k], second[k])`` (e.g. the close pairs of :func:`co_event_pairs`). Events in no pair
+    are not a group; a chain counts as one component (single linkage)."""
+    parent = list(range(len(entity)))
+
+    def root(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for a, b in zip(np.asarray(first).tolist(), np.asarray(second).tolist(), strict=True):
+        ra, rb = root(a), root(b)
+        if ra != rb:
+            parent[rb] = ra
+    members: dict[int, set] = {}
+    for k in set(np.asarray(first).tolist()) | set(np.asarray(second).tolist()):
+        members.setdefault(root(k), set()).add(entity[k])
+    return np.array(sorted(len(m) for m in members.values()), dtype=np.int64)
+
+
+def first_mover_logit(diff: np.ndarray, *, max_iter: int = 50, tol: float = 1e-10) -> np.ndarray:
+    """Coefficients of P(this one first) = logistic(beta . (x_first - x_second)), from ordered
+    pairs (Bradley-Terry with covariates, no intercept, since the model must be symmetric).
+
+    ``diff`` is pairs x covariates: the first event's person minus the second's. Newton-Raphson;
+    NaN when it does not converge (e.g. complete separation).
+    """
+    d = np.atleast_2d(np.asarray(diff, dtype=float))
+    beta = np.zeros(d.shape[1])
+    for _ in range(max_iter):
+        p = 1 / (1 + np.exp(-(d @ beta)))
+        grad = d.T @ (1 - p)
+        hess = (d * (p * (1 - p))[:, None]).T @ d
+        try:
+            step = np.linalg.solve(hess, grad)
+        except np.linalg.LinAlgError:
+            return np.full(d.shape[1], NAN)
+        beta = beta + step
+        if np.max(np.abs(step)) < tol:
+            return beta
+    return np.full(d.shape[1], NAN)
+
+
+def cluster_ratio(
+    observed: np.ndarray,
+    expected: np.ndarray,
+    *,
+    n_boot: int = 4000,
+    seed: int = 0,
+    level: float = 0.95,
+) -> Interval | list[Interval]:
+    """Pooled ratio sum(observed) / sum(expected) with a percentile interval from resampling
+    clusters (rows, e.g. camp days) with replacement.
+
+    ``expected`` is typically the mean of a shuffled null per cluster. With 2-D input (clusters x
+    categories) one interval per category is returned, all from the same resampled clusters.
+    """
+    obs, exp_ = np.asarray(observed, dtype=float), np.asarray(expected, dtype=float)
+    one = obs.ndim == 1
+    if one:
+        obs, exp_ = obs[:, None], exp_[:, None]
+    k = obs.shape[0]
+    idx = np.random.default_rng(seed).integers(0, k, (n_boot, k))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        est = obs.sum(0) / exp_.sum(0)
+        draws = obs[idx].sum(1) / exp_[idx].sum(1)
+    out = []
+    for c in range(obs.shape[1]):
+        d = draws[:, c][np.isfinite(draws[:, c])]
+        lo, hi = np.quantile(d, [0.5 - level / 2, 0.5 + level / 2]) if d.size else (NAN, NAN)
+        out.append(Interval(float(est[c]), float(lo), float(hi), k))
+    return out[0] if one else out

@@ -10,8 +10,13 @@ import polars as pl
 import pytest
 
 from social_energy.exploratory import (
+    CloseIndex,
     bootstrap_mean,
+    cluster_ratio,
+    co_event_pairs,
     co_events,
+    first_mover_logit,
+    group_sizes,
     null_compare,
     person_rates,
     shuffle_events,
@@ -127,3 +132,69 @@ def test_null_compare():
     assert c.ratio == pytest.approx(6 / 5.5)
     assert c.share_null_at_least == pytest.approx(0.5)
     assert math.isnan(null_compare(1, [0, 0]).ratio)
+
+
+# --- round 2: the pairs themselves, group moments, who goes first, day-clustered ratios -----------
+
+
+def test_co_event_pairs_lists_each_pair_in_time_order_with_gap_and_co_location():
+    # The same events as test_co_events: within 300 s, six pairs, three close.
+    entity = ["a", "a", "b", "c", "d"]
+    t = [100, 200, 250, 500, 520]
+    close = CloseIndex({("a", 0, "b"), ("d", 300, "c")}, bin_size=300)
+    p = co_event_pairs(entity, t, close, window=300, bin_size=300)
+    got = sorted(zip(p.first.tolist(), p.second.tolist(), p.gap.tolist(), p.close.tolist(),
+                     strict=True))  # fmt: skip
+    assert got == [
+        (0, 2, 150, True),  # a100-b250
+        (1, 2, 50, True),  # a200-b250
+        (1, 3, 300, False),  # a200-c500, inclusive edge
+        (2, 3, 250, False),  # b250-c500
+        (2, 4, 270, False),  # b250-d520
+        (3, 4, 20, True),  # c500-d520, close in d's bin only
+    ]
+
+
+def test_co_event_pairs_keep_input_positions_when_times_are_unsorted():
+    # Input order is not time order: positions refer to the input, first is the earlier event.
+    p = co_event_pairs(["b", "a"], [400, 100], CloseIndex(set(), bin_size=300), window=600,
+                       bin_size=300)  # fmt: skip
+    assert (p.first.tolist(), p.second.tolist(), p.gap.tolist()) == ([1], [0], [300])
+
+
+def test_close_index_matches_triples_only():
+    idx = CloseIndex({("a", 0, "b"), ("b", 300, "a")}, bin_size=300)
+    hit = idx.contains(["a", "a", "b", "b", "z"], [0, 300, 300, 0, 0], ["b", "b", "a", "a", "a"])
+    assert hit.tolist() == [True, False, True, False, False]
+
+
+def test_group_sizes_are_distinct_people_per_connected_component():
+    # Events 0-1-2 chain (people a, b, a again) -> one component of 2 people; 3-4-5 a triangle of
+    # c, d, e -> 3 people; event 6 has no edge and is not a group.
+    entity = ["a", "b", "a", "c", "d", "e", "f"]
+    sizes = group_sizes(entity, np.array([0, 1, 3, 3, 4]), np.array([1, 2, 4, 5, 5]))
+    assert sorted(sizes.tolist()) == [2, 3]
+    assert group_sizes(entity, np.array([], dtype=int), np.array([], dtype=int)).size == 0
+
+
+def test_first_mover_logit_recovers_direction_and_is_zero_when_balanced():
+    # x_first - x_second: positive differences go first 3 times out of 4 -> log-odds per unit
+    # of difference = log(3) for |d| = 1 (pairs with d = +1 three times and d = -1 once).
+    d = np.array([[1.0], [1.0], [1.0], [-1.0]])
+    assert first_mover_logit(d)[0] == pytest.approx(math.log(3), abs=1e-6)
+    assert first_mover_logit(np.array([[1.0], [-1.0]]))[0] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_cluster_ratio_sums_then_resamples_clusters():
+    # Observed 2, 4, 6 against expected 1, 2, 3 per day -> ratio 2 in every resample.
+    r = cluster_ratio(np.array([2.0, 4.0, 6.0]), np.array([1.0, 2.0, 3.0]), n_boot=200, seed=1)
+    assert (r.estimate, r.lo, r.hi, r.n) == pytest.approx((2.0, 2.0, 2.0, 3))
+    # Uneven days: the pooled ratio is 12 / 6 = 2 (not the mean of daily ratios, 0 + 1 + 10/3
+    # over 3 = 1.44), and resamples spread around it.
+    u = cluster_ratio(np.array([0.0, 2.0, 10.0]), np.array([1.0, 2.0, 3.0]), n_boot=2000, seed=1)
+    assert u.estimate == pytest.approx(2.0)
+    assert u.lo < 2.0 < u.hi
+    # Several categories at once (days x categories).
+    m = cluster_ratio(np.array([[2.0, 1.0], [4.0, 1.0]]), np.array([[1.0, 1.0], [2.0, 1.0]]),
+                      n_boot=100, seed=0)  # fmt: skip
+    assert [i.estimate for i in m] == pytest.approx([2.0, 1.0])
