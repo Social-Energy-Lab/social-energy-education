@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import numpy as np
 import polars as pl
 import pytest
 
@@ -90,3 +91,70 @@ def test_settings_classify_bins(presses):
     s = presses.settings(placed, plenum)["setting"].to_list()
     assert s == ["course block", "other daytime", "KüA evening", "late evening", "night",
                  "meal time", "plenum"]  # fmt: skip
+
+
+@pytest.fixture(scope="module")
+def cascades():
+    return _load("exploratory_cascades")
+
+
+def test_tie_bands_count_days_with_enough_close_minutes(cascades):
+    # Pair (a, b): 12 close bins (60 min) on one camp day, 11 on the next -> tied 1 day -> band 1.
+    # Pair (a, c): only weak readings -> never close, so not in the table at all.
+    utc = ZoneInfo("UTC")
+    day1 = [datetime(2026, 8, 20, 10, 5 * k, tzinfo=utc) for k in range(12)]
+    day2 = [datetime(2026, 8, 21, 10, 5 * k, tzinfo=utc) for k in range(11)]
+    rows = [("a", t, "b", -60) for t in day1 + day2] + [("b", day1[0], "a", -60)]
+    rows += [("a", day1[0], "c", -80)]
+    ends = pl.DataFrame(rows, schema=["entity", "bin", "other", "max_rssi"], orient="row")
+    assert cascades.tie_bands(ends) == {("a", "b"): 1}
+
+
+def test_statistics_count_one_group_moment(cascades):
+    from datetime import date
+
+    from social_energy.exploratory import CloseIndex
+
+    # a, b, c press at 100, 150 and 200 s, all close to each other in bin 0; d presses alone at
+    # 1000 s. Co-located pairs: a-b (50 s), a-c (100 s), b-c (50 s); none with d.
+    presses = pl.DataFrame({
+        "entity": ["a", "b", "c", "d"], "ts": [100, 150, 200, 1000],
+        "day": [date(2026, 8, 20)] * 4, "phase": ["evening"] * 4,
+        "setting": ["KüA evening"] * 4, "group": ["participant"] * 4,
+    })  # fmt: skip
+    close = {(x, 0, y) for x in "abc" for y in "abc" if x != y}
+    kua = cascades.SETTINGS.index("KüA evening")
+    s = cascades.Setup(
+        presses=presses,
+        exposure=pl.DataFrame({"entity": list("abcd"), "bs": [0, 0, 0, 900]}),
+        close=CloseIndex(close, bin_size=300),
+        rssi={},
+        setting_of={("a", 0): kua, ("b", 0): kua, ("c", 0): kua, ("d", 900): kua},
+        band={("a", "b"): 3},
+        days=[date(2026, 8, 20)],
+    )
+    st = cascades.statistics(s, s.ts)
+    assert st["close"].tolist() == [[3.0]]
+    assert st["any"].tolist() == [[3.0]]  # d is 800 s or more from everyone
+    assert st["setting"][0, kua] == 3
+    assert st["phase"][0, cascades.PHASES.index("evening")] == 3
+    # Gaps 50, 50 (30-60 s band) and 100 (1-2 min band).
+    assert st["latency"][0].tolist() == [0, 0, 2, 1, 0, 0, 0]
+    assert st["size"][0].tolist() == [0, 1, 0, 0]  # one group of three people
+    assert st["triangles"].tolist() == [[1.0]]
+    assert st["tie"][0].tolist() == [2, 0, 0, 1]  # a-b in band 3, the others never tied
+    # Leaving the pair (a, b) out removes its press pair and breaks the triangle.
+    s.drop = {("a", "b")}
+    st = cascades.statistics(s, s.ts)
+    assert st["close"].tolist() == [[2.0]] and st["triangles"].tolist() == [[0.0]]
+
+
+def test_random_order_keeps_pairs_sharing_a_press_dependent(cascades, monkeypatch):
+    # Pairs (0, 1) and (0, 2) share press 0. Under random order of the three presses, press 0
+    # is before both others with probability 1/3, so both pairs keep their orientation 1/3 of
+    # the time; flipping pairs independently would give 1/4.
+    monkeypatch.setattr(cascades, "N_SHUFFLE", 6000)
+    o = pl.DataFrame({"i": [0, 0], "j": [1, 2]})
+    draws = list(cascades.random_order(o, np.random.default_rng(0)))
+    both_kept = np.mean([not f[0] and not f[1] for f in draws])
+    assert both_kept == pytest.approx(1 / 3, abs=0.02)

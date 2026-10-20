@@ -389,25 +389,23 @@ def ratios(r, label: str) -> pl.DataFrame:
     return pl.DataFrame(rows)
 
 
-def places(data: dict, spine: Spine) -> dict:
+def placed_settings(exposure: pl.DataFrame, spine: Spine) -> pl.DataFrame:
+    """Exposure bins with ``location``, ``zone`` (``unplaced`` when none) and ``setting``."""
     zone = {loc.ref: loc.zone for loc in spine.locations}
     rooms = cp.load_all("rooms").select("entity", "bin", "location")
-    placed = (
-        data["exposure"]
-        .join(rooms, on=["entity", "bin"], how="left")
-        .with_columns(
-            pl.col("location")
-            .replace_strict(zone, default=None)
-            .fill_null("unplaced")
-            .alias("zone")
-        )
+    placed = exposure.join(rooms, on=["entity", "bin"], how="left").with_columns(
+        pl.col("location").replace_strict(zone, default=None).fill_null("unplaced").alias("zone")
     )
     windows = event_windows(spine, known_only=False)
     plen = windows.filter(pl.col("kind") == "plenum").with_columns(
         pl.datetime_ranges(pl.col("start").dt.truncate(cp.BIN), pl.col("end"), interval=cp.BIN,
                            closed="left").alias("bin")
     ).explode("bin", empty_as_null=True).select("bin").unique()  # fmt: skip
-    placed = settings(placed, plen)
+    return settings(placed, plen)
+
+
+def places(data: dict, spine: Spine) -> dict:
+    placed = placed_settings(data["exposure"], spine)
     presses = data["presses"].join(placed.select("entity", "bin", "zone", "setting"),
                                    on=["entity", "bin"])  # fmt: skip
     out = {}
