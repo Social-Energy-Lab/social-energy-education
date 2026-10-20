@@ -4,6 +4,8 @@
 
 **Goal:** a checklist to agree with the beacon team before START-Stiftung or SUPER YOU, so that the losses and ambiguities met at DSA 2026 are designed out rather than repaired afterwards. Rules only; the evidence is in [`../../context/instruments/beacons.md`](../../context/instruments/beacons.md) and the private notes.
 
+The hypotheses planned for those phases, and which of the points below each one depends on, are in [`next-phase-preregistration.md`](next-phase-preregistration.md) (section "Instrument and procedure changes that would help").
+
 ## Firmware and logging
 
 - **Flush to flash often.** Records reach flash only when the RAM ring is nearly full, so a restart loses everything since the last readout. A periodic flush (or a much lower threshold) would turn hours of loss into minutes.

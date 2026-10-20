@@ -89,3 +89,7 @@ A result that flips under one of these is reported as fragile. Variants 4 and 5 
 
 - Agreed by: Álvaro (analysis team), 2026-10-19
 - Frozen at: 2026-10-19, commit 109bc50 (the plan's text as of that commit; this sign-off block is the only later edit)
+
+## Results
+
+Both tiers have run: the confirmatory tests on 2026-10-19 (`../analyses/confirmatory.py`) and the exploratory analyses on 2026-10-20 (`../analyses/exploratory_*.py`). The results, deviations and readings of open wording are in the private notes only (`$SOCIAL_ENERGY_DATA/dsa-2026/notes/confirmatory-2026-10-19.md` and `exploratory-*-2026-10-20.md`). Nothing above this section was changed. Hypotheses for the next phases: [`../../../docs/plans/ideas/next-phase-preregistration.md`](../../../docs/plans/ideas/next-phase-preregistration.md).

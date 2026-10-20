@@ -1,8 +1,8 @@
 # Survey ingest and scoring (SurveyJS → scale scores)
 
 **Priority:** high
-**Gate:** ready
-**Next:** the analysis plan was frozen on 2026-10-19 (commit 109bc50) and `survey.analysis_plan_frozen` is set: run `social-energy score-survey studies/dsa-2026/study.yaml`, then check reliability and dimensionality.
+**Gate:** none
+**Next:** check dimensionality of the adapted and own scales (R-SWE, B15, C5, B16 add-ons) on the scored export, and apply the fatigue rule (score only if alpha ≥ 0.70); counts to the private notes only
 
 **Goal:** `social_energy.survey` flattens a SurveyJS export into one row per respondent and computes validated scale scores from a public codebook.
 
@@ -10,6 +10,7 @@
 
 - **Branch:** `main` (#6 and #8 merged).
 - **Done:** ingest (`ingest_zeitgeist`, `ingest-survey`). Scoring: `social_energy.survey.codebook` (pydantic, `extra="forbid"`) and `social_energy.survey.score` (`validate_against`, `recode`, `resolve_submissions`, `score`, `reliability`, `score_survey`), and `social-energy score-survey`, which writes `derived/survey/scoring/{scores,reliability,submissions}.parquet` + `qa.json`. Tests: a golden fixture with hand-derived expectations, a synthetic oracle (`synth.survey.generate_scored_survey`), and the CLI and its gate; each was shown to fail under a deliberate mutation of the code. The DSA 2026 codebook covers every code in the real export, and every codebook code exists in it (checked 2026-10-17, codes only, nothing scored). Observed values fit every codebook range. Pre-scoring checks (2026-10-18): `social_energy.survey.checks` (`reverse_key_check`, `version_equivalence`) and `social-energy check-survey`, which writes `derived/survey/checks/{reverse_keys,versions}.parquet` + `summary.json` and computes no score, so it is not gated. Run on the real export: the reverse-keying list agreed with the data for every scale (all `reverse_status: confirmed_by_check`); the version check gave no verdict. Results with numbers in the private note only.
+- **Scored (2026-10-19):** `score-survey` ran after the freeze; `derived/survey/scoring/` holds scores, reliability (alpha and omega per scale) and submissions, and the confirmatory and exploratory analyses read them. Kept submissions were linked to people by platform account through the spine, with the typed study ID as a cross-check, so the confirmatory run did not need the correction table. Reliability numbers are in the private note `dsa-2026/notes/confirmatory-2026-10-19.md`.
 - **Handoff:** answers from the research team go into the codebook only, never into the code. `score-survey` exits 3 until `survey.analysis_plan_frozen` is set. The study-ID correction table is private: a CSV under the data root, named in `local.yaml` (`docs/context/data-layout.md`). It waits on the team's mapping table (`ongoing/dsa-2026-spine.md`). Every score row carries `provisional` while any entry it rests on is not settled (`confirmed`, `decided` or `confirmed_by_check`).
 
 ## Context
@@ -70,4 +71,5 @@ For Álvaro:
 - [x] Pre-scoring checks: reverse keys (item-rest) and old codes (distributions), `check-survey`; run on the real export, statuses set, numbers in the private note
 - [x] Old-code answers: count as their current codes (Álvaro, 2026-10-18)
 - [x] B19/B20 range: 1–10, confirmed from the served form definition (2026-10-18)
-- [ ] After the freeze (set 2026-10-19): run `score-survey`, check reliability and dimensionality for the adapted and own scales (R-SWE, B15, C5, B16 add-ons); counts go to the private study notes only
+- [x] After the freeze (set 2026-10-19): run `score-survey` and check reliability per scale (2026-10-19; numbers in the private note)
+- [ ] Dimensionality of the adapted and own scales (R-SWE, B15, C5, B16 add-ons), and the fatigue rule (score only if alpha ≥ 0.70, else item by item); counts go to the private study notes only. None of them is in a confirmatory composite.

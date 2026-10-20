@@ -1,8 +1,8 @@
 # DSA 2026: first analyses of co-presence, self-reports and beacon health
 
 **Priority:** high
-**Gate:** ready
-**Next:** the confirmatory tests ran on 2026-10-19 (`studies/dsa-2026/analyses/confirmatory.py`, results in the private notes only); refresh the deck for the 3 Nov presentation
+**Gate:** none
+**Next:** build the 3 Nov deck from the private presentation material (`dsa-2026/notes/presentation-2026-11-03.md`); then take the next-phase preregistration (`../ideas/next-phase-preregistration.md`) to the research team
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 
@@ -13,6 +13,7 @@
 - **Waiting elsewhere (not on Next):** the experiment log (commands, base buttons; with the research team, not the beacon team, 2026-10-19); sign-off on the analysis choices below by the research team; firmware documentation from the beacon team, which decides the previous-boot rule.
 - **Consent:** the beacon-consent ruling of 2026-09-22 was applied to the spine on 2026-10-01, and every analysis was rerun with it.
 - **Handoff:** run `uv run social-energy ingest-beacons studies/dsa-2026/study.yaml`, then `copresence_by_phase.py build` and `report`, then `beacon_diagnostics.py` (writes the lost windows), then `self_report_context.py` (`uv run --extra analysis python …`), then `sensitivity_ingests.py` (`uv run --extra analysis python studies/dsa-2026/analyses/sensitivity_ingests.py [hand_split_fill] [no_drift]`; rebuilds the ingest, pairs, seen bins and windows for sensitivities 2 and 3 under `derived/sensitivity/<variant>/`; reads the spine, so rerun it after a spine change), then `outcomes.py` (`uv run python studies/dsa-2026/analyses/outcomes.py`; per-person C1–C4 for the main settings and sensitivities 2–7, beacon data only; a sensitivity ingest not built is left out and listed in its `qa.json`). All read through the spine and write only under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/`. Outcome numbers: `dsa-2026/notes/outcomes-2026-10-17.md` and, for sensitivities 2–3, `dsa-2026/notes/sensitivities-2-3-2026-10-19.md` in the private half.
+- **Both tiers of the frozen plan have run** (plan frozen 2026-10-19 at 109bc50). Confirmatory (2026-10-19, PR #14): after `outcomes.py` and `social-energy score-survey studies/dsa-2026/study.yaml`, run `uv run --extra analysis python studies/dsa-2026/analyses/confirmatory.py` (toolkit `social_energy.confirmatory`; writes `derived/analyses/confirmatory/`). Exploratory (2026-10-20, PRs #15, #16, #17), each `uv run --extra analysis python studies/dsa-2026/analyses/<script>.py`, in this order: `exploratory_survey.py` (after `confirmatory.py`), `exploratory_presses.py`, `exploratory_rhythm.py` (after `copresence_by_phase.py build` and `beacon_diagnostics.py`), `exploratory_acoustics.py` (after `acoustics_presses.py`'s inputs and `exploratory_rhythm.py`), `exploratory_cascades.py`. Toolkit: `social_energy.exploratory`, `social_energy.rhythm`. All write under `derived/analyses/exploratory/`. Results, with every number, only in the private notes: `confirmatory-2026-10-19.md`, `exploratory-presses-survey-2026-10-20.md`, `exploratory-rhythm-acoustics-2026-10-20.md`, `exploratory-cascades-2026-10-20.md`. Leads worth testing on fresh data went into `../ideas/next-phase-preregistration.md`.
 
 ## Settings in use
 
@@ -62,7 +63,9 @@ While waiting on the research team (added 2026-10-17):
 - [x] C4 sensitivity 7, accidental runs as the beacon team described them (2026-10-18): variant `accidental_7min`, a chain is accidental only when it lasts 7 minutes, no count rule (`press_episodes(accidental_n=None)`). C4 barely moves. Numbers in the private half.
 - [ ] Acoustics: agree the feature set with the research team (frequency and level features only, per the ethics approval) and a WAV deletion date; then rerun the extraction with `--delete-wavs`. The WAVs are kept until then. Proposal (2026-10-18): keep levels (Leq, L10/L50/L90, band levels) and spectral shape (centroid, flatness) at one-second resolution and nothing from which speech could be rebuilt; delete on a fixed date after the group agrees. The in-person interview audio is in the same position (ethics: delete after transcription; transcripts exist, the audio is still on disk).
 - [ ] 24–27 Aug: own-record coverage drops by about half while per-hour contact rates and RSSI are unchanged, so two-sided measures and ties undercount those days; ask the beacon team whether readouts were lost or not taken, then either adjust ties for coverage or caveat those days.
-- [ ] Material for the research-group presentation on 2026-11-03: descriptive beacon results, acoustics against press density (exploratory), the analysis plan.
+- [x] Exploratory tier of the frozen plan (2026-10-20, PRs #15–#17): new ties (former C3) under every variant, background against network position, company at presses within person, collective moments (cascades) in two rounds, places and programme items, the programme's rhythm (special-day mixing and persistence of new ties), acoustics against presses with the hour held fixed. Scripts and order in the Handoff; numbers in the private notes only.
+- [x] Next-phase preregistration drafted from the exploratory leads, with C1, C2 and C4 as replications: [`../ideas/next-phase-preregistration.md`](../ideas/next-phase-preregistration.md) (2026-10-20).
+- [ ] Research-group presentation on 2026-11-03: the slide-by-slide material is written in the private half (`dsa-2026/notes/presentation-2026-11-03.md`, 2026-10-20, aggregates only); build the deck from it.
 - [x] Acoustics against press density (exploratory, 2026-10-17): `studies/dsa-2026/analyses/acoustics_presses.py` bins the AudioMoth features to the 5-minute beacon bins inside each recording slot and sets level and spectral features against press rates camp-wide and among people placed in the recorder's room (lost windows out of presses and hours, groups under five suppressed, correlations also within slot to separate the day's rhythm). Run it after `extract-acoustics`, `copresence_by_phase.py build` and `beacon_diagnostics.py` with `uv run --extra analysis python studies/dsa-2026/analyses/acoustics_presses.py`; it writes tables, three figures and `summary.json` to `derived/analyses/acoustics-presses/`. Findings in the private half.
 
 
@@ -81,7 +84,7 @@ While waiting on the research team (added 2026-10-17):
 - [x] Rerun everything once the beacon-consent ruling is in the spine.
 - [x] Check whether ties first made on the excursion or rotation day persist on later days.
 - [x] Lost windows start at the last readout that delivered records, including readouts that arrived without their header; validated against the tag's own rows versus its partners' (`read_deliveries`).
-- [ ] Persistence with shorter contacts, and self-reports between people who first met on a special day.
+- [ ] Persistence with shorter contacts, and self-reports between people who first met on a special day. The first half ran inside `exploratory_rhythm.py` (30-minute ties); the second is still open.
 - [x] Move the instrument rules into the toolkit with hand-derived tests: power cycles, restarts and lost windows (`social_energy.beacons.cycles`), press episodes and accidental runs (`social_energy.beacons.presses`). The analyses call them; outputs unchanged on the real data.
 - [ ] End-to-end run of the three analyses on `social_energy.synth` in CI (`add-analysis` skill). Blocked on shape: they read the upstream `Output/` tables, which the generator does not write; either the generator writes them or the analyses switch to our ingest after the dating fix.
 
