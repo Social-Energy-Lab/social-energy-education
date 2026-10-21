@@ -19,7 +19,7 @@ from ..study import ExplorerConfig
 from ..synth import CampSpec, generate
 from .aggregates import check_aggregates, synthetic_aggregates
 from .public import write_public_bundle
-from .validate import validate_site_data
+from .validate import SiteDataError, validate_site_data
 
 EXPLORER_STATIC = Path(__file__).resolve().parents[1] / "explorer" / "static"
 SITE_STATIC = Path(__file__).resolve().parent / "static"
@@ -69,6 +69,16 @@ def synthetic_site_data(
     return out_dir
 
 
+def _allowed_files(data_dir: Path) -> list[str]:
+    """The files the site may serve; any other entry means the export is wrong."""
+    meta = json.loads((data_dir / "meta.json").read_text(encoding="utf-8"))
+    allowed = ["meta.json", "aggregates.json", *(f"{n}.bin" for n in sorted(meta.get("files", {})))]
+    for entry in sorted(data_dir.iterdir()):
+        if entry.name not in allowed or not entry.is_file():
+            raise SiteDataError(f"{entry.name} is not part of the public data; the export is wrong")
+    return allowed
+
+
 def build_site(
     out: Path,
     data_dir: Path | None,
@@ -85,8 +95,13 @@ def build_site(
     out = paths.refuse_inside_repo(out)
     if data_dir is None and (config is None or timezone is None):
         raise ValueError("a synthetic build needs config and timezone")
+    min_group = config.min_group if config else 5
     if data_dir is not None:
-        validate_site_data(data_dir)
+        data_dir = Path(data_dir).resolve()
+        if data_dir == out or out in data_dir.parents:
+            raise ValueError(f"data dir {data_dir} is inside the output {out}, which is rebuilt")
+        validate_site_data(data_dir, min_group=min_group)
+        allowed = _allowed_files(data_dir)
     out.mkdir(parents=True, exist_ok=True)
     shutil.copytree(SITE_STATIC, out, dirs_exist_ok=True)
     (out / "vendor").mkdir(exist_ok=True)
@@ -98,6 +113,8 @@ def build_site(
     if data_dir is None:
         synthetic_site_data(target, config, timezone=timezone, seed=seed)
     else:
-        shutil.copytree(data_dir, target)
-    validate_site_data(target, **({"min_group": config.min_group} if config else {}))
+        target.mkdir()
+        for name in allowed:
+            shutil.copy2(data_dir / name, target / name)
+    validate_site_data(target, min_group=min_group)
     return out

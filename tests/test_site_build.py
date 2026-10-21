@@ -74,3 +74,40 @@ def test_cli_site_build_without_data_root(tmp_path, monkeypatch):
 
 def test_cli_site_build_requires_out(tmp_path):
     assert cli.main(["site-build", str(STUDY)]) == 2
+
+
+def _copy_data(built: Path, dest: Path) -> Path:
+    dest.mkdir(parents=True)
+    for f in (built / "data").iterdir():
+        (dest / f.name).write_bytes(f.read_bytes())
+    return dest
+
+
+def test_build_refuses_stray_file_in_data_dir(tmp_path, built):
+    data = _copy_data(built, tmp_path / "data")
+    (data / "notes.txt").write_text("names")
+    with pytest.raises(SiteDataError, match=r"notes\.txt"):
+        build_site(tmp_path / "o", data)
+    assert not (tmp_path / "o" / "data" / "notes.txt").exists()
+
+
+def test_build_refuses_data_dir_inside_out(tmp_path, built):
+    out = tmp_path / "o"
+    _copy_data(built, out / "data")
+    with pytest.raises(ValueError, match="inside the output"):
+        build_site(out, out / "data")
+    assert (out / "data" / "meta.json").is_file()
+
+
+def test_build_uses_one_min_group(tmp_path, built, monkeypatch):
+    from social_energy.site import build as mod
+
+    seen = []
+    real = mod.validate_site_data
+    monkeypatch.setattr(
+        mod,
+        "validate_site_data",
+        lambda d, min_group=5: (seen.append(min_group), real(d, min_group=min_group))[1],
+    )
+    build_site(tmp_path / "o", built / "data", config=ExplorerConfig(min_group=5))
+    assert len(set(seen)) == 1 and len(seen) == 2
