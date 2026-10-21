@@ -195,6 +195,25 @@ def test_without_a_triangle_the_fallback_stays():
     assert anchored.runs[("U", "u")].kind == "rate" and anchored.runs[("U", "u")].uncertain
 
 
+def test_past_its_records_a_drifting_clock_is_anchored_not_checked():
+    """U (drifting 18 s/h, over the 1-s/h limit) has records at T = 2000 and 3000 only. In
+    the box (T 7000-8200) its clock is extrapolated: the box anchors it there and the run
+    gains the knot, instead of checking it against its own extrapolation."""
+    strict = replace(CFG, box_drift_limit_s_per_h=1.0)
+    _, st = setup()
+    u_rec = [("U", "u", float(u_tau(x)), float(u_error(x))) for x in (2000.0, 3000.0)]
+    rec = frame(records() + u_rec, RECORDS_SCHEMA)
+    model = ClockModel(rec, frame(RUNS, RUNS_SCHEMA), strict)
+    nodes = solve(box_edges(model, st, BOX), model, BOX)
+    u = nodes.filter(device="U").row(0, named=True)
+    assert not u["known"] and u["status"] == "anchor"
+    anchored = ClockModel(model.records, model.runs_table, strict, anchors=nodes)
+    rc = anchored.runs[("U", "u")]
+    assert rc.kind == "sync" and rc.anchors == 1 and not rc.uncertain
+    t, _ = anchored.correct("U", "u", np.array([u_tau(8100.0)]))
+    assert abs(t[0] - 8100.0) < 0.1
+
+
 def test_leave_one_out_recovers_a_measured_run_from_the_box():
     """Give U sync records with its true error (offset = error, the master keeps time) at
     T = 2000, 5000, 8000. Leaving them out, the box anchors U to within 0.1 s of the model

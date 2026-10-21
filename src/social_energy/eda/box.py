@@ -360,6 +360,20 @@ NODES_SCHEMA = {
 }
 
 
+def _between_records(model: ClockModel, device: str, run: str, tau: float) -> bool:
+    """Whether a drifting unit's records bracket ``tau`` (within ``merge_s``). Past its
+    records its clock is extrapolated with the fitted rate: the box measures it better
+    there than the records do, so it is anchored, not checked. Clocks that keep time (and
+    masters, measured by the reference curves) count as measured anywhere in their run."""
+    rc = model.runs.get((device, run))
+    if rc is None or rc.kind != "sync" or rc.span is None:
+        return True
+    if abs(rc.slope) * 3600 <= model.config.box_drift_limit_s_per_h:
+        return True
+    m = model.config.merge_s
+    return rc.span[0] - m <= tau <= rc.span[1] + m
+
+
 def solve(edges: pl.DataFrame, model: ClockModel, config: BoxConfig) -> pl.DataFrame:
     """One row per stretch with pairs: its anchor or check against ``model``. Pair lags
     measured under another model are carried over to this one exactly (the lag is a
@@ -417,7 +431,7 @@ def solve(edges: pl.DataFrame, model: ClockModel, config: BoxConfig) -> pl.DataF
     known, model_error = [], []
     for _, d, r, _, tau in nodes.iter_rows():
         c, unc, src = model.correct_full(d, r, np.array([tau]))
-        known.append(bool(not unc[0] and src[0] == 0))
+        known.append(bool(not unc[0] and src[0] == 0) and _between_records(model, d, r, tau))
         model_error.append(float(tau + ref - c[0]))
     refs = set(model.config.reference_devices)
     sol = solve_offsets(
