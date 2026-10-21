@@ -7,6 +7,7 @@ people (or none stated) is dropped. Only the keys listed here can ever reach the
 from __future__ import annotations
 
 import copy
+import math
 import random
 
 AGGREGATE_SECTIONS: dict[str, tuple[str, ...]] = {
@@ -43,7 +44,7 @@ NUMBER_KEYS = (
 
 
 def is_number(v: object) -> bool:
-    return isinstance(v, int | float) and not isinstance(v, bool)
+    return isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
 
 
 def check_aggregates(agg: dict, min_group: int = 5) -> dict:
@@ -57,10 +58,10 @@ def check_aggregates(agg: dict, min_group: int = 5) -> dict:
             out[section] = [
                 {k: copy.deepcopy(v) for k, v in row.items() if k in allowed}
                 for row in rows
-                if is_number(row.get("people")) and row["people"] >= min_group
+                if is_number(row.get("people"))
+                and row["people"] >= min_group
+                and not row.get("suppressed")
             ]
-        else:
-            out[section] = copy.deepcopy(rows)
     return out
 
 

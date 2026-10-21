@@ -20,7 +20,7 @@ from social_energy.site import (
 def _site(tmp_path, agg=None):
     out = tmp_path / "site"
     write_public_bundle(_world(), out, CONFIG, timezone=TZ, seed=1)
-    (out / "aggregates.json").write_text(json.dumps(agg or synthetic_aggregates()))
+    (out / "aggregates.json").write_text(json.dumps(agg or synthetic_aggregates(), allow_nan=False))
     return out
 
 
@@ -61,7 +61,7 @@ def test_validator_accepts_public_bundle_with_synthetic_aggregates(tmp_path):
 def test_validator_refuses_team_bundle(tmp_path):
     out = tmp_path / "team"
     write_bundle(_world(), out, CONFIG, timezone=TZ, mode="team", seed=1)
-    (out / "aggregates.json").write_text(json.dumps(synthetic_aggregates()))
+    (out / "aggregates.json").write_text(json.dumps(synthetic_aggregates(), allow_nan=False))
     with pytest.raises(SiteDataError, match="mode"):
         validate_site_data(out)
 
@@ -109,3 +109,34 @@ def test_validator_refuses_missing_people_unknown_section_key_and_number(tmp_pat
         mutate(agg)
         with pytest.raises(SiteDataError, match=name):
             validate_site_data(_site(tmp_path / name, agg))
+
+
+def test_check_drops_suppressed_rows_and_unknown_sections():
+    agg = {
+        "places": [
+            {"setting": "a", "people": 9, "suppressed": True},
+            {"setting": "b", "people": 9, "suppressed": False},
+        ],
+        "rooms": [{"people": 20}],
+    }
+    out = check_aggregates(agg)
+    assert out == {"places": [{"setting": "b", "people": 9}]}
+
+
+def test_non_finite_values_are_refused_and_dropped(tmp_path):
+    nan = float("nan")
+    assert check_aggregates({"places": [{"setting": "a", "people": nan}]})["places"] == []
+    assert check_aggregates({"numbers": {"n_presses": nan, "company_gain": float("inf")}}) == {
+        "numbers": {}
+    }
+    agg = synthetic_aggregates()
+    agg["places"][0]["people"] = nan
+    out = _site(tmp_path / "p", None)
+    (out / "aggregates.json").write_text(json.dumps(agg))  # NaN literal
+    with pytest.raises(SiteDataError, match="places"):
+        validate_site_data(out)
+    agg = synthetic_aggregates()
+    agg["numbers"]["n_presses"] = nan
+    (out / "aggregates.json").write_text(json.dumps(agg))
+    with pytest.raises(SiteDataError, match="n_presses"):
+        validate_site_data(out)
