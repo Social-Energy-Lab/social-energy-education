@@ -58,7 +58,7 @@ SOURCE_PRIORITY = {"sd": 0, "export": 1}
 #: Samples per key, and per confirmation, when matching an export's rows to its SD card.
 MATCH_KEY = 4
 MATCH_CONFIRM = 32
-MATCH_PROBES = 24
+MATCH_EVERY = 128 * 300  # rows between probes (5 min)
 #: Rate of the motion series used for the co-motion check.
 COMOTION_HZ = 64.0
 
@@ -705,40 +705,101 @@ def _keys(v: np.ndarray) -> np.ndarray:
     return k
 
 
-def _segment_lags(e, adc: np.ndarray, sd_t: np.ndarray, sd_ppg: np.ndarray) -> dict[int, float]:
-    """Per export clock segment, the lag (export time - device time) at which its rows are the
-    SD run's records, from exact PPG sequences at ``MATCH_PROBES`` rows; segments whose probes
-    do not agree to 0.05 s are left out."""
-    keys = _keys(sd_ppg)
-    order = np.argsort(keys, kind="stable")
-    sorted_keys = keys[order]
-    out: dict[int, float] = {}
-    for s in np.unique(e.segment[e.segment >= 0]):
-        rows = np.flatnonzero(e.segment == s)
-        rows = rows[rows < len(adc) - MATCH_CONFIRM]
-        if not len(rows):
+class _SdIndex:
+    """One SD run's PPG sequence, indexed for exact lookups of an export's rows."""
+
+    def __init__(self, t: np.ndarray, ppg: np.ndarray):
+        self.t, self.ppg = t, ppg
+        keys = _keys(ppg)
+        self.order = np.argsort(keys, kind="stable")
+        self.keys = keys[self.order]
+
+    def find(self, pat: np.ndarray) -> int | None:
+        """The one placed record where ``pat`` starts, or None if none or several."""
+        key = _keys(pat[:MATCH_KEY])[0]
+        lo, hi = np.searchsorted(self.keys, [key, key + 1])
+        hits = [
+            int(i)
+            for i in self.order[lo : min(hi, lo + 50)]
+            if i + len(pat) <= len(self.ppg)
+            and np.array_equal(self.ppg[i : i + len(pat)], pat)
+            and np.isfinite(self.t[i])
+        ]
+        return hits[0] if len(hits) == 1 else None
+
+
+def _row_lags(
+    e, adc: np.ndarray, sd: dict[str, _SdIndex]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per export row: the lag (export time - device time) of the nearest probe of its own
+    clock segment, within ``2 * MATCH_EVERY`` rows, that found its samples on an SD run (NaN
+    where none did; a segment with no probe in reach borrows a neighbouring one's); that
+    probe's run (None where none); and whether the row is flagged (its segment's probes on
+    either side disagree, or its lag is borrowed)."""
+    n = len(adc)
+    seg = e.segment if e.segment is not None else np.where(np.isfinite(e.t), 0, -1)
+    probes = np.arange(0, max(n - MATCH_CONFIRM, 0), MATCH_EVERY)
+    p_lag = np.full(len(probes), np.nan)
+    p_run = np.full(len(probes), None, dtype=object)
+    for j, r in enumerate(probes):
+        pat = adc[r : r + MATCH_CONFIRM]
+        if seg[r] < 0 or np.ptp(pat) < 3:  # a bad row, or flat (off the finger): not unique
             continue
-        lags = []
-        for r in rows[np.linspace(0, len(rows) - 1, min(MATCH_PROBES, len(rows))).astype(int)]:
-            pat = adc[r : r + MATCH_CONFIRM]
-            if np.ptp(pat) < 3:  # flat (off the finger, saturated): not unique
-                continue
-            key = _keys(pat[:MATCH_KEY])[0]
-            lo, hi = np.searchsorted(sorted_keys, [key, key + 1])
-            hits = [
-                i
-                for i in order[lo : min(hi, lo + 50)]
-                if i + MATCH_CONFIRM <= len(sd_ppg)
-                and np.array_equal(sd_ppg[i : i + MATCH_CONFIRM], pat)
-                and np.isfinite(sd_t[i])
+        for run, idx in sd.items():
+            i = idx.find(pat)
+            if i is not None:
+                p_lag[j], p_run[j] = e.t[r] - idx.t[i], run
+                break
+    lag = np.full(n, np.nan)
+    row_run = np.full(n, None, dtype=object)
+    disagree = np.zeros(n, bool)
+    ok = np.flatnonzero(np.isfinite(p_lag))
+    if not len(ok):
+        return lag, row_run, disagree
+    pos, pl_, pr = probes[ok], p_lag[ok], p_run[ok]
+    rows = np.arange(n)
+    reach = 2 * MATCH_EVERY
+
+    def nearest(cands: np.ndarray, rws: np.ndarray, sgs: np.ndarray | None) -> np.ndarray:
+        """Index into ``cands`` of the nearest probe (in segment ``sgs`` if given), -1 if none
+        within ``reach``."""
+        out = np.full(len(rws), -1, np.int64)
+        if sgs is None:
+            groups = [(np.arange(len(rws)), np.arange(len(cands)))]
+        else:
+            groups = [
+                (np.flatnonzero(sgs == g), np.flatnonzero(seg[pos[cands]] == g))
+                for g in np.unique(sgs)
             ]
-            if len(hits) == 1:
-                lags.append(e.t[r] - sd_t[hits[0]])
-        if len(lags) >= 3:
-            med = float(np.median(lags))
-            if np.mean(np.abs(np.array(lags) - med) <= 0.05) >= 0.5:
-                out[int(s)] = med
-    return out
+        for ri, ci in groups:
+            if not len(ri) or not len(ci):
+                continue
+            cp = pos[cands[ci]]
+            k = np.searchsorted(cp, rws[ri])
+            lo, hi = np.clip(k - 1, 0, len(cp) - 1), np.clip(k, 0, len(cp) - 1)
+            pick = np.where(np.abs(rws[ri] - cp[lo]) <= np.abs(cp[hi] - rws[ri]), lo, hi)
+            fine = np.abs(rws[ri] - cp[pick]) <= reach
+            out[ri[fine]] = ci[pick[fine]]
+        return out
+
+    good = seg >= 0
+    all_p = np.arange(len(pos))
+    own = np.full(n, -1, np.int64)
+    own[good] = nearest(all_p, rows[good], seg[good])
+    # A row whose own clock segment has no probe in reach borrows a neighbour's lag: flagged.
+    other = np.full(n, -1, np.int64)
+    need = good & (own < 0)
+    other[need] = nearest(all_p, rows[need], None)
+    pick = np.where(own >= 0, own, other)
+    usable = pick >= 0
+    lag[usable] = pl_[pick[usable]]
+    row_run[usable] = pr[pick[usable]]
+    # Flag rows between two probes of their segment that disagree, and borrowed rows.
+    k = np.searchsorted(pos, rows)
+    left, right = np.clip(k - 1, 0, len(pos) - 1), np.clip(k, 0, len(pos) - 1)
+    same = (seg[pos[left]] == seg) & (seg[pos[right]] == seg) & (left != right)
+    disagree = ((same & (np.abs(pl_[left] - pl_[right]) > 0.05)) | (own < 0)) & usable
+    return lag, row_run, disagree
 
 
 def _correct_export(
@@ -752,57 +813,54 @@ def _correct_export(
     """Corrected times, ``clock_uncertain`` and file info for one export.
 
     An export's rows are its SD card's records where both exist, and its repaired clock is
-    the device's plus a constant that can differ by whole 512-s wraps between its clock
-    segments. So each segment is matched to an SD run of the same device by exact PPG
-    sequences; its lag is removed and the run's clock model applied. A segment the card does
-    not hold takes the lag of the nearest matched segment of its file (flagged); a file with
-    no match is taken as the device's clock with the unit's fallback (flagged)."""
+    the device's plus a constant that can change by whole 512-s wraps (after a long gap, or
+    where the card has a gap the export has not). So every ``MATCH_EVERY`` rows a probe of
+    ``MATCH_CONFIRM`` PPG samples is looked up exactly on the device's SD runs; each row takes
+    the lag of its nearest successful probe in the same clock segment (within twice the probe
+    spacing), and that run's clock model. Rows between disagreeing probes are flagged. Rows no
+    probe reaches keep the export's own clock with the unit's fallback (flagged)."""
     info: dict[str, Any] = {
         "export_offset_s": None,
-        "export_segments_matched": 0,
-        "export_segments_off_by_wraps": 0,
+        "export_rows_matched": 0,
+        "export_lag_changes": 0,
         "matched_run": None,
     }
     n = len(e.t)
     if model is None:
         info["clock_model"] = "none"
         return e.t, np.zeros(n, bool), info
-    fin = np.isfinite(e.t)
-    seg = e.segment if e.segment is not None else np.where(fin, 0, -1)
-    matched: dict[int, tuple[float, str]] = {}
-    if fin.any() and series and e.qa["clock"] != "recovered":
-        adc = np.rint(np.nan_to_num(e.ppg_mv) * 4095 / 3000).astype(np.int64)
-        lo, hi = np.nanmin(e.t) - 12 * 3600, np.nanmax(e.t) + 12 * 3600
-        for run, (sd_t, sd_ppg) in series.items():
-            span = sd_t[np.isfinite(sd_t)]
-            if not len(span) or span[0] > hi or span[-1] < lo:
-                continue
-            for s, lag in _segment_lags(e, adc, sd_t, sd_ppg).items():
-                matched.setdefault(s, (lag, run))
     t = np.full(n, np.nan)
     unc = np.ones(n, bool)
-    if matched:
-        segs = np.array(sorted(matched))
-        for s in np.unique(seg[seg >= 0]):
-            rows = seg == s
-            near = int(segs[np.argmin(np.abs(segs - s))])
-            lag, run = matched[near]
-            t[rows], u = model.correct(device, run, e.t[rows] - lag)
-            unc[rows] = u | (near != s)
-        first = matched[int(segs[0])][0]
-        wraps = sum(abs(lag - first) >= 256 for lag, _ in matched.values())
-        runs = [run for _, run in matched.values()]
-        rc = model.runs.get((device, max(set(runs), key=runs.count)))
+    lag = np.full(n, np.nan)
+    row_run = np.full(n, None, dtype=object)
+    disagree = np.zeros(n, bool)
+    if np.isfinite(e.t).any() and series and e.qa["clock"] != "recovered":
+        adc = np.rint(np.nan_to_num(e.ppg_mv) * 4095 / 3000).astype(np.int64)
+        sd = {run: _SdIndex(st, sp) for run, (st, sp) in series.items()}
+        lag, row_run, disagree = _row_lags(e, adc, sd)
+        del sd
+    matched = np.isfinite(lag)
+    if matched.any():
+        runs = [r for r in row_run[matched]]
+        for run in sorted(set(runs)):
+            rows = matched & (row_run == run)
+            t[rows], u = model.correct(device, run, e.t[rows] - lag[rows])
+            unc[rows] = u | disagree[rows]
+        main = max(set(runs), key=runs.count)
+        rc = model.runs.get((device, main))
         info.update(
-            export_offset_s=float(first),  # the file's constant, at its first segment
-            export_segments_off_by_wraps=int(wraps),
-            export_segments_matched=len(matched),
-            matched_run=max(set(runs), key=runs.count),
+            export_offset_s=float(lag[matched][0]),
+            export_rows_matched=int(matched.sum()),
+            export_lag_changes=int((np.abs(np.diff(lag[matched])) > 256).sum()),
+            matched_run=main,
             clock_model=f"sd-{rc.kind if rc else 'rate'}",
         )
     else:
-        t, _ = model.correct(device, path.name, e.t)
         info["clock_model"] = "rate"
+    rest = ~matched & np.isfinite(e.t)
+    if rest.any():
+        t[rest], _ = model.correct(device, path.name, e.t[rest])
+        unc[rest] = True
     if e.qa["clock"] == "recovered":
         unc = np.ones(n, bool)
     return t, unc, info

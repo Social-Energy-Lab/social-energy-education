@@ -167,7 +167,7 @@ def test_an_export_is_matched_to_its_card_and_fills_what_the_card_lost(with_expo
     )
     assert f["clock_model"] == "sd-sync" and f["clock_uncertain"]  # the borrowed segment
     assert abs(f["export_offset_s"] - (-synth.notes["export_constant_s"])) < 0.05
-    assert f["export_segments_matched"] == 3 and f["export_segments_off_by_wraps"] == 2
+    assert f["export_lag_changes"] == 1  # one jump of a whole wrap, at the hole
     exp = t.seconds.filter((pl.col("source") == "export") & (pl.col("device") == "SH01"))
     only = exp.filter(~pl.col("duplicate"))
     lo, hi = synth.notes["sh01_lost"]
