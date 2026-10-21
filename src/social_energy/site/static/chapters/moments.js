@@ -57,11 +57,7 @@ export function render(el, agg, t, opts = {}) {
       const big = document.createElement("strong");
       big.textContent = `${fmt(head.ratio)}×`;
       const sub = document.createElement("span");
-      sub.textContent = t("ch_moments_headline", {
-        cascade_excess: head.ratio,
-        cascade_excess_lo: head.lo,
-        cascade_excess_hi: head.hi,
-      });
+      sub.textContent = t("ch_moments_headline");
       fig.append(big, sub);
       el.append(fig);
     }

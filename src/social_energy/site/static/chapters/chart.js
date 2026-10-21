@@ -199,15 +199,21 @@ export function hbars(host, rows, { label, axis, tick, refAt = null, reference, 
     .attr("rx", 3)
     .attr("width", 0);
   bars.append("title").text((r) => r.tip);
+  // The interval over the bar: a surface-coloured halo under the line keeps it visible on the
+  // accent in both themes.
   const whisk = g
     .filter((r) => finite(r.lo) && finite(r.hi))
-    .append("line")
-    .attr("class", "interval")
-    .attr("x1", (r) => x(r.lo))
-    .attr("x2", (r) => x(r.hi))
-    .attr("y1", rowH / 2)
-    .attr("y2", rowH / 2)
+    .append("g")
     .attr("opacity", 0);
+  for (const cls of ["interval-halo", "interval"]) {
+    whisk
+      .append("line")
+      .attr("class", cls)
+      .attr("x1", (r) => x(r.lo))
+      .attr("x2", (r) => x(r.hi))
+      .attr("y1", rowH / 2)
+      .attr("y2", rowH / 2);
+  }
 
   if (refAt !== null) {
     svg

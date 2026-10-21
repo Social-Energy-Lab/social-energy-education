@@ -147,3 +147,33 @@ def test_synthetic_counts_are_whole_numbers():
     counts = {k: v for k, v in numbers.items() if k.startswith("n_")}
     assert set(counts) == {"n_participants", "n_presses", "n_confirmatory"}
     assert all(type(v) is int for v in counts.values()), counts
+
+
+def test_synthetic_ratios_sit_inside_their_intervals_and_numbers_match_rows():
+    for seed in range(50):
+        agg = synthetic_aggregates(seed)
+        for section in ("moments_latency", "moments_size"):
+            for row in agg[section]:
+                assert row["ratio_lo"] <= row["ratio"] <= row["ratio_hi"], (seed, section, row)
+        for section, (est, lo, hi) in {
+            "moments_headline": ("ratio", "lo", "hi"),
+            "persistence": ("share", "lo", "hi"),
+            "places": ("rate", "lo", "hi"),
+            "confirmatory": ("estimate", "lo", "hi"),
+        }.items():
+            for row in agg[section]:
+                assert row[lo] <= row[est] <= row[hi], (seed, section, row)
+        n = agg["numbers"]
+        head = agg["moments_headline"][0]
+        assert (n["cascade_excess"], n["cascade_excess_lo"], n["cascade_excess_hi"]) == (
+            head["ratio"],
+            head["lo"],
+            head["hi"],
+        )
+        first = next(r for r in agg["moments_latency"] if r["band"] == "0-10")
+        assert n["latency_0_10_ratio"] == first["ratio"]
+        ordinary = [r["cross_share"] for r in agg["daily_mixing"] if r["kind"] == "ordinary"]
+        assert (n["mixing_ordinary_lo"], n["mixing_ordinary_hi"]) == (min(ordinary), max(ordinary))
+        share = {r["origin"]: r["share"] for r in agg["persistence"]}
+        assert n["persistence_ordinary"] == share["ordinary"]
+        assert n["persistence_excursion"] == share["excursion"]

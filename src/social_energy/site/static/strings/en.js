@@ -122,7 +122,7 @@ export default {
   ch_moments_seconds: "seconds",
   ch_moments_people: "people",
   ch_moments_headline:
-    "Shared presses compared with chance: {cascade_excess} times, range {cascade_excess_lo} to {cascade_excess_hi}.",
+    "shared presses compared with chance",
   ch_moments_aria_latency:
     "One bar per gap between two presses; its length shows how often such pairs happened compared with chance. The vertical line marks as often as by chance.",
   ch_moments_aria_size:

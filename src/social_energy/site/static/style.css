@@ -234,6 +234,8 @@ main { counter-reset: chapter 1; }
 .viz .row-label { fill: var(--ink-2); font-size: 13px; }
 .viz .bar { fill: var(--accent); }
 .viz .interval { stroke: var(--ink-1); stroke-width: 2; stroke-linecap: round; }
+.viz .interval-halo { stroke: var(--surface-0); stroke-width: 6; stroke-linecap: round; }
+.viz .label-bg { fill: var(--surface-0); }
 .viz .reference { stroke: var(--ink-2); stroke-width: 1.5; stroke-dasharray: 4 4; }
 .viz .estimate { fill: var(--accent); stroke: var(--surface-0); stroke-width: 2; }
 .viz .line { fill: none; stroke: var(--accent); stroke-width: 2; }

@@ -112,6 +112,20 @@ function forest(host, rows, { scale, axis, noEffect, label, fmt, t }) {
     .attr("dy", narrow ? 0 : "0.35em")
     .attr("text-anchor", narrow ? "start" : "end")
     .text((r) => testName(t, r));
+  if (narrow) {
+    // A label above its interval sits on a backing in the surface colour, so the grid and the
+    // no-effect line never run through the words.
+    g.select("text").each(function () {
+      const box = this.getBBox();
+      d3.select(this.parentNode)
+        .insert("rect", "text")
+        .attr("class", "label-bg")
+        .attr("x", box.x - 4)
+        .attr("y", box.y - 1)
+        .attr("width", box.width + 8)
+        .attr("height", box.height + 2);
+    });
+  }
   g.append("line")
     .attr("class", "interval")
     .attr("x1", (r) => x(r.lo))

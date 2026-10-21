@@ -301,3 +301,48 @@ test("placeRows: settings with a rate, highest first", () => {
     ["plenum", "course_block", "meal_time"],
   );
 });
+
+test("showBin prefers the excursion over an earlier special day such as arrival", () => {
+  const meta = {
+    t0: "2026-08-14T05:30:00Z",
+    bin_seconds: 300,
+    timezone: "Europe/Berlin",
+    special_days: [
+      { start_bin: 0, end_bin: 288, label: "arrival day" },
+      { start_bin: 576, end_bin: 864, label: "rotation" },
+      { start_bin: 288, end_bin: 576, label: "excursion" },
+    ],
+  };
+  assert.equal(circles.showBin(meta), 288 + 90);
+  // Labels from study notes may be longer ("excursion day").
+  const long = { ...meta, special_days: [meta.special_days[0], { ...meta.special_days[2], label: "excursion day" }] };
+  assert.equal(circles.showBin(long), 288 + 90);
+  // No excursion: the earliest special day.
+  const none = { ...meta, special_days: [meta.special_days[1], meta.special_days[0]] };
+  assert.equal(circles.showBin(none), 90);
+});
+
+const chart = await load("chapters/chart.js");
+
+test("metaDay and dayLabel read ISO dates, phaseLabel reads phase names (the real export)", () => {
+  const meta = {
+    t0: "2026-08-13T05:30:00Z",
+    bin_seconds: 300,
+    timezone: "Europe/Berlin",
+    phases: ["morning", "midday", "afternoon"],
+    days: [
+      { index: 0, start_bin: 0 },
+      { index: 1, start_bin: 288 },
+    ],
+  };
+  assert.equal(chart.metaDay("2026-08-14", meta).index, 1);
+  assert.equal(chart.metaDay("2026-08-13", meta).index, 0);
+  assert.equal(chart.metaDay("2026-09-01", meta), null);
+  assert.equal(chart.metaDay(1, meta).index, 1);
+  assert.equal(chart.dayLabel("2026-08-14", meta, "en", true), "14");
+  assert.equal(chart.dayLabel("2026-08-20", null, "de", true), "20");
+  const t = (k) => ({ phase_afternoon: "Nachmittag" })[k] ?? k;
+  assert.equal(chart.phaseLabel("afternoon", meta, t), "Nachmittag");
+  assert.equal(chart.phaseLabel(2, meta, t), "Nachmittag");
+  assert.equal(chart.phaseLabel("siesta", meta, t), "siesta");
+});

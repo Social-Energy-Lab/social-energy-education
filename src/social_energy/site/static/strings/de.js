@@ -111,7 +111,7 @@ export default {
   ch_moments_body:
     "Wenn zwei Menschen nah beieinander sind und beide innerhalb weniger Sekunden drücken, war das vielleicht derselbe Moment. Wir haben gezählt, wie oft das vorkam, und mit dem Zufall verglichen: {cascade_excess}-mal so oft wie erwartet (Spanne {cascade_excess_lo} bis {cascade_excess_hi}). Ein Wert von eins hieße: so oft wie durch Zufall.",
   ch_moments_body2:
-    "Lagen höchstens zehn Sekunden zwischen den beiden Drücken, war das Verhältnis {latency_0_10_ratio}. So lässt sich die Balken unten lesen: Eine Spitze ganz am Anfang spräche dafür, dass zwei auf dasselbe reagiert haben; eine Spitze später eher dafür, dass einer den anderen angesteckt hat.",
+    "Lagen höchstens zehn Sekunden zwischen den beiden Drücken, war das Verhältnis {latency_0_10_ratio}. So lassen sich die Balken unten lesen: Eine Spitze ganz am Anfang spräche dafür, dass zwei auf dasselbe reagiert haben; eine Spitze später eher dafür, dass einer den anderen angesteckt hat.",
   ch_moments_body3_pos:
     "Wer drückte, hatte in diesem Moment im Schnitt {company_gain} Menschen mehr in der Nähe als sonst.",
   ch_moments_body3_neg:
@@ -123,7 +123,7 @@ export default {
   ch_moments_seconds: "Sekunden",
   ch_moments_people: "Personen",
   ch_moments_headline:
-    "Gemeinsame Drücke im Vergleich zum Zufall: das {cascade_excess}-Fache, Spanne {cascade_excess_lo} bis {cascade_excess_hi}.",
+    "gemeinsame Drücke im Vergleich zum Zufall",
   ch_moments_aria_latency:
     "Ein Balken je Abstand zwischen zwei Drücken; seine Länge zeigt, wie oft solche Paare im Vergleich zum Zufall vorkamen. Die senkrechte Linie markiert: so oft wie durch Zufall.",
   ch_moments_aria_size:

@@ -152,6 +152,8 @@ export function render(el, agg, t, opts = {}) {
       b.addEventListener("click", () => {
         el.dataset.measure = m;
         draw();
+        // The redraw replaced the buttons; keep the keyboard where it was.
+        el.querySelector('.toggle [aria-pressed="true"]')?.focus();
       });
       toggle.append(b);
     }

@@ -72,10 +72,6 @@ def synthetic_aggregates(seed: int = 0) -> dict:
     def people() -> int:
         return rng.randint(5, 60)
 
-    def ci(lo: float, hi: float) -> dict:
-        a, b = sorted((rng.uniform(lo, hi), rng.uniform(lo, hi)))
-        return {"lo": round(a, 3), "hi": round(b, 3)}
-
     def val(lo: float, hi: float) -> float:
         return round(rng.uniform(lo, hi), 3)
 
@@ -107,12 +103,65 @@ def synthetic_aggregates(seed: int = 0) -> dict:
             "hi": round(b, 3),
         }
 
+    def ratio_row(key: str, value: str) -> dict:
+        est = around(0.5, 3, 0.2, 0.8)
+        return {
+            key: value,
+            "people": people(),
+            "ratio": est["estimate"],
+            "ratio_lo": est["lo"],
+            "ratio_hi": est["hi"],
+        }
+
+    latency = [ratio_row("band", b) for b in ("0-10", "10-30", "30-60")]
+    size = [ratio_row("size", s) for s in ("2", "3-4", "5+")]
+    est = around(0.8, 2.5, 0.1, 0.5)
+    null_mean = val(20, 120)
+    headline = {
+        "people": people(),
+        "observed": round(null_mean * est["estimate"], 3),
+        "null_mean": null_mean,
+        "ratio": est["estimate"],
+        "lo": est["lo"],
+        "hi": est["hi"],
+    }
+
+    mixing = [
+        {
+            "day": d,
+            "kind": "excursion" if d == 1 else "ordinary",
+            "people": people(),
+            "cross_share": val(40, 65) if d == 1 else val(8, 22),
+            "expected": val(55, 62),
+        }
+        for d in range(4)
+    ]
+    persistence = [
+        {
+            "origin": o,
+            "people": people(),
+            "new_ties": val(0, 10),
+            "share": est["estimate"],
+            "lo": est["lo"],
+            "hi": est["hi"],
+        }
+        for o in ("ordinary", "excursion")
+        for est in [around(15, 60, 4, 12)]
+    ]
+
     numbers = {k: synthetic_number(k) for k in NUMBER_KEYS}
-    # A range reads lo <= value <= hi.
-    trio = ("cascade_excess_lo", "cascade_excess", "cascade_excess_hi")
-    numbers.update(zip(trio, sorted(numbers[k] for k in trio), strict=True))
-    pair = ("mixing_ordinary_lo", "mixing_ordinary_hi")
-    numbers.update(zip(pair, sorted(numbers[k] for k in pair), strict=True))
+    # The copy's numbers are the rows the charts draw, so text and chart agree.
+    numbers["cascade_excess"] = headline["ratio"]
+    numbers["cascade_excess_lo"] = headline["lo"]
+    numbers["cascade_excess_hi"] = headline["hi"]
+    numbers["latency_0_10_ratio"] = latency[0]["ratio"]
+    ordinary = [r["cross_share"] for r in mixing if r["kind"] == "ordinary"]
+    numbers["mixing_ordinary_lo"] = min(ordinary)
+    numbers["mixing_ordinary_hi"] = max(ordinary)
+    numbers["mixing_random"] = round(sum(r["expected"] for r in mixing) / len(mixing), 3)
+    numbers["mixing_excursion"] = next(r["cross_share"] for r in mixing if r["kind"] == "excursion")
+    for r in persistence:
+        numbers[f"persistence_{r['origin']}"] = r["share"]
     return {
         # Four camp days and six daytime phases (indices into meta.phases), day 1 the special
         # day, as in the synthetic camp that build.py writes.
@@ -127,57 +176,11 @@ def synthetic_aggregates(seed: int = 0) -> dict:
             for d in range(4)
             for p in range(6)
         ],
-        "daily_mixing": [
-            {
-                "day": d,
-                "kind": "excursion" if d == 1 else "ordinary",
-                "people": people(),
-                "cross_share": val(40, 65) if d == 1 else val(8, 22),
-                "expected": val(55, 62),
-            }
-            for d in range(4)
-        ],
-        "persistence": [
-            {
-                "origin": o,
-                "people": people(),
-                "new_ties": val(0, 10),
-                "share": est["estimate"],
-                "lo": est["lo"],
-                "hi": est["hi"],
-            }
-            for o in ("ordinary", "excursion")
-            for est in [around(15, 60, 4, 12)]
-        ],
-        "moments_latency": [
-            {
-                "band": b,
-                "people": people(),
-                "ratio": val(0.5, 3),
-                "ratio_lo": val(0.3, 1),
-                "ratio_hi": val(1, 4),
-            }
-            for b in ("0-10", "10-30", "30-60")
-        ],
-        "moments_size": [
-            {
-                "size": s,
-                "people": people(),
-                "ratio": val(0.5, 3),
-                "ratio_lo": val(0.3, 1),
-                "ratio_hi": val(1, 4),
-            }
-            for s in ("2", "3-4", "5+")
-        ],
-        "moments_headline": [
-            {
-                "people": people(),
-                "observed": val(0, 200),
-                "null_mean": val(0, 200),
-                "ratio": val(0.5, 3),
-                **ci(0.3, 4),
-            }
-        ],
+        "daily_mixing": mixing,
+        "persistence": persistence,
+        "moments_latency": latency,
+        "moments_size": size,
+        "moments_headline": [headline],
         "places": [
             {
                 "setting": s,

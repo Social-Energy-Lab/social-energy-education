@@ -14,6 +14,7 @@ import {
   named,
   numberFormat,
   onResize,
+  slug,
   svgIn,
 } from "./chart.js";
 
@@ -46,10 +47,17 @@ function localMinutes(meta, bin) {
   return get("hour") * 60 + get("minute");
 }
 
-/** The bin at SHOW_HOUR on the first special day (its start when later), or null. */
+/** The special-day label the button looks for first; the copy's story is about this day. */
+export const SHOW_LABEL = "excursion";
+
+/**
+ * The bin at SHOW_HOUR on the special day labelled SHOW_LABEL (else the earliest special day),
+ * or at its start when that is later; null without special days.
+ */
 export function showBin(meta, hour = SHOW_HOUR) {
   const specials = [...(meta?.special_days ?? [])].sort((a, b) => a.start_bin - b.start_bin);
-  const first = specials[0];
+  const first =
+    specials.find((d) => slug(d.label ?? "").split("_").includes(SHOW_LABEL)) ?? specials[0];
   if (!first || !meta.t0 || !meta.bin_seconds) return null;
   const ahead = hour * 60 - localMinutes(meta, first.start_bin);
   const bin = first.start_bin + Math.round((ahead * 60) / meta.bin_seconds);
