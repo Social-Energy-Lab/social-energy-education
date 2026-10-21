@@ -154,17 +154,20 @@ def with_exports(tmp_path_factory):
 
 
 def test_an_export_is_matched_to_its_card_and_fills_what_the_card_lost(with_exports):
-    """SH01's export has the device's clock minus one sync offset (Shimmer Base's constant).
-    The ingest measures that constant against the card (within 0.15 s), then corrects the
-    export through the card's clock model: its seconds coincide with the card's (flagged
-    duplicate, the card wins), and the ones the card lost (chunk 2's tail) come back at their
-    true times, within 1.5 s."""
+    """SH01's export has the device's clock minus one sync offset (Shimmer Base's constant),
+    and a 630-s hole the export's repair can only bridge modulo 512 s, so its second segment
+    sits 512 s early. Each segment is matched to the card row for row: the first lag is the
+    constant (within 0.05 s), the second is off by a whole wrap. Corrected through the card's
+    clock model, its seconds coincide with the card's (flagged duplicate, the card wins), and
+    the ones the card lost (chunk 2's tail, in the second segment) come back at their true
+    times, within 1.5 s."""
     synth, t = with_exports
     f = t.files.filter((pl.col("source") == "export") & (pl.col("device") == "SH01")).row(
         0, named=True
     )
-    assert f["clock_model"] == "sd-sync" and not f["clock_uncertain"]
-    assert abs(f["export_offset_s"] - (-synth.notes["export_constant_s"])) < 0.15
+    assert f["clock_model"] == "sd-sync" and f["clock_uncertain"]  # the borrowed segment
+    assert abs(f["export_offset_s"] - (-synth.notes["export_constant_s"])) < 0.05
+    assert f["export_segments_matched"] == 3 and f["export_segments_off_by_wraps"] == 2
     exp = t.seconds.filter((pl.col("source") == "export") & (pl.col("device") == "SH01"))
     only = exp.filter(~pl.col("duplicate"))
     lo, hi = synth.notes["sh01_lost"]
@@ -172,6 +175,11 @@ def test_an_export_is_matched_to_its_card_and_fills_what_the_card_lost(with_expo
     inner = sec[(sec > lo - 60) & (sec < hi + 60)]
     assert abs(inner.min() - lo) <= 1.5 and abs(inner.max() + 1 - hi) <= 1.5
     assert exp["duplicate"].mean() > 0.6
+    a, b = synth.notes["sh01_unmatched_segment"]
+    t_s = exp["t"].dt.epoch("s")
+    borrowed = exp.filter((t_s > a + 2) & (t_s < b - 2))
+    assert borrowed.height > 100 and borrowed["clock_uncertain"].all()
+    assert not exp.filter((t_s < a - 2) | (t_s > b + 2))["clock_uncertain"].any()
 
 
 def test_an_export_without_a_clock_is_placed_from_its_session(with_exports):

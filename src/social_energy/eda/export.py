@@ -61,6 +61,7 @@ class ExportFile:
     ppg_mv: np.ndarray
     hr_bpm: np.ndarray  # NaN where the export has none
     qa: dict[str, Any]
+    segment: np.ndarray | None = None  # per row: its clock segment, -1 for bad rows
 
 
 def _separator(path: Path) -> str:
@@ -158,6 +159,7 @@ def read_export(
     t = np.full(n, np.nan)
     ambiguous = np.zeros(n, bool)
     n_segments = n_ambiguous = 0
+    segment = np.full(n, -1, np.int64)
     if len(gi):
         d = tick_steps(ticks[gi])
         max_step = int(config.max_step_s * TICK_HZ)
@@ -180,6 +182,7 @@ def read_export(
                     ambiguous[members] = True
                     n_ambiguous += 1
             t[members] = start + tau[seg == s]
+            segment[members] = s
             prev_end = t[members[-1]]
 
     us = df["us"].to_numpy()
@@ -191,6 +194,7 @@ def read_export(
         t=t,
         bad=~good,
         gap_ambiguous=ambiguous,
+        segment=segment,
         conductance_us=np.where(valid, us, np.nan),
         gsr_valid=valid,
         gsr_range=df["gsr_range"].fill_nan(0).to_numpy().astype(np.int64),

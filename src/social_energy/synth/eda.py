@@ -279,6 +279,7 @@ def generate_eda(spec: EdaSpec, out_dir: Path) -> SyntheticEda:
         near = (hit > 0) & (wall - bursts[np.maximum(hit - 1, 0)] < 0.15)
         acc[near & (wall >= box_from), 0] = 3000
         ppg = (2000 + 300 * np.sin(2 * np.pi * 1.2 * wall)).astype(np.int64)
+        ppg += rng.integers(-4, 5, n)  # sensor noise: real PPG sequences do not repeat
         dev_ticks = round((t0 + off0) * TICK_HZ) + 256 * np.arange(n) + lag
         ticks = dev_ticks % TICK_WRAP
         true_t = t0 + wall
@@ -378,11 +379,21 @@ def generate_eda(spec: EdaSpec, out_dir: Path) -> SyntheticEda:
         exp_dir = out_dir / "exports"
         exp_dir.mkdir()
         s1 = signals["SH01"]
-        upto = int(np.searchsorted(s1["true_t"], t0 + 32 * 60))
+        upto = int(np.searchsorted(s1["true_t"], t0 + 40 * 60))
         # Shimmer Base subtracts one sync record: here SH01's at 10 min of device time.
         constant = float(s1["offsets"][int(np.searchsorted(dev_el, 600.0))])
-        stamps = (s1["dev_t"][:upto] - constant) * 1000
-        sig = {k: s1[k][:upto] for k in ("acc", "range", "us", "ppg")}
+        # The export lacks 630 s of device time from minute 10: a gap the 512-s repair can
+        # only place modulo 512 (118 s), so its second segment lands 512 s early.
+        # Two more 70-s holes cut out a segment (device 1570-1700 s) that lies wholly in the
+        # tail the card lost: it can only borrow its neighbours' lag.
+        d = dev_el[:upto]
+        keep = ((d < 600) | (d >= 1230)) & ~((d >= 1500) & (d < 1570)) & ~((d >= 1700) & (d < 1770))
+        rows = np.flatnonzero(keep)
+        notes["sh01_unmatched_segment"] = tuple(
+            t0 + x / (1 + _clock(spec, "SH01")[1]) for x in (1570, 1700)
+        )
+        stamps = (s1["dev_t"][rows] - constant) * 1000
+        sig = {k: s1[k][rows] for k in ("acc", "range", "us", "ppg")}
         p1 = exp_dir / "day_Session1_SH01_Calibrated_SD.csv"
         _write_export(p1, "SH01", stamps, sig)
         s2 = signals["SH02"]

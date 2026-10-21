@@ -443,43 +443,6 @@ class ClockModel:
         )
 
 
-def match_lag(
-    ta: np.ndarray,
-    xa: np.ndarray,
-    tb: np.ndarray,
-    xb: np.ndarray,
-    max_lag_s: float,
-    hz: float,
-) -> tuple[float, float]:
-    """Lag (s) such that ``b`` at ``t + lag`` matches ``a`` at ``t`` (b's clock reads later),
-    and the peak correlation, for two signals on regular ``hz`` grids starting at ``ta[0]``
-    and ``tb[0]``. NaN counts as no signal. Uses first differences, so levels do not matter."""
-    lo = max(ta[0], tb[0] - max_lag_s)
-    hi = min(ta[-1], tb[-1] + max_lag_s)
-    if hi - lo < 4 * max_lag_s:
-        return float("nan"), 0.0
-    n = int((hi - lo) * hz)
-    L = int(max_lag_s * hz)
-
-    def take(t0: float, x: np.ndarray, start: float, m: int) -> np.ndarray:
-        i = round((start - t0) * hz)
-        out = np.zeros(m)
-        a, b = max(i, 0), min(i + m, len(x))
-        if b > a:
-            out[a - i : b - i] = x[a:b]
-        d = np.r_[0, np.diff(out)]
-        d[~np.isfinite(d)] = 0
-        return d
-
-    x = take(ta[0], np.nan_to_num(np.asarray(xa, float), nan=0.0), lo, n)
-    y = take(tb[0], np.nan_to_num(np.asarray(xb, float), nan=0.0), lo - max_lag_s, n + 2 * L)
-    size = 1 << int(np.ceil(np.log2(len(y) + n)))
-    c = np.fft.irfft(np.conj(np.fft.rfft(x, size)) * np.fft.rfft(y, size), size)[: 2 * L + 1]
-    norm = np.sqrt((x * x).sum() * (y[L : L + n] ** 2).sum()) + 1e-12
-    k = int(np.argmax(c))
-    return (k - L) / hz, float(c[k] / norm)
-
-
 def comotion(
     signals: dict[str, np.ndarray],
     t0: float,
