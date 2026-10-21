@@ -10,11 +10,13 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import yaml
 
 from . import paths
 from .beacons import BeaconConfig
+from .eda.clock import ClockConfig
 from .eda.ingest import EdaConfig
 from .survey import SurveyConfig
 
@@ -157,11 +159,39 @@ class StudyConfig:
     def eda_config(self) -> EdaConfig:
         section = self.raw["eda"]
         rotation = section.get("rotation_s", 3600)
+        clock = section.get("clock") or {}
+        tz = ZoneInfo(self.timezone)
+        windows = []
+        for w in clock.get("comotion_windows") or ():
+            # "YYYY-MM-DD HH:MM-HH:MM", local time.
+            day, span = str(w).split(" ")
+            a, b = span.split("-")
+            lo, hi = (
+                datetime.combine(_as_date(day), time.fromisoformat(x), tz).timestamp()
+                for x in (a, b)
+            )
+            windows.append((lo, hi))
+        starts = {
+            str(name): _as_datetime(v).replace(tzinfo=tz).timestamp()
+            if _as_datetime(v).tzinfo is None
+            else _as_datetime(v).timestamp()
+            for name, v in (section.get("export_starts") or {}).items()
+        }
         return EdaConfig(
             valid_from=_as_date(section["valid_from"]),
             valid_to=_as_date(section["valid_to"]),
             mtime_to_utc_s=float(section.get("mtime_to_utc_s", 0.0)),
             rotation_s=float(rotation) if rotation is not None else None,
+            clock=ClockConfig(
+                reference_devices=tuple(clock.get("reference_devices") or ()),
+                timezone=self.timezone,
+                reference_to_utc_s=float(clock.get("reference_to_utc_s", 0.0)),
+                fallback_rates_s_per_h={
+                    str(k): float(v) for k, v in (clock.get("fallback_rates_s_per_h") or {}).items()
+                },
+            ),
+            comotion_windows=tuple(windows),
+            export_starts=starts,
         )
 
     def purged_devices(self) -> tuple[int, ...]:

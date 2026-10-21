@@ -9,7 +9,7 @@ import math
 import numpy as np
 import pytest
 
-from social_energy.eda.export import read_export
+from social_energy.eda.export import export_span, read_export
 
 UNITS = ["ms", "m/(s^2)", "m/(s^2)", "m/(s^2)", "no_units", "uS", "kOhms", "mV", "ms", "BPM"]
 COLS = [
@@ -108,3 +108,24 @@ def test_unsynced_devices_export_a_plain_timestamp(tmp_path):
     assert e.qa["clock"] == "device"
     write_export(path, [T0_MS + i * STEP for i in range(200)], device="SH04")
     assert read_export(path).qa["clock"] == "sync"
+
+
+def test_an_export_without_a_clock_is_unplaced_unless_given_a_start(tmp_path):
+    """Every timestamp -1: no time at all (not 1969). With a start, row i sits at
+    start + i / 128 and the clock is 'recovered'."""
+    path = tmp_path / "day1_Session1_SH15_Calibrated_SD.csv"
+    write_export(path, [-1.0] * 300)
+    e = read_export(path)
+    assert np.isnan(e.t).all() and e.qa["clock"] == "none"
+    e = read_export(path, start_s=T0_MS / 1000)
+    assert close(e.t, T0_MS / 1000 + np.arange(300) / 128)
+    assert e.qa["clock"] == "recovered" and e.qa["records_bad"] == 0
+
+
+def test_export_span_reads_only_the_first_and_last_rows(tmp_path):
+    path = tmp_path / "x_SH07_Calibrated_SD.csv"
+    write_export(path, [T0_MS + i * STEP for i in range(1000)])
+    first, last = export_span(path)
+    assert math.isclose(first, T0_MS / 1000) and math.isclose(last, (T0_MS + 999 * STEP) / 1000)
+    write_export(path, [-1.0] * 10)
+    assert export_span(path) == (None, None)

@@ -76,7 +76,41 @@ eda:
   # timestamp on every device-day both cover (median of per-device-day medians, 2026-10-21).
   # Re-measure on any other copy: a copy that keeps true modification times needs another value.
   mtime_to_utc_s: 7201.0
-  rotation_s: 3600  # devices close a chunk and open the next every hour of wall time
+  # Chunks rotate by sample count (3600.2 s of device time), not wall time; the chunk header,
+  # not the modification time, places the data. mtime_to_utc_s is the fallback only.
+  rotation_s: 3600
+  # Clock correction (docs/context/instruments/eda.md, "Clock"). Five units ran slow while
+  # recording; the sync records on the cards measure each unit against the sync master.
+  clock:
+    # Units whose clocks agree with one another to < 1 s and drift < 0.1 s/h (forensics,
+    # 2026-10-21): their sync records define the reference. SH03 sits a constant 1.5-3 s off
+    # them, so it is corrected, not a reference.
+    reference_devices: [SH02, SH06, SH07, SH08, SH11, SH12, SH15]
+    # The reference group against UTC. Not measurable from the cards; the plenum AudioMoth
+    # and the field notes bound it to a few seconds [inferred].
+    # [unknown: was the laptop that activated the units each morning on network time?]
+    reference_to_utc_s: 0.0
+    # For a unit with no run the sync records could fit: SH04 never wrote a record; box and
+    # plenum co-motion put it at about -5 to -8 s/h.
+    fallback_rates_s_per_h: {SH04: -6.0}
+    # Evening hand-in: devices lay together in the box. The co-motion check (qa.json) looks
+    # for pairs moving together in these windows (local time).
+    comotion_windows:
+      - "2026-08-16 18:45-19:30"
+      - "2026-08-19 18:50-21:00"
+      - "2026-08-20 18:50-21:00"
+      - "2026-08-21 19:25-21:00"
+      - "2026-08-22 18:30-21:00"
+      - "2026-08-23 19:45-21:30"
+      - "2026-08-24 18:50-21:40"
+      - "2026-08-25 18:50-21:00"
+      - "2026-08-26 18:45-21:00"
+      - "2026-08-27 19:10-22:50"
+      - "2026-08-28 20:00-21:00"
+  # Exports written without a clock (every timestamp -1) are placed from the median first
+  # timestamp of the other exports of their session (the units were started together),
+  # unless a start is given here (local time).
+  export_starts: {}
 
 acoustics:
   devices:

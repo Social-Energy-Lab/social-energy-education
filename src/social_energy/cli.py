@@ -18,8 +18,10 @@ social-energy purge-device studies/<id>/study.yaml --device N [--dry-run | --app
 social-energy ingest-eda studies/<id>/study.yaml
     Shimmer SD cards under raw/eda/sd-cards/<card>/ and calibrated exports under
     raw/eda/imported/*/ -> derived/eda/: files, seconds, scr and wear parquet, plus
-    person_minutes.parquet (through the spine, EDA consent only) and qa.json. One device and
-    one run at a time.
+    person_minutes.parquet (through the spine, EDA consent only), clock.parquet (the clock
+    model per run), comotion.parquet (the co-motion check) and qa.json. Device clocks are
+    corrected through the cards' sync records. Replaces only its own outputs. One device and
+    one run at a time (the cards are read twice: clock scan, then tables).
 social-energy extract-acoustics studies/<id>/study.yaml [--delete-wavs]
     AudioMoth WAVs under raw/audiomoth/<device>/ -> derived/acoustics/<device>/.
 
@@ -212,6 +214,12 @@ def purge_device(study: StudyConfig, devices: list[int], apply: bool = False) ->
     return 0
 
 
+INGEST_EDA_OUTPUTS = tuple(
+    f"{n}.parquet"
+    for n in ("files", "seconds", "scr", "wear", "clock", "comotion", "person_minutes")
+)
+
+
 def ingest_eda_command(study: StudyConfig) -> int:
     layout = paths.study(study.study_id)
     raw = layout.raw / "eda"
@@ -222,10 +230,11 @@ def ingest_eda_command(study: StudyConfig) -> int:
         return 1
     tables = ingest_eda(cards, exports, study.eda_config())
     out = layout.derived / "eda"
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
-    for name in ("files", "seconds", "scr", "wear"):
+    out.mkdir(parents=True, exist_ok=True)
+    # Only this command's own outputs are replaced (other commands write beside them).
+    for name in (*INGEST_EDA_OUTPUTS, "qa.json"):
+        (out / name).unlink(missing_ok=True)
+    for name in ("files", "seconds", "scr", "wear", "clock", "comotion"):
         getattr(tables, name).write_parquet(out / f"{name}.parquet")
     qa = {"ingest": tables.qa}
     if (layout.spine / "meta.yaml").exists():

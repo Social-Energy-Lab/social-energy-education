@@ -5,6 +5,8 @@ ones without an artifact (``artifact_s`` says how many had one), and SCRs touchi
 are not counted. People without EDA consent are
 removed entirely: their data may not be used, so it is not carried in a flag. Exclusion
 windows are flagged (``excluded``), so filtering them stays the analyst's visible choice.
+So are minutes whose device clock could not be measured (``clock_uncertain``: any second of
+the minute placed by the fallback clock model, ``eda.clock``).
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ def person_minutes(tables: EdaTables, spine: Spine) -> tuple[pl.DataFrame, dict[
     s = s.filter(pl.col("entity").is_in(consented))
     s = spine.flag_excluded(s, device_col="device", time_col="t", kind="eda")
     clean = pl.col("conductance_us").filter(~pl.col("artifact"))
+    uncertain = pl.col("clock_uncertain").any() if "clock_uncertain" in s.columns else pl.lit(False)
     minutes = s.group_by("entity", pl.col("t").dt.truncate("1m").alias("minute")).agg(
         pl.col("device").first(),
         pl.len().alias("worn_s"),
@@ -36,6 +39,7 @@ def person_minutes(tables: EdaTables, spine: Spine) -> tuple[pl.DataFrame, dict[
         pl.col("hr_bpm").mean().alias("hr_bpm"),
         pl.col("source").first(),
         pl.col("excluded").any(),
+        uncertain.alias("clock_uncertain"),
     )
     scr = spine.resolve(
         tables.scr.filter(pl.col("ok") & pl.col("worn") & ~pl.col("artifact")),
