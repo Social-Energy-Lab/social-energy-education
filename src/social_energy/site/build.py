@@ -74,8 +74,11 @@ def _allowed_files(data_dir: Path) -> list[str]:
     meta = json.loads((data_dir / "meta.json").read_text(encoding="utf-8"))
     allowed = ["meta.json", "aggregates.json", *(f"{n}.bin" for n in sorted(meta.get("files", {})))]
     for entry in sorted(data_dir.iterdir()):
-        if entry.name not in allowed or not entry.is_file():
+        if entry.name not in allowed or entry.is_symlink() or not entry.is_file():
             raise SiteDataError(f"{entry.name} is not part of the public data; the export is wrong")
+    for name in allowed:
+        if not (data_dir / name).is_file():
+            raise SiteDataError(f"{name} is listed in the public data but missing")
     return allowed
 
 

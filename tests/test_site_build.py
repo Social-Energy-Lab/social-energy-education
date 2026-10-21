@@ -103,11 +103,26 @@ def test_build_uses_one_min_group(tmp_path, built, monkeypatch):
     from social_energy.site import build as mod
 
     seen = []
-    real = mod.validate_site_data
     monkeypatch.setattr(
-        mod,
-        "validate_site_data",
-        lambda d, min_group=5: (seen.append(min_group), real(d, min_group=min_group))[1],
+        mod, "validate_site_data", lambda d, min_group=5: seen.append(min_group) or {}
     )
-    build_site(tmp_path / "o", built / "data", config=ExplorerConfig(min_group=5))
-    assert len(set(seen)) == 1 and len(seen) == 2
+    build_site(tmp_path / "o", built / "data", config=ExplorerConfig(min_group=7))
+    assert seen == [7, 7]
+
+
+def test_build_refuses_missing_listed_table(tmp_path, built):
+    data = _copy_data(built, tmp_path / "data")
+    (data / "pairs.bin").unlink()
+    with pytest.raises(SiteDataError, match=r"pairs\.bin"):
+        build_site(tmp_path / "o", data)
+    assert not (tmp_path / "o" / "data").exists()
+
+
+def test_build_refuses_symlink_in_data_dir(tmp_path, built):
+    data = _copy_data(built, tmp_path / "data")
+    secret = tmp_path / "secret.bin"
+    secret.write_bytes((data / "seen.bin").read_bytes())
+    (data / "seen.bin").unlink()
+    (data / "seen.bin").symlink_to(secret)
+    with pytest.raises(SiteDataError, match=r"seen\.bin"):
+        build_site(tmp_path / "o", data)
