@@ -134,3 +134,11 @@ def test_a_rise_out_of_a_notch_is_flagged():
     clean = scr.filter(~pl.col("artifact"))
     assert clean.height == 1 and abs(clean["onset_s"][0] - T0 - 45) <= 0.6
     assert scr.filter("artifact").height >= 1
+
+
+def test_artifact_mask_of_a_series_shorter_than_the_padding():
+    """10 bins (2.5 s), one out of range: the mask keeps the series' length, all marked."""
+    x = np.full(10, 1.0)
+    x[3] = 0.01
+    mask = artifact_mask(x, ScrConfig())
+    assert len(mask) == 10 and mask.all()

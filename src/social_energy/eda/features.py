@@ -67,7 +67,8 @@ def artifact_mask(x: np.ndarray, config: ScrConfig) -> np.ndarray:
     bad[1:] |= fast | fall
     pad = round(config.artifact_pad_s * config.rate_hz)
     if pad and bad.any():
-        bad = np.convolve(bad.astype(np.int64), np.ones(2 * pad + 1, np.int64), "same") > 0
+        full = np.convolve(bad.astype(np.int64), np.ones(2 * pad + 1, np.int64), "full")
+        bad = full[pad : pad + len(bad)] > 0  # "same" would return the longer length
     return bad
 
 
