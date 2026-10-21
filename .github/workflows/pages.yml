@@ -1,0 +1,60 @@
+name: pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/social_energy/site/**"
+      - "src/social_energy/explorer/static/**"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+
+      - name: Fetch the real data release, if one exists
+        id: data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Expected asset: site-data.zip on release site-data-dsa-2026, with the
+          # files at the zip root (meta.json directly inside, no wrapping folder).
+          # No release means a synthetic demo build. Any failure with a release
+          # present (download, unzip, missing meta.json) fails the job.
+          if gh release view site-data-dsa-2026 >/dev/null 2>&1; then
+            gh release download site-data-dsa-2026 -p site-data.zip -D "$RUNNER_TEMP"
+            mkdir -p "$RUNNER_TEMP/data"
+            unzip -q "$RUNNER_TEMP/site-data.zip" -d "$RUNNER_TEMP/data"
+            test -f "$RUNNER_TEMP/data/meta.json"
+            echo "args=--data $RUNNER_TEMP/data" >> "$GITHUB_OUTPUT"
+          else
+            echo "No site-data-dsa-2026 release: building the synthetic demo."
+            echo "args=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the site
+        run: uv run social-energy site-build studies/dsa-2026/study.yaml --out "$RUNNER_TEMP/site" ${{ steps.data.outputs.args }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
