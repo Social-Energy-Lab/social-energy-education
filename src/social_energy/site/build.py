@@ -11,7 +11,12 @@ import json
 import shutil
 import tempfile
 from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+import numpy as np
+import polars as pl
 
 from .. import paths
 from ..explorer.synthetic import synthetic_inputs
@@ -25,6 +30,9 @@ EXPLORER_STATIC = Path(__file__).resolve().parents[1] / "explorer" / "static"
 SITE_STATIC = Path(__file__).resolve().parent / "static"
 SYNTHETIC_PEOPLE = 40
 SYNTHETIC_COURSES = 4
+#: Share of people who leave their course group in an hour: ordinary day, evening, special day.
+MIX_DAY, MIX_EVENING, MIX_SPECIAL = 0.06, 0.3, 0.55
+EVENING = (19, 23)  # local hours [start, end)
 
 
 def _synthetic_spec(seed: int) -> CampSpec:
@@ -42,6 +50,62 @@ def _synthetic_spec(seed: int) -> CampSpec:
     )
 
 
+def _course_pairs(inp, nodes: dict[str, str], special: tuple[int, int], timezone: str, seed: int):
+    """Close pairs for a camp with course structure, replacing the generator's dense ones.
+
+    Every hour each person either stays with their course (in one of two small groups) or
+    joins one of a few mixed groups; more people mix in the evening and on the special day.
+    Members of a group are close in each bin of the hour in which both were heard, with a
+    small dropout. The synthetic generator has no courses, so without this the demo network
+    is one ball.
+    """
+    rng = np.random.default_rng(seed)
+    tz = ZoneInfo(timezone)
+    people = sorted(nodes)
+    course = np.array([int(nodes[p]) for p in people])
+    seen = inp.seen.with_columns(
+        ((pl.col("bin") - inp.t0).dt.total_seconds() // inp.bin_seconds).alias("k")
+    )
+    heard = {(e, int(k)) for e, k in zip(seen["entity"], seen["k"], strict=True)}
+    per_hour = 3600 // inp.bin_seconds
+    rows_a, rows_b, rows_k = [], [], []
+    for h0 in range(0, inp.n_bins, per_hour):
+        local = (inp.t0 + timedelta(seconds=h0 * inp.bin_seconds)).astimezone(tz)
+        if special[0] <= h0 < special[1]:
+            mix = MIX_SPECIAL
+        elif EVENING[0] <= local.hour < EVENING[1]:
+            mix = MIX_EVENING
+        else:
+            mix = MIX_DAY
+        n_mixed = max(2, round(mix * len(people) / 5))
+        group = np.where(
+            rng.random(len(people)) < mix,
+            1000 + rng.integers(0, n_mixed, len(people)),
+            course * 10 + rng.integers(0, 2, len(people)),
+        )
+        members: dict[int, list[int]] = {}
+        for i, g in enumerate(group):
+            members.setdefault(int(g), []).append(i)
+        for idx in members.values():
+            for x in range(len(idx)):
+                for y in range(x + 1, len(idx)):
+                    a, b = sorted((people[idx[x]], people[idx[y]]))
+                    for k in range(h0, min(h0 + per_hour, inp.n_bins)):
+                        if (a, k) in heard and (b, k) in heard and rng.random() > 0.15:
+                            rows_a.append(a)
+                            rows_b.append(b)
+                            rows_k.append(k)
+    t0 = pl.lit(inp.t0).dt.convert_time_zone("UTC")
+    return pl.DataFrame(
+        {"a": rows_a, "b": rows_b, "k": rows_k}, schema_overrides={"k": pl.Int64}
+    ).select(
+        "a",
+        "b",
+        (t0 + pl.duration(seconds=pl.col("k") * inp.bin_seconds)).alias("bin"),
+        pl.lit(-60, dtype=pl.Int64).alias("max_rssi"),
+    )
+
+
 def synthetic_site_data(
     out_dir: Path, config: ExplorerConfig, *, timezone: str, seed: int = 0
 ) -> Path:
@@ -51,8 +115,9 @@ def synthetic_site_data(
         inp = synthetic_inputs(generate(_synthetic_spec(seed), Path(tmp) / "camp"))
     # A few courses, assigned deterministically, so the dots get course colours.
     nodes = {entity: str(i % SYNTHETIC_COURSES + 1) for i, entity in enumerate(sorted(inp.nodes))}
-    inp = replace(inp, nodes=nodes)
     third = inp.n_bins // 3
+    pairs = _course_pairs(inp, nodes, (third, 2 * third), timezone, seed)
+    inp = replace(inp, nodes=nodes, pairs=pairs.cast(inp.pairs.schema))
     write_public_bundle(
         inp,
         out_dir,

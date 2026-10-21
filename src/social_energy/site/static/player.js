@@ -302,7 +302,7 @@ export function mountPlayer(root, site, t, opts = {}) {
     if (!w || !h) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const s = Math.min(w, h) / 2.5; // world units [-1.25, 1.25] fit the short side
+    const s = Math.min(w, h) / 2.9; // world units [-1.45, 1.45] fit the short side: clusters sit past the ring
     const cx = w / 2;
     const cy = h / 2;
     const pos = sim.pos;
@@ -424,6 +424,8 @@ export function mountPlayer(root, site, t, opts = {}) {
     sim.step(weights, vis, Math.max(1, Math.min(8, Math.round(dt * 120))));
     draw();
     const moving = playing || sim.energy() > 0.0004 || ts < nightUntil;
+    // setPlaying(false) at the end of the timeline may already have scheduled a frame.
+    if (raf) return;
     if (moving && onscreen) raf = requestAnimationFrame(frame);
     else last = 0;
   }
@@ -501,11 +503,7 @@ export function mountPlayer(root, site, t, opts = {}) {
   return {
     seekTo(bin) {
       const i = model.lowerBound(shown, bin);
-      seekIndex(Math.min(i, shown.length - 1));
-      if (reduced && !playing) {
-        settle();
-        draw();
-      }
+      seekIndex(Math.min(i, shown.length - 1)); // wake() settles at once under reduced motion
     },
     pause: () => setPlaying(false),
     play: () => setPlaying(true),

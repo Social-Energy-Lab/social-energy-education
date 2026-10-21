@@ -2,7 +2,7 @@
 // chapters. A chapter is ./chapters/<name>.js exporting render(el, agg, t, opts); a chapter
 // that is not there yet leaves a quiet placeholder and the rest of the page works.
 import { loadSite } from "./data.js";
-import { getLang, initLang, setLang, setNumbers, t } from "./i18n.js";
+import { getLang, initLang, setLang, setNumbers, signed, t } from "./i18n.js";
 import { mountPlayer, startPaused } from "./player.js";
 
 const CHAPTERS = ["day", "circles", "moments", "places", "null", "how"];
@@ -15,7 +15,13 @@ function applyStrings() {
   document.documentElement.lang = getLang();
   document.title = t("page_title");
   document.querySelector('meta[name="description"]')?.setAttribute("content", t("page_description"));
-  for (const node of document.querySelectorAll("[data-t]")) node.textContent = t(node.dataset.t);
+  for (const node of document.querySelectorAll("[data-t]")) {
+    // data-t-sign names a number whose sign picks the wording (…_pos / …_neg).
+    const { key, extra } = node.dataset.tSign
+      ? signed(node.dataset.t, node.dataset.tSign)
+      : { key: node.dataset.t, extra: undefined };
+    node.textContent = t(key, extra);
+  }
   const toggle = document.getElementById("lang");
   toggle.textContent = t("lang_switch");
   toggle.setAttribute("aria-label", t("lang_switch_label"));

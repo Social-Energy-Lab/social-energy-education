@@ -156,5 +156,7 @@ def synthetic_aggregates(seed: int = 0) -> dict:
             }
             for t, sc in (("h1", "sd"), ("h2", "rr"))
         ],
-        NUMBERS: {k: val(0, 100) for k in NUMBER_KEYS},
+        NUMBERS: {
+            k: rng.randint(30, 600) if k.startswith("n_") else val(0, 100) for k in NUMBER_KEYS
+        },
     }

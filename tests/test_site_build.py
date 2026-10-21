@@ -126,3 +126,20 @@ def test_build_refuses_symlink_in_data_dir(tmp_path, built):
     (data / "seen.bin").symlink_to(secret)
     with pytest.raises(SiteDataError, match=r"seen\.bin"):
         build_site(tmp_path / "o", data)
+
+
+def test_synthetic_camp_has_course_structure(built):
+    # Ties stay mostly inside courses, and cross courses more on the synthetic special day.
+    import numpy as np
+
+    meta = json.loads((built / "data" / "meta.json").read_text())
+    n = meta["files"]["pairs"]["count"]
+    cols = np.frombuffer((built / "data" / "pairs.bin").read_bytes(), "<u2").reshape(3, n)
+    k, a, b = cols
+    course = np.array([node["course"] for node in meta["nodes"]])
+    cross = course[a] != course[b]
+    special = meta["special_days"][0]
+    on = (k >= special["start_bin"]) & (k < special["end_bin"])
+    assert cross[~on].mean() < 0.3
+    assert cross[on].mean() > cross[~on].mean() + 0.15
+    assert n < 150_000

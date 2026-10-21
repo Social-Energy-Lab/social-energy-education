@@ -129,3 +129,20 @@ test("dayStarts: the first shown index of each camp day", () => {
     { day: 2, index: 4, bin: 5 },
   ]);
 });
+
+test("signed copy: the sentence follows the sign, the number is shown without it", () => {
+  assert.deepEqual(i18n.signed("ch_moments_body3", "company_gain", { company_gain: 1.5 }), {
+    key: "ch_moments_body3_pos",
+    extra: { company_gain_abs: 1.5 },
+  });
+  assert.deepEqual(i18n.signed("ch_moments_body3", "company_gain", { company_gain: -0.4 }), {
+    key: "ch_moments_body3_neg",
+    extra: { company_gain_abs: 0.4 },
+  });
+  // No number: the neutral-looking positive form, with a dash for the value.
+  assert.equal(i18n.signed("x", "company_gain", {}).key, "x_pos");
+  i18n.setLang("de");
+  i18n.setNumbers({ company_gain: -2 });
+  const { key, extra } = i18n.signed("ch_moments_body3", "company_gain");
+  assert.match(i18n.t(key, extra), /2 Menschen weniger/);
+});

@@ -65,6 +65,16 @@ export function setLang(next, remember = false) {
   return lang;
 }
 
+/** For copy whose wording depends on a sign: `<base>_pos` or `<base>_neg`, and `<name>_abs`. */
+export function signed(base, name, values = numbers) {
+  const v = values?.[name];
+  const ok = typeof v === "number" && Number.isFinite(v);
+  return {
+    key: `${base}_${ok && v < 0 ? "neg" : "pos"}`,
+    extra: ok ? { [`${name}_abs`]: Math.abs(v) } : {},
+  };
+}
+
 export function setNumbers(values) {
   numbers = values ?? {};
 }

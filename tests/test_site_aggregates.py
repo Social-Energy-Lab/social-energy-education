@@ -140,3 +140,10 @@ def test_non_finite_values_are_refused_and_dropped(tmp_path):
     (out / "aggregates.json").write_text(json.dumps(agg))
     with pytest.raises(SiteDataError, match="n_presses"):
         validate_site_data(out)
+
+
+def test_synthetic_counts_are_whole_numbers():
+    numbers = synthetic_aggregates(3)["numbers"]
+    counts = {k: v for k, v in numbers.items() if k.startswith("n_")}
+    assert set(counts) == {"n_participants", "n_presses", "n_confirmatory"}
+    assert all(type(v) is int for v in counts.values()), counts

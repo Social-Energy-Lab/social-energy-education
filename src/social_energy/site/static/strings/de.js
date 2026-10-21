@@ -17,12 +17,13 @@ export default {
   hero_lede:
     "Jeder Punkt ist eine Person, ohne Namen. Wer länger nah beieinander war, ist durch eine Linie verbunden. Und wenn ein Punkt aufleuchtet, hat jemand auf den Knopf am Armband gedrückt: Dieser Moment hat mich bewegt.",
   legend_dot: "Ein Punkt: eine Person. Die Farbe steht für ihren Kurs, welcher es ist, verraten wir nicht.",
-  legend_line: "Eine Linie: mindestens fünfzehn Minuten nah beieinander in den letzten zwei Stunden.",
+  legend_line:
+    "Eine Linie: in mindestens drei Fünf-Minuten-Abschnitten der letzten zwei Stunden nah beieinander.",
   legend_cross: "Weiße Linie: über Kursgrenzen hinweg.",
   legend_glow: "Leuchten: Jemand hat gerade gedrückt.",
   legend_faded: "Blass: Das Armband war zwei Stunden lang nicht zu hören.",
   legend_ring:
-    "Jeder Kurs hat seinen Platz auf dem Ring. Wer weit weg von zu Hause ist, ist mit Leuten aus anderen Kursen unterwegs.",
+    "Jeder Kurs hat seinen Platz auf dem Ring. Wer weit weg davon ist, ist meist mit Leuten aus anderen Kursen zusammen.",
 
   player_label: "Animiertes Netz der Akademie: wer wann mit wem zusammen war",
   player_play: "Abspielen",
@@ -58,9 +59,9 @@ export default {
 
   intro_title: "Signaturen sozialer Energie",
   intro_body:
-    "Manche Momente tragen eine Gruppe: ein Abend, an dem alle bleiben, ein Gespräch, das nicht aufhören will. Soziologinnen und Soziologen nennen das soziale Energie. Messen lässt sie sich nicht direkt. Aber sie hinterlässt Spuren: wer zusammen ist, wie lange, und wann sich jemand bewegt fühlt. Diese Spuren, wir nennen sie Signaturen, haben wir während der Akademie aufgezeichnet.",
+    "Manche Momente tragen eine Gruppe: ein Abend, an dem alle bleiben, ein Gespräch, das nicht aufhören will. Wir nennen das soziale Energie. Messen lässt sie sich nicht direkt. Aber sie hinterlässt Spuren: wer zusammen ist, wie lange, und wann sich jemand bewegt fühlt. Diese Spuren, wir nennen sie Signaturen, haben wir während der Akademie aufgezeichnet.",
   intro_body2:
-    "{n_participants} Teilnehmende haben Armbänder getragen und insgesamt {n_presses}-mal gedrückt. Was folgt, sind die Muster, die wir darin gefunden haben. Und eines, das wir gesucht und nicht gefunden haben.",
+    "{n_participants} Teilnehmende haben Armbänder getragen und insgesamt {n_presses}-mal gedrückt. Was folgt, sind die Spuren, denen wir nachgehen, und eine Prüfung, die wir vorab festgelegt haben.",
   tier_confirmatory: "Vorab festgelegt",
   tier_exploratory: "Eine Spur, kein Beweis",
   chart_pending: "Die Grafik zu diesem Kapitel folgt bald.",
@@ -73,11 +74,12 @@ export default {
   ch_day_axis_day: "Tag",
   ch_day_axis_phase: "Tageszeit",
 
-  ch_circles_title: "Kurse bilden Kreise, besondere Tage brechen sie auf",
+  ch_circles_title:
+    "Bleiben die Kurse unter sich?",
   ch_circles_body:
-    "Im Alltag bleiben die Kurse unter sich: An gewöhnlichen Tagen gehen {mixing_ordinary_lo} bis {mixing_ordinary_hi} % der Verbindungen über Kursgrenzen. Würden sich alle zufällig mischen, wären es etwa {mixing_random} %.",
+    "An gewöhnlichen Tagen gingen {mixing_ordinary_lo} bis {mixing_ordinary_hi} % der Verbindungen über Kursgrenzen. Würden sich alle zufällig mischen, wären es etwa {mixing_random} %.",
   ch_circles_body2:
-    "Am Exkursionstag steigt der Anteil auf {mixing_excursion} %, am Rotationstag auf {mixing_rotation} %. Im Netz oben sieht man es: Der Ring lockert sich, weiße Linien ziehen quer hindurch.",
+    "Am Exkursionstag lag der Anteil bei {mixing_excursion} %, am Rotationstag bei {mixing_rotation} %. Mit „Im Netz zeigen“ springt das Netz oben zum Exkursionstag, dort lässt sich der Ring mit einem gewöhnlichen Tag vergleichen.",
   ch_circles_body3:
     "Halten die neuen Bekanntschaften? Von den Verbindungen, die an einem gewöhnlichen Tag entstanden, kamen {persistence_ordinary} % in den drei Tagen danach wieder vor; bei denen vom Exkursionstag {persistence_excursion} %.",
   ch_circles_show: "Im Netz zeigen",
@@ -88,13 +90,16 @@ export default {
   origin_excursion: "Exkursionstag",
   origin_rotation: "Rotationstag",
 
-  ch_moments_title: "Geteilte Momente",
+  ch_moments_title:
+    "Drücken Menschen gemeinsam?",
   ch_moments_body:
-    "Wenn zwei Menschen nah beieinander sind und beide innerhalb weniger Sekunden drücken, war das vielleicht derselbe Moment. Solche Paare gab es {cascade_excess}-mal so oft, wie es der Zufall erwarten ließe (Spanne {cascade_excess_lo} bis {cascade_excess_hi}).",
+    "Wenn zwei Menschen nah beieinander sind und beide innerhalb weniger Sekunden drücken, war das vielleicht derselbe Moment. Wir haben gezählt, wie oft das vorkam, und mit dem Zufall verglichen: {cascade_excess}-mal so oft wie erwartet (Spanne {cascade_excess_lo} bis {cascade_excess_hi}). Ein Wert von eins hieße: so oft wie durch Zufall.",
   ch_moments_body2:
-    "Am stärksten ist der Effekt in den ersten zehn Sekunden: {latency_0_10_ratio}-mal so oft wie zufällig. So lässt sich die Kurve lesen: Eine Spitze ganz am Anfang spricht dafür, dass zwei auf dasselbe reagiert haben; eine Spitze später eher dafür, dass einer den anderen angesteckt hat.",
-  ch_moments_body3:
-    "Und wer drückt, hat im Schnitt {company_gain} Menschen mehr um sich als sonst.",
+    "Lagen höchstens zehn Sekunden zwischen den beiden Drücken, war das Verhältnis {latency_0_10_ratio}. So lässt sich die Kurve unten lesen: Eine Spitze ganz am Anfang spräche dafür, dass zwei auf dasselbe reagiert haben; eine Spitze später eher dafür, dass einer den anderen angesteckt hat.",
+  ch_moments_body3_pos:
+    "Wer drückte, hatte in diesem Moment im Schnitt {company_gain} Menschen mehr in der Nähe als sonst.",
+  ch_moments_body3_neg:
+    "Wer drückte, hatte in diesem Moment im Schnitt {company_gain_abs} Menschen weniger in der Nähe als sonst.",
   ch_moments_latency: "Abstand zwischen zwei Drücken",
   ch_moments_size: "Größe der Gruppe, die gemeinsam drückt",
   ch_moments_ratio: "Wie oft im Vergleich zum Zufall",
@@ -102,9 +107,10 @@ export default {
   ch_moments_seconds: "Sekunden",
   ch_moments_people: "Personen",
 
-  ch_places_title: "Wo bewegende Momente passieren",
+  ch_places_title:
+    "Wo wird gedrückt?",
   ch_places_body:
-    "Gedrückt wurde überall, aber nicht überall gleich oft. Im Plenum, wenn alle zusammenkommen, kamen auf eine Stunde {plenum_vs_course}-mal so viele Drücke wie im Kurs. Die Orte haben wir selbst in Gruppen eingeteilt, aus dem Programm und den Räumen.",
+    "Wir haben die Drücke nach Situationen sortiert: Kurs, Plenum, Essen, Abendprogramm und mehr. Die Einteilung stammt von uns, aus dem Programm und den Räumen. Auf eine Stunde im Plenum kamen {plenum_vs_course}-mal so viele Drücke wie auf eine Stunde im Kurs.",
   ch_places_rate: "Drücke pro zehn Stunden",
   setting_plenum: "Plenum",
   setting_course_block: "Kurs",
@@ -118,7 +124,7 @@ export default {
   ch_null_body:
     "Bevor wir die Daten angesehen haben, haben wir aufgeschrieben, was wir prüfen wollen und wie. Die Vermutung: Wer im Fragebogen mehr Vertrauen ins Leben und mehr Lust aufs Leben angibt, ist stärker eingebunden, mischt sich mehr über Kursgrenzen und drückt öfter. Mit {n_confirmatory} Teilnehmenden fand diese Prüfung keine Bestätigung.",
   ch_null_body2:
-    "Das heißt nicht, dass es den Zusammenhang nicht gibt. Bei so wenigen Menschen kann ein kleiner Effekt leicht unsichtbar bleiben, und die Spannen unten sind breit. Es heißt: Diese Akademie liefert keinen Beleg dafür. Alles andere auf dieser Seite ist erkundend, Spuren für die nächsten Camps, keine geprüften Ergebnisse.",
+    "Das heißt nicht, dass es den Zusammenhang nicht gibt. Bei so wenigen Menschen kann ein kleiner Effekt leicht unsichtbar bleiben; wie groß die Unsicherheit ist, zeigen die Intervalle in der Grafik unten. Es heißt: Diese Akademie liefert keinen Beleg dafür. Alles andere auf dieser Seite ist erkundend, Spuren für die nächsten Camps, keine geprüften Ergebnisse.",
   ch_null_axis_sd: "Effekt in Standardabweichungen",
   ch_null_axis_rr: "Verhältnis der Drückrate",
   ch_null_no_effect: "Kein Effekt",
@@ -129,11 +135,11 @@ export default {
 
   ch_how_title: "Wie das funktioniert",
   ch_how_beacons:
-    "Alle Teilnehmenden, die zugestimmt haben, trugen ein kleines Funk-Armband. Die Armbänder hören einander: Alle fünf Minuten wissen wir, wer nah beieinander war. Nicht wo, nicht was gesagt wurde, nur wer mit wem.",
+    "Alle Teilnehmenden, die zugestimmt haben, trugen ein kleines Funk-Armband. Die Armbänder hören einander: Für jeden Fünf-Minuten-Abschnitt wissen wir, wer nah beieinander war. Feste Sender in den Räumen verraten auch, in welchem Raum jemand war; das zeigt diese Seite nicht.",
   ch_how_button:
-    "Am Armband ist ein Knopf. Wir haben gebeten, ihn zu drücken, wenn ein Moment bewegt, egal ob froh, traurig oder überwältigend. Was den Moment ausgemacht hat, wissen wir nicht.",
+    "Am Armband ist ein Knopf. Wir haben gebeten, ihn zu drücken, wenn ein Moment einen bewegt, nicht unbedingt im guten Sinn. Was den Moment ausgemacht hat, wissen wir nicht.",
   ch_how_not_recorded:
-    "Nicht aufgezeichnet: Gespräche, Orte auf der Karte, Namen. Fragebögen, Interviews und Beobachtungen gehören zur Studie, erscheinen hier aber nicht.",
+    "Nicht auf dieser Seite: wo jemand war, Fragebögen, Interviews und Beobachtungen. Sie gehören zur Studie, erscheinen hier aber nicht.",
   ch_how_privacy_title: "Was wir zum Schutz aller tun",
   privacy_names: "Keine Namen und keine Kennungen. Niemand lässt sich hier anklicken oder suchen.",
   privacy_courses: "Die Kurse sind nicht beschriftet, Farben und Plätze auf dem Ring sind gemischt.",
@@ -144,7 +150,7 @@ export default {
   ch_how_tiers:
     "Zwei Arten von Ergebnissen: Die Prüfung in „Was wir nicht gefunden haben“ war vorab festgelegt und ist die einzige, die etwas bestätigen oder widerlegen konnte. Alles andere ist erkundend: Muster, denen die nächsten Camps nachgehen.",
   ch_how_repo:
-    "Die Methoden, der Code und der Analyseplan sind offen. Die Daten nicht: Sie beschreiben Minderjährige und bleiben bei den Forschenden.",
+    "Methoden, Code und Analyseplan liegen offen. Die Daten nicht: Sie beschreiben Minderjährige und bleiben bei den Forschenden.",
   ch_how_repo_link: "Zum Code auf GitHub",
   ch_how_cite:
     "Zitieren: Social Energy Lab, Signaturen sozialer Energie, Deutsche SchülerAkademie 2026, https://github.com/Social-Energy-Lab/social-energy-education",

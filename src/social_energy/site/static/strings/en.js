@@ -17,12 +17,13 @@ export default {
   hero_lede:
     "Each dot is one person, with no name. People who spent a while close together are joined by a line. And when a dot lights up, someone has pressed the button on their wristband: this moment moved me.",
   legend_dot: "A dot: one person. The colour stands for their course; which course, we don't say.",
-  legend_line: "A line: close together for at least fifteen minutes in the last two hours.",
+  legend_line:
+    "A line: close together in at least three five-minute slots of the last two hours.",
   legend_cross: "White line: across courses.",
   legend_glow: "A glow: someone just pressed.",
   legend_faded: "Faded: the wristband wasn't heard for two hours.",
   legend_ring:
-    "Each course has its place on the ring. Someone far from home is out with people from other courses.",
+    "Each course has its place on the ring. Someone far from it is usually with people from other courses.",
 
   player_label: "Animated network of the academy: who was with whom, and when",
   player_play: "Play",
@@ -57,9 +58,9 @@ export default {
 
   intro_title: "Signatures of social energy",
   intro_body:
-    "Some moments carry a group: an evening when nobody wants to leave, a conversation that won't end. Sociologists call this social energy. It can't be measured directly. But it leaves traces: who is together, for how long, and when someone feels moved. We call these traces signatures, and we recorded them during the academy.",
+    "Some moments carry a group: an evening when nobody wants to leave, a conversation that won't end. We call this social energy. It can't be measured directly. But it leaves traces: who is together, for how long, and when someone feels moved. We call these traces signatures, and we recorded them during the academy.",
   intro_body2:
-    "{n_participants} participants wore wristbands and pressed {n_presses} times in all. What follows are the patterns we found in them. And one we looked for and did not find.",
+    "{n_participants} participants wore wristbands and pressed {n_presses} times in all. What follows are the traces we are following up, and one test we fixed in advance.",
   tier_confirmatory: "Fixed in advance",
   tier_exploratory: "A lead, not proof",
   chart_pending: "The chart for this chapter is coming soon.",
@@ -72,11 +73,12 @@ export default {
   ch_day_axis_day: "Day",
   ch_day_axis_phase: "Time of day",
 
-  ch_circles_title: "Courses form circles, special days break them open",
+  ch_circles_title:
+    "Do courses keep to themselves?",
   ch_circles_body:
-    "Day to day, courses keep to themselves: on ordinary days {mixing_ordinary_lo} to {mixing_ordinary_hi} % of ties cross a course boundary. If everyone mixed at random, it would be about {mixing_random} %.",
+    "On ordinary days, {mixing_ordinary_lo} to {mixing_ordinary_hi} % of ties crossed a course boundary. If everyone mixed at random, it would be about {mixing_random} %.",
   ch_circles_body2:
-    "On the excursion day the share rises to {mixing_excursion} %, on the rotation day to {mixing_rotation} %. You can see it in the network above: the ring loosens and white lines cut across it.",
+    "On the excursion day the share was {mixing_excursion} %, on the rotation day {mixing_rotation} %. “Show me on the network” moves the network above to the excursion day, where you can compare the ring with an ordinary day.",
   ch_circles_body3:
     "Do the new acquaintances last? Of the ties that formed on an ordinary day, {persistence_ordinary} % came back within the next three days; of those from the excursion day, {persistence_excursion} %.",
   ch_circles_show: "Show me on the network",
@@ -87,12 +89,16 @@ export default {
   origin_excursion: "Excursion day",
   origin_rotation: "Rotation day",
 
-  ch_moments_title: "Shared moments",
+  ch_moments_title:
+    "Do people press together?",
   ch_moments_body:
-    "When two people are close together and both press within a few seconds, it may have been the same moment. Such pairs happened {cascade_excess} times as often as chance would predict (range {cascade_excess_lo} to {cascade_excess_hi}).",
+    "When two people are close together and both press within a few seconds, it may have been the same moment. We counted how often that happened and compared it with chance: {cascade_excess} times as often as expected (range {cascade_excess_lo} to {cascade_excess_hi}). A value of one would mean as often as by chance.",
   ch_moments_body2:
-    "The effect is strongest in the first ten seconds: {latency_0_10_ratio} times as often as by chance. Here is how to read the curve: a peak right at the start suggests two people reacting to the same thing; a later peak would suggest one person setting off the other.",
-  ch_moments_body3: "And someone who presses has, on average, {company_gain} more people around them than usual.",
+    "When at most ten seconds lay between the two presses, the ratio was {latency_0_10_ratio}. Here is how to read the curve below: a peak right at the start would suggest two people reacting to the same thing; a later peak would suggest one person setting off the other.",
+  ch_moments_body3_pos:
+    "Someone who pressed had, on average, {company_gain} more people close by at that moment than usual.",
+  ch_moments_body3_neg:
+    "Someone who pressed had, on average, {company_gain_abs} fewer people close by at that moment than usual.",
   ch_moments_latency: "Time between two presses",
   ch_moments_size: "Size of the group pressing together",
   ch_moments_ratio: "How often compared with chance",
@@ -100,9 +106,10 @@ export default {
   ch_moments_seconds: "seconds",
   ch_moments_people: "people",
 
-  ch_places_title: "Where moving moments happen",
+  ch_places_title:
+    "Where do people press?",
   ch_places_body:
-    "People pressed everywhere, but not everywhere equally often. In the plenary, when everyone comes together, an hour brought {plenum_vs_course} times as many presses as an hour in a course. We sorted the places into groups ourselves, from the programme and the rooms.",
+    "We sorted the presses by situation: course, plenary, meals, evening programme and more. The grouping is ours, made from the programme and the rooms. An hour in the plenary brought {plenum_vs_course} times as many presses as an hour in a course.",
   ch_places_rate: "Presses per ten hours",
   setting_plenum: "Plenary",
   setting_course_block: "Course",
@@ -116,7 +123,7 @@ export default {
   ch_null_body:
     "Before looking at the data, we wrote down what we would test and how. The idea: people who report more trust in life and more lust for life in the questionnaire are more embedded, mix more across courses and press more often. With {n_confirmatory} participants, this test found no support.",
   ch_null_body2:
-    "That doesn't mean the link isn't there. With so few people a small effect can easily stay invisible, and the ranges below are wide. It means this academy gives no evidence for it. Everything else on this page is exploratory: leads for the next camps, not tested results.",
+    "That doesn't mean the link isn't there. With so few people a small effect can easily stay invisible; the intervals in the chart below show how uncertain the estimates are. It means this academy gives no evidence for it. Everything else on this page is exploratory: leads for the next camps, not tested results.",
   ch_null_axis_sd: "Effect in standard deviations",
   ch_null_axis_rr: "Ratio of press rates",
   ch_null_no_effect: "No effect",
@@ -127,11 +134,11 @@ export default {
 
   ch_how_title: "How this works",
   ch_how_beacons:
-    "Every participant who agreed wore a small radio wristband. The wristbands hear each other: every five minutes we know who was close to whom. Not where, not what was said, only who was with whom.",
+    "Every participant who agreed wore a small radio wristband. The wristbands hear each other: for every five-minute slot we know who was close to whom. Fixed transmitters in the rooms also tell which room someone was in; this page does not show that.",
   ch_how_button:
-    "The wristband has a button. We asked people to press it whenever a moment moved them, whether happy, sad or overwhelming. What made the moment, we don't know.",
+    "The wristband has a button. We asked people to press it whenever a moment moved them, not necessarily in a good way. What made the moment, we don't know.",
   ch_how_not_recorded:
-    "Not recorded: conversations, places on a map, names. Questionnaires, interviews and observations are part of the study but do not appear here.",
+    "Not on this page: where anyone was, questionnaires, interviews and observations. They are part of the study but do not appear here.",
   ch_how_privacy_title: "What we do to protect everyone",
   privacy_names: "No names and no IDs. Nobody can be clicked on or searched for here.",
   privacy_courses: "Courses are not labelled; colours and places on the ring are shuffled.",
