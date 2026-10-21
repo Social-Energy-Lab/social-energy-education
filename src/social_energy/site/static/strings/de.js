@@ -65,6 +65,10 @@ export default {
   tier_confirmatory: "Vorab festgelegt",
   tier_exploratory: "Eine Spur, kein Beweis",
   chart_pending: "Die Grafik zu diesem Kapitel folgt bald.",
+  chart_empty:
+    "Für diese Grafik gibt es nicht genug Daten: Jede Zahl muss auf mindestens fünf Personen beruhen.",
+  chart_interval_note:
+    "Die dünne Linie an jedem Balken zeigt die Spanne der Unsicherheit.",
 
   ch_day_title: "Ein Tag an der Akademie",
   ch_day_body:
@@ -95,7 +99,7 @@ export default {
   ch_moments_body:
     "Wenn zwei Menschen nah beieinander sind und beide innerhalb weniger Sekunden drücken, war das vielleicht derselbe Moment. Wir haben gezählt, wie oft das vorkam, und mit dem Zufall verglichen: {cascade_excess}-mal so oft wie erwartet (Spanne {cascade_excess_lo} bis {cascade_excess_hi}). Ein Wert von eins hieße: so oft wie durch Zufall.",
   ch_moments_body2:
-    "Lagen höchstens zehn Sekunden zwischen den beiden Drücken, war das Verhältnis {latency_0_10_ratio}. So lässt sich die Kurve unten lesen: Eine Spitze ganz am Anfang spräche dafür, dass zwei auf dasselbe reagiert haben; eine Spitze später eher dafür, dass einer den anderen angesteckt hat.",
+    "Lagen höchstens zehn Sekunden zwischen den beiden Drücken, war das Verhältnis {latency_0_10_ratio}. So lässt sich die Balken unten lesen: Eine Spitze ganz am Anfang spräche dafür, dass zwei auf dasselbe reagiert haben; eine Spitze später eher dafür, dass einer den anderen angesteckt hat.",
   ch_moments_body3_pos:
     "Wer drückte, hatte in diesem Moment im Schnitt {company_gain} Menschen mehr in der Nähe als sonst.",
   ch_moments_body3_neg:
@@ -106,6 +110,12 @@ export default {
   ch_moments_reference: "So oft wie durch Zufall",
   ch_moments_seconds: "Sekunden",
   ch_moments_people: "Personen",
+  ch_moments_headline:
+    "Gemeinsame Drücke im Vergleich zum Zufall: das {cascade_excess}-Fache, Spanne {cascade_excess_lo} bis {cascade_excess_hi}.",
+  ch_moments_aria_latency:
+    "Ein Balken je Abstand zwischen zwei Drücken; seine Länge zeigt, wie oft solche Paare im Vergleich zum Zufall vorkamen. Die senkrechte Linie markiert: so oft wie durch Zufall.",
+  ch_moments_aria_size:
+    "Ein Balken je Gruppengröße; seine Länge zeigt, wie oft solche Gruppen gemeinsam drückten, im Vergleich zum Zufall. Die senkrechte Linie markiert: so oft wie durch Zufall.",
 
   ch_places_title:
     "Wo wird gedrückt?",
@@ -128,6 +138,10 @@ export default {
   ch_null_axis_sd: "Effekt in Standardabweichungen",
   ch_null_axis_rr: "Verhältnis der Drückrate",
   ch_null_no_effect: "Kein Effekt",
+  ch_null_aria:
+    "Ein Punkt je vorab festgelegter Prüfung, die waagrechte Linie zeigt die Spanne der Unsicherheit, die senkrechte Linie markiert: kein Effekt.",
+  ch_null_note:
+    "So liest man die Grafik: Jeder Punkt ist eine Schätzung, die Linie durch ihn ihre Spanne. Berührt oder kreuzt die Linie die Markierung „Kein Effekt“, sind die Daten auch damit vereinbar, dass es keinen Effekt gibt. Je länger die Linie, desto unsicherer die Schätzung.",
   test_c1: "Vertrauen ins Leben → Stärke der Verbindungen",
   test_c2: "Lust aufs Leben → Anteil über Kursgrenzen",
   test_c4_trust: "Vertrauen ins Leben → wie oft gedrückt",

@@ -64,6 +64,10 @@ export default {
   tier_confirmatory: "Fixed in advance",
   tier_exploratory: "A lead, not proof",
   chart_pending: "The chart for this chapter is coming soon.",
+  chart_empty:
+    "There is not enough data for this chart: every number has to rest on at least five people.",
+  chart_interval_note:
+    "The thin line on each bar shows the range of uncertainty.",
 
   ch_day_title: "A day at the academy",
   ch_day_body:
@@ -94,7 +98,7 @@ export default {
   ch_moments_body:
     "When two people are close together and both press within a few seconds, it may have been the same moment. We counted how often that happened and compared it with chance: {cascade_excess} times as often as expected (range {cascade_excess_lo} to {cascade_excess_hi}). A value of one would mean as often as by chance.",
   ch_moments_body2:
-    "When at most ten seconds lay between the two presses, the ratio was {latency_0_10_ratio}. Here is how to read the curve below: a peak right at the start would suggest two people reacting to the same thing; a later peak would suggest one person setting off the other.",
+    "When at most ten seconds lay between the two presses, the ratio was {latency_0_10_ratio}. Here is how to read the bars below: a peak right at the start would suggest two people reacting to the same thing; a later peak would suggest one person setting off the other.",
   ch_moments_body3_pos:
     "Someone who pressed had, on average, {company_gain} more people close by at that moment than usual.",
   ch_moments_body3_neg:
@@ -105,6 +109,12 @@ export default {
   ch_moments_reference: "As often as by chance",
   ch_moments_seconds: "seconds",
   ch_moments_people: "people",
+  ch_moments_headline:
+    "Shared presses compared with chance: {cascade_excess} times, range {cascade_excess_lo} to {cascade_excess_hi}.",
+  ch_moments_aria_latency:
+    "One bar per gap between two presses; its length shows how often such pairs happened compared with chance. The vertical line marks as often as by chance.",
+  ch_moments_aria_size:
+    "One bar per group size; its length shows how often groups of that size pressed together, compared with chance. The vertical line marks as often as by chance.",
 
   ch_places_title:
     "Where do people press?",
@@ -127,6 +137,10 @@ export default {
   ch_null_axis_sd: "Effect in standard deviations",
   ch_null_axis_rr: "Ratio of press rates",
   ch_null_no_effect: "No effect",
+  ch_null_aria:
+    "One dot per pre-registered test, a horizontal line for its range of uncertainty, and a vertical line marking no effect.",
+  ch_null_note:
+    "How to read it: each dot is an estimate, the line through it its range. If the line touches or crosses the “No effect” mark, the data are also consistent with no effect at all. The longer the line, the less certain the estimate.",
   test_c1: "Trust in life → strength of ties",
   test_c2: "Lust for life → share across courses",
   test_c4_trust: "Trust in life → how often pressed",

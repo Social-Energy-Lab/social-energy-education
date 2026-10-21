@@ -79,6 +79,32 @@ def synthetic_aggregates(seed: int = 0) -> dict:
     def val(lo: float, hi: float) -> float:
         return round(rng.uniform(lo, hi), 3)
 
+    def synthetic_number(key: str) -> float:
+        # Counts are integers, ratios sit near 1, company_gain may take either sign, the rest
+        # are shares in percent.
+        if key.startswith("n_"):
+            return rng.randint(30, 600)
+        if key.startswith(("cascade_", "latency_", "plenum_")):
+            return val(0.5, 3)
+        if key == "company_gain":
+            return val(-2, 2)
+        return val(0, 100)
+
+    def around(lo: float, hi: float, w_lo: float, w_hi: float) -> dict:
+        est = rng.uniform(lo, hi)
+        a, b = est - rng.uniform(w_lo, w_hi), est + rng.uniform(w_lo, w_hi)
+        return {
+            "estimate": round(est, 3),
+            "lo": round(max(a, 0.05) if lo > 0 else a, 3),
+            "hi": round(b, 3),
+        }
+
+    numbers = {k: synthetic_number(k) for k in NUMBER_KEYS}
+    # A range reads lo <= value <= hi.
+    trio = ("cascade_excess_lo", "cascade_excess", "cascade_excess_hi")
+    numbers.update(zip(trio, sorted(numbers[k] for k in trio), strict=True))
+    pair = ("mixing_ordinary_lo", "mixing_ordinary_hi")
+    numbers.update(zip(pair, sorted(numbers[k] for k in pair), strict=True))
     return {
         "day_phase": [
             {
@@ -145,18 +171,16 @@ def synthetic_aggregates(seed: int = 0) -> dict:
             {"setting": s, "people": people(), "rate": val(0, 5), **ci(0, 5)}
             for s in ("dining", "lecture", "outdoors")
         ],
+        # Effects in SD around 0; rate ratios around 1 (always positive). Each interval holds
+        # its estimate.
         "confirmatory": [
-            {
-                "test": t,
-                "label": t,
-                "people": people(),
-                "estimate": val(-1, 1),
-                **ci(-1, 1),
-                "scale": sc,
-            }
-            for t, sc in (("h1", "sd"), ("h2", "rr"))
+            {"test": t, "label": t, "people": people(), "scale": sc, **around(*null_band)}
+            for t, sc, null_band in (
+                ("c1", "sd", (-0.6, 0.6, 0.1, 0.45)),
+                ("c2", "sd", (-0.6, 0.6, 0.1, 0.45)),
+                ("c4_trust", "rr", (0.6, 1.6, 0.15, 0.5)),
+                ("c4_lust", "rr", (0.6, 1.6, 0.15, 0.5)),
+            )
         ],
-        NUMBERS: {
-            k: rng.randint(30, 600) if k.startswith("n_") else val(0, 100) for k in NUMBER_KEYS
-        },
+        NUMBERS: numbers,
     }

@@ -146,3 +146,79 @@ test("signed copy: the sentence follows the sign, the number is shown without it
   const { key, extra } = i18n.signed("ch_moments_body3", "company_gain");
   assert.match(i18n.t(key, extra), /2 Menschen weniger/);
 });
+
+// ----------------------------------------------------------------- chapters 4 and 6
+
+const moments = await load("chapters/moments.js").catch(() => ({}));
+const nullChapter = await load("chapters/null.js").catch(() => ({}));
+
+test("latencyBars: one bar per band, ordered by where the band starts", () => {
+  const rows = [
+    { band: "30-60", people: 9, ratio: 1.1, ratio_lo: 0.8, ratio_hi: 1.4 },
+    { band: "0-10", people: 9, ratio: 2, ratio_lo: 1.5, ratio_hi: 2.5 },
+    { band: "60+", people: 9, ratio: 0.9, ratio_lo: 0.7, ratio_hi: 1.2 },
+    { band: "10-30", people: 9, ratio: 1.3, ratio_lo: 1, ratio_hi: 1.7 },
+  ];
+  assert.deepEqual(moments.latencyBars(rows), [
+    { band: "0-10", ratio: 2, lo: 1.5, hi: 2.5 },
+    { band: "10-30", ratio: 1.3, lo: 1, hi: 1.7 },
+    { band: "30-60", ratio: 1.1, lo: 0.8, hi: 1.4 },
+    { band: "60+", ratio: 0.9, lo: 0.7, hi: 1.2 },
+  ]);
+});
+
+test("latencyBars: a row without a ratio is left out, no rows give no bars", () => {
+  const rows = [{ band: "0-10", ratio: null }, { band: "10-30", ratio: 1.2 }];
+  assert.deepEqual(
+    moments.latencyBars(rows).map((r) => r.band),
+    ["10-30"],
+  );
+  assert.deepEqual(moments.latencyBars(undefined), []);
+});
+
+test("forestRows: crossesNull at zero for SD effects and at one for rate ratios", () => {
+  const rows = [
+    { test: "c1", label: "c1", estimate: 0.2, lo: -0.1, hi: 0.5, scale: "sd" },
+    { test: "c2", label: "c2", estimate: 0.4, lo: 0.1, hi: 0.7, scale: "sd" },
+    { test: "c4", label: "c4", estimate: 1.2, lo: 0.9, hi: 1.6, scale: "rr" },
+    { test: "c5", label: "c5", estimate: 0.5, lo: 0.2, hi: 0.8, scale: "rr" },
+  ];
+  const out = nullChapter.forestRows(rows);
+  assert.deepEqual(
+    out.map((r) => [r.label, r.scale, r.crossesNull]),
+    [
+      ["c1", "sd", true],
+      ["c2", "sd", false],
+      ["c4", "rr", true],
+      ["c5", "rr", false],
+    ],
+  );
+  assert.deepEqual(Object.keys(out[0]).sort(), [
+    "crossesNull",
+    "estimate",
+    "hi",
+    "label",
+    "lo",
+    "scale",
+    "test",
+  ]);
+  // A rate ratio whose interval spans zero but not one does not cross its null.
+  assert.equal(
+    nullChapter.forestRows([{ label: "x", estimate: 0.5, lo: 0.2, hi: 0.9, scale: "rr" }])[0]
+      .crossesNull,
+    false,
+  );
+});
+
+test("forestRows: rows with an unknown scale or a missing number are left out", () => {
+  const rows = [
+    { label: "a", estimate: 0.1, lo: -0.2, hi: 0.3, scale: "odds" },
+    { label: "b", estimate: null, lo: -0.2, hi: 0.3, scale: "sd" },
+    { label: "c", estimate: 0.1, lo: -0.2, hi: 0.3, scale: "sd" },
+  ];
+  assert.deepEqual(
+    nullChapter.forestRows(rows).map((r) => r.label),
+    ["c"],
+  );
+  assert.deepEqual(nullChapter.forestRows(undefined), []);
+});

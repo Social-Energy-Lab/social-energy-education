@@ -224,6 +224,49 @@ main { counter-reset: chapter 1; }
   border: 1px dashed var(--rule); border-radius: 12px; padding: 28px 16px; text-align: center;
   color: var(--ink-3); font-size: 14px; margin: 0;
 }
+/* --- charts (chapters 2-6): text in ink tokens, marks in the accent, recessive grid */
+.viz { margin: 0 0 22px; }
+.viz figcaption { font-size: 14px; font-weight: 600; color: var(--ink-1); margin: 0 0 4px; }
+.viz svg { display: block; overflow: visible; font: 13px/1 var(--sans); font-variant-numeric: tabular-nums; }
+.viz .grid line { stroke: var(--rule); stroke-width: 1; }
+.viz .axis text { fill: var(--ink-3); font-size: 12px; }
+.viz .axis .axis-title, .viz .reference-label { fill: var(--ink-2); font-size: 12px; }
+.viz .row-label { fill: var(--ink-2); font-size: 13px; }
+.viz .bar { fill: var(--accent); }
+.viz .interval { stroke: var(--ink-1); stroke-width: 2; stroke-linecap: round; }
+.viz .reference { stroke: var(--ink-2); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.viz .estimate { fill: var(--accent); stroke: var(--surface-0); stroke-width: 2; }
+.viz .line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.viz .expected { fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-dasharray: 5 5; }
+.viz .point { fill: var(--accent); stroke: var(--surface-0); stroke-width: 2; }
+.viz .special { fill: var(--accent); fill-opacity: .12; }
+.viz .special-label { fill: var(--accent); font-size: 12px; }
+.viz .cell { fill: var(--accent); }
+.viz .cell-empty { fill: none; stroke: var(--rule); stroke-dasharray: 2 3; }
+.viz .cell-text { fill: var(--ink-1); font-size: 12px; }
+.viz .cell-text.strong { fill: var(--surface-0); }
+.headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0 0 22px; }
+.headline strong {
+  font-family: var(--serif); font-weight: 600; font-size: clamp(2.4rem, 9vw, 3.4rem); line-height: 1;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.headline span { color: var(--ink-2); font-size: 15px; max-width: 26rem; }
+.chart-note { font-size: 14px; color: var(--ink-2); max-width: var(--measure); margin: 0 0 8px; }
+.toggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; margin: 0 0 12px; }
+.toggle button, .chart-action {
+  font: inherit; font-size: 14px; color: var(--ink-2); background: transparent; border: 0;
+  min-height: 40px; padding: 0 14px; cursor: pointer;
+}
+.toggle button + button { border-left: 1px solid var(--rule); }
+.toggle button[aria-pressed="true"] { color: var(--surface-0); background: var(--ink-1); }
+.chart-action {
+  border: 1px solid var(--accent); border-radius: 999px; color: var(--ink-1); margin: 0 0 18px;
+}
+.chart-action:hover { background: var(--surface-2); }
+.chapter .legend-inline { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); margin: 0 0 6px; padding: 0; list-style: none; }
+.chapter .legend-inline li { display: flex; align-items: center; gap: 8px; margin: 0; }
+.legend-inline svg { flex: none; }
+
 .chapter ul { padding-left: 1.2em; margin: 0 0 14px; }
 .chapter li { margin-bottom: 6px; }
 .chapter h3 { font-size: 1.02rem; margin: 22px 0 8px; }
