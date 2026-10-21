@@ -357,3 +357,14 @@ test("metaDay and dayLabel read ISO dates, phaseLabel reads phase names (the rea
   assert.equal(chart.phaseLabel(2, meta, t), "Nachmittag");
   assert.equal(chart.phaseLabel("siesta", meta, t), "siesta");
 });
+
+test("fitLabel: a label too wide for its column is ellipsized, a short one is kept", () => {
+  const measure = (s) => s.length * 7;
+  assert.equal(chart.fitLabel("Plenum", 100, measure), "Plenum");
+  const long = "Abendprogramm der Kurse und Arbeitsgemeinschaften";
+  const fit = chart.fitLabel(long, 100, measure);
+  assert.ok(fit.endsWith("…"), fit);
+  assert.ok(measure(fit) <= 100, fit);
+  assert.ok(long.startsWith(fit.slice(0, -1).trimEnd()), fit);
+  assert.equal(chart.fitLabel(long, 3, measure), "…");
+});

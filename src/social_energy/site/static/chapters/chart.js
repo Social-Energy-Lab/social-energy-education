@@ -88,6 +88,17 @@ export function textWidth(svg, texts, cls = "row-label") {
   return max;
 }
 
+/** `text`, cut with "…" until `measure` of it fits in `maxW` px; unchanged when it fits. */
+export function fitLabel(text, maxW, measure) {
+  const s = String(text);
+  if (measure(s) <= maxW) return s;
+  for (let n = s.length - 1; n > 0; n--) {
+    const cut = `${s.slice(0, n).trimEnd()}…`;
+    if (measure(cut) <= maxW) return cut;
+  }
+  return "…";
+}
+
 /**
  * Re-run the chapter's draw when its box changes width (rotation, resize). One observer per
  * container; the latest draw wins, so a language switch does not stack observers.
@@ -183,13 +194,24 @@ export function hbars(host, rows, { label, axis, tick, refAt = null, reference, 
     .data(rows)
     .join("g")
     .attr("transform", (_, i) => `translate(0,${y(i)})`);
+  // A label wider than its column (capped at 45% of the width) is cut with "…" so nothing
+  // runs off the left edge; the full name stays in its tooltip.
   g.append("text")
     .attr("class", "row-label")
     .attr("x", labelW - 10)
     .attr("y", rowH / 2)
     .attr("dy", "0.35em")
     .attr("text-anchor", "end")
-    .text((r) => r.name);
+    .each(function (r) {
+      const node = d3.select(this).text(r.name);
+      const measure = (s) => {
+        this.textContent = s;
+        return this.getComputedTextLength?.() ?? s.length * 7.5;
+      };
+      const fit = fitLabel(r.name, labelW - 14, measure);
+      node.text(fit);
+      if (fit !== String(r.name)) node.append("title").text(r.name);
+    });
   const bars = g
     .append("rect")
     .attr("class", "bar")
