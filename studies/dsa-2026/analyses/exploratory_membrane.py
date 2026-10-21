@@ -15,9 +15,11 @@ are left out. Each analysis then needs its own other module (``survey``; ``beaco
 0. **Agreement** between the first coder and the independent second coder on the shared sample:
    quadratic-weighted kappa on the three state codes, exact agreement on the categorical ones.
 1. **Convergence:** ``M_everyday`` against the trust and lust composites (Spearman).
-2. **Opening and behaviour:** ``D_academy = M_now - M_arrival`` against presses per exposure hour
-   and co-located press pairs per exposure hour (NB2, exposure offset), network strength and
-   cross-course share (OLS, HC3); interview day as covariate. Beside it, Spearman.
+2. **Opening and behaviour:** the change over the academy, three ways (``D_academy``,
+   ``D_academy_lenient`` and ``change_signed``; codebook, "Variants under comparison") against
+   presses per exposure hour and co-located press pairs per exposure hour (NB2, exposure offset),
+   network strength and cross-course share (OLS, HC3); interview day as covariate. Beside it,
+   Spearman.
    *Added after coding (logged in the plan):* ``opened`` (the coded ``direction`` is "opened") as a
    second predictor, because the codebook's 4-versus-5 rule leaves ``D_academy`` at 0 for several
    people who describe opening.
@@ -67,6 +69,9 @@ SLUG = "exploratory-membrane"
 MIN_GROUP = 5
 LEVELS = [1, 2, 3, 4, 5]
 STATES = ["M_everyday", "M_arrival", "M_now"]
+#: The change over the academy, measured three ways (codebook, "Variants under comparison").
+CHANGES = ["D_academy", "D_academy_lenient", "change_signed", "opened"]
+SIGN = {"opened": 1.0, "closed": -1.0, "stable": 0.0}
 LOW_COVERAGE = (date(2026, 8, 24), date(2026, 8, 27))
 WINDOW_S = 300
 N_BOOT = 4000
@@ -103,7 +108,12 @@ def code_frame(codes: dict[str, dict], people: dict[str, str], variant: str) -> 
             continue
         r = {"entity": people[key], "key": key, "interview_day": float(day.day)}
         r |= {s: state(c, s, variant) for s in STATES}
+        r["M_now_lenient"] = state(c, "M_now_lenient", variant) if "M_now_lenient" in c else None
+        amount = state(c, "change_amount", variant) if "change_amount" in c else None
         r["direction"] = c["direction"]["value"]
+        sign = SIGN.get(r["direction"])
+        r["change_amount"] = amount
+        r["change_signed"] = None if amount is None or sign is None else sign * amount
         r["opened"] = None if r["direction"] == "na" else float(r["direction"] == "opened")
         r["selective"] = bool(c["selective"]["value"])
         r["primed"] = bool(c.get("primed"))
@@ -112,16 +122,19 @@ def code_frame(codes: dict[str, dict], people: dict[str, str], variant: str) -> 
     return f.with_columns(
         (pl.col("M_now") - pl.col("M_arrival")).alias("D_academy"),
         (pl.col("M_now") - pl.col("M_everyday")).alias("D_vs_everyday"),
+        (pl.col("M_now_lenient") - pl.col("M_arrival")).alias("D_academy_lenient"),
+        (pl.col("M_now_lenient") - pl.col("M_everyday")).alias("D_vs_everyday_lenient"),
     )
 
 
 def agreement(first: dict[str, dict], second: dict[str, dict]) -> pl.DataFrame:
     shared = sorted(set(first) & set(second))
     rows = []
-    for s in STATES:
-        a = [first[k][s]["value"] for k in shared]
-        b = [second[k][s]["value"] for k in shared]
-        k = weighted_kappa(a, b, levels=LEVELS)
+    scales = [(s, LEVELS) for s in [*STATES, "M_now_lenient"]] + [("change_amount", [0, 1, 2, 3])]
+    for s, levels in scales:
+        a = [first[k].get(s, {}).get("value") for k in shared]
+        b = [second[k].get(s, {}).get("value") for k in shared]
+        k = weighted_kappa(a, b, levels=levels)
         both_na = sum(x == "na" and y == "na" for x, y in zip(a, b, strict=True))
         rows.append({"code": s, "items": len(shared), "n_rated_by_both": k.n, "kappa_w": k.kappa,
                      "exact": k.exact, "within_one": k.within_one, "both_na": both_na})  # fmt: skip
@@ -215,7 +228,7 @@ def behaviour(f: pl.DataFrame, variant: str) -> list[dict]:
         if exposure is not None:
             rate = pl.col(outcome) / pl.col(exposure)
             g = f.filter(pl.col(exposure) > 0).with_columns(rate.alias(label))
-        for pred in ("D_academy", "opened"):
+        for pred in CHANGES:
             r = {"variant": variant, "outcome": label, "predictor": pred,
                  **spearman(g, pred, label), **model(g, outcome, pred, kind, exposure)}  # fmt: skip
             if r["n"] < MIN_GROUP * 3:
@@ -300,7 +313,9 @@ def descriptives(f: pl.DataFrame, codes: dict[str, dict], people: dict[str, str]
                      "withheld": n < MIN_GROUP})  # fmt: skip
 
     total = f.height
-    for col in [*STATES, "D_academy", "D_vs_everyday", "direction", "selective", "primed"]:
+    cols = [*STATES, "M_now_lenient", "change_amount", "D_academy", "D_academy_lenient",
+            "change_signed", "D_vs_everyday", "direction", "selective", "primed"]  # fmt: skip
+    for col in cols:
         for level, n in Counter(str(v) for v in f[col].to_list()).items():
             add(col, level, n, total)
     for side in ("openers", "closers"):
@@ -360,14 +375,15 @@ def main() -> None:
         )  # fmt: skip
         beh += behaviour(b, v)
         g = f.join(grad, on="entity")
-        gr.append({"variant": v, **spearman(g, "D_vs_everyday", "gradient")})
+        for x in ("D_vs_everyday", "D_vs_everyday_lenient"):
+            gr.append({"variant": v, "measure": x, **spearman(g, x, "gradient")})
         if v in ("main", "no_24_27_aug"):
             eps += episodes(data, placed, v)
 
     def guard(rows: list[dict]) -> pl.DataFrame:
         t = pl.DataFrame(rows, infer_schema_length=None)
         if "n" in t.columns:
-            keep = [c for c in t.columns if c in ("variant", "composite", "n")]
+            keep = [c for c in t.columns if c in ("variant", "composite", "measure", "n")]
             t = t.with_columns(
                 [
                     pl.when(pl.col("n") < MIN_GROUP).then(None).otherwise(pl.col(c)).alias(c)
