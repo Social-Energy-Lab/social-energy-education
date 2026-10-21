@@ -15,6 +15,7 @@ import yaml
 
 from . import paths
 from .beacons import BeaconConfig
+from .eda.ingest import EdaConfig
 from .survey import SurveyConfig
 
 # Sections that name a private deployment: refused in the public study.yaml (see StudyConfig.local).
@@ -151,6 +152,16 @@ class StudyConfig:
             witness_min_peak_ratio=float(section.get("witness_min_peak_ratio", 3.0)),
             clock_rate_ppm=float(section.get("clock_rate_ppm", 0.0)),
             purged_devices=self.purged_devices(),
+        )
+
+    def eda_config(self) -> EdaConfig:
+        section = self.raw["eda"]
+        rotation = section.get("rotation_s", 3600)
+        return EdaConfig(
+            valid_from=_as_date(section["valid_from"]),
+            valid_to=_as_date(section["valid_to"]),
+            mtime_to_utc_s=float(section.get("mtime_to_utc_s", 0.0)),
+            rotation_s=float(rotation) if rotation is not None else None,
         )
 
     def purged_devices(self) -> tuple[int, ...]:
