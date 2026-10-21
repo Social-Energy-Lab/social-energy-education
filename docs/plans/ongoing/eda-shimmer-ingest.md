@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** none
-**Next:** research team reviews the wear and SCR thresholds and the artifact rules (open questions below); then EDA enters the exploratory tier (EDA around self-report presses, per-phase arousal, co-present wearers at minute level)
+**Next:** EDA enters the exploratory tier (EDA around self-report presses, per-phase arousal, co-present wearers at minute level)
 
 **Goal:** `social_energy.eda` turns Shimmer SD-card logs and Shimmer Base CSV exports into canonical per-device tables (per-second signal, wear bouts, skin-conductance responses) in UTC, flagged not dropped, and resolves them to people through the spine.
 
@@ -32,10 +32,10 @@ The DSA 2026 delivery arrived on 2026-10-20: byte copies of all 15 SD cards plus
 - One source per device-second: the SD card over the export (it keeps the device's own placement and the raw values).
 - Contact threshold 0.05 µS: the real conductance distribution is bimodal with its valley there.
 - Heart rate only where the export carries it (15–17 Aug); no PPG beat detection yet.
+- Thresholds (decided 2026-10-21, ours rather than the research team's): SCR primary rule stays at 0.05 µS trough to peak, 0.5–5 s rise, with the artifact and notch rules; the sensitivity rule is the same detections filtered to amplitude ≥ 0.2 µS. The clean rate (~5.8/min) is above resting norms, but the rate does not follow motion much (stillest fifth of minutes ~4.5/min, most active ~6.9/min), analyses compare a person with their own baseline, and the 0.2 µS filter lands near resting norms (~3.3/min). Wear: contact 0.05 µS, bouts ≥ 300 s, gaps ≤ 60 s bridged, all unchanged.
 
 ## Open questions
 
 - `[unknown: are the Shimmer default GSR resistors right for every device, or were any devices calibrated individually?]` The defaults reproduce the export exactly on every overlap checked.
 - `[unknown: is PPG usable per device for heart rate on 19–28 Aug? The research team found it dead on one device]`
-- `[unknown: does the research team accept the SCR rule (0.05 µS trough-to-peak, 0.5–5 s rise) and the artifact rules?]` On the real data clean SCRs come out at several per worn minute, above resting norms; amplitudes are kept so a stricter threshold is one filter away.
 - `[unknown: should cross-device timing be corrected per device-day?]` Device clocks sit up to ~15 s apart on SD-only days; fine for minute-level analyses, not for second-level coupling with beacon presses.
