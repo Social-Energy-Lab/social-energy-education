@@ -39,7 +39,7 @@ Sundays follow a different schedule (brunch, afternoon plenum). Spontaneous, unp
 | Module | What | Who | Status in toolkit |
 |---|---|---|---|
 | Beacons | contact logs + room presence + self-report button + eco sessions | nearly all participants and staff; ~57 room/zone tags | ingest ✅ (`social_energy.beacons`); full delivery imported 2026-09-20 (13–29 Aug), checked against the delivered `Output/` tables, every disagreement explained (`docs/context/instruments/beacons.md`) |
-| EDA (Shimmer) | skin conductance, PPG and motion during daytime sessions, 15–28 Aug; heart rate only in the 15–17 Aug exports | 15 devices, rotated daily among consenting participants | ingested (`social-energy ingest-eda`) |
+| EDA (Shimmer) | skin conductance, PPG and motion during daytime sessions, 15–28 Aug; heart rate from the raw PPG on every day (with a quality index), plus Shimmer's own in the 15–17 Aug exports | 15 devices, rotated daily among consenting participants | ingested (`social-energy ingest-eda`, `social-energy eda-heart-rate`) |
 | Acoustics (AudioMoth ×2) | scheduled recordings in dining hall and main hall | spaces, not persons | features + verified deletion ✅ (`social_energy.acoustics`) |
 | Survey (SurveyJS on zeitgeist-platform) | baseline questionnaire, right after the AI interview | 88 respondents after exclusions | download ✅ (`fetch-zeitgeist`), ingest ✅ (`social_energy.survey`); scoring planned |
 | Interviews | in-person during (DJI Mic 3); AI voice before (zeitgeist-platform, 99 calls after exclusions) | subsets | AI interviews: download ✅ (`fetch-zeitgeist`); content is qualitative, out of scope for code |
