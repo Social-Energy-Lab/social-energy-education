@@ -1,5 +1,7 @@
 name: pages
 
+# A new data release does not trigger this workflow: run it by hand with
+# `gh workflow run pages.yml`.
 on:
   workflow_dispatch:
   push:
@@ -7,6 +9,8 @@ on:
     paths:
       - "src/social_energy/site/**"
       - "src/social_energy/explorer/static/**"
+      - "studies/dsa-2026/study.yaml"
+      - "uv.lock"
       - ".github/workflows/pages.yml"
 
 permissions:
@@ -21,6 +25,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      TAG: site-data-dsa-2026
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -34,19 +40,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Expected asset: site-data.zip on release site-data-dsa-2026, with the
+          # Expected asset: site-data.zip on release $TAG, with the
           # files at the zip root (meta.json directly inside, no wrapping folder).
           # No release means a synthetic demo build. Any failure with a release
           # present (download, unzip, missing meta.json) fails the job.
-          if gh release view site-data-dsa-2026 >/dev/null 2>&1; then
-            gh release download site-data-dsa-2026 -p site-data.zip -D "$RUNNER_TEMP"
+          # Only a 404 means "no release". Any other API failure (auth, rate
+          # limit, 5xx) fails the job so a live real-data site is never
+          # overwritten by a synthetic build.
+          if out=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>&1); then
+            gh release download "$TAG" -p site-data.zip -D "$RUNNER_TEMP"
             mkdir -p "$RUNNER_TEMP/data"
             unzip -q "$RUNNER_TEMP/site-data.zip" -d "$RUNNER_TEMP/data"
             test -f "$RUNNER_TEMP/data/meta.json"
             echo "args=--data $RUNNER_TEMP/data" >> "$GITHUB_OUTPUT"
-          else
-            echo "No site-data-dsa-2026 release: building the synthetic demo."
+          elif echo "$out" | grep -q "HTTP 404"; then
+            echo "No $TAG release: building the synthetic demo."
             echo "args=" >> "$GITHUB_OUTPUT"
+          else
+            echo "$out" >&2
+            exit 1
           fi
 
       - name: Build the site
