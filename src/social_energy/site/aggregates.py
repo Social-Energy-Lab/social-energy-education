@@ -88,7 +88,15 @@ def synthetic_aggregates(seed: int = 0) -> dict:
             return val(0.5, 3)
         if key == "company_gain":
             return val(-2, 2)
-        return val(0, 100)
+        # Shares in percent, in the ranges the synthetic rows use.
+        ranges = {
+            "mixing_ordinary_lo": (8, 15),
+            "mixing_ordinary_hi": (15, 22),
+            "mixing_random": (55, 62),
+            "mixing_excursion": (40, 65),
+            "mixing_rotation": (20, 40),
+        }
+        return val(*ranges.get(key, (15, 60)))
 
     def around(lo: float, hi: float, w_lo: float, w_hi: float) -> dict:
         est = rng.uniform(lo, hi)
@@ -106,6 +114,8 @@ def synthetic_aggregates(seed: int = 0) -> dict:
     pair = ("mixing_ordinary_lo", "mixing_ordinary_hi")
     numbers.update(zip(pair, sorted(numbers[k] for k in pair), strict=True))
     return {
+        # Four camp days and six daytime phases (indices into meta.phases), day 1 the special
+        # day, as in the synthetic camp that build.py writes.
         "day_phase": [
             {
                 "day": d,
@@ -114,29 +124,30 @@ def synthetic_aggregates(seed: int = 0) -> dict:
                 "others": val(0, 8),
                 "share_no_one": val(0, 100),
             }
-            for d in range(3)
-            for p in range(2)
+            for d in range(4)
+            for p in range(6)
         ],
         "daily_mixing": [
             {
                 "day": d,
-                "kind": k,
+                "kind": "excursion" if d == 1 else "ordinary",
                 "people": people(),
-                "cross_share": val(0, 100),
-                "expected": val(0, 100),
+                "cross_share": val(40, 65) if d == 1 else val(8, 22),
+                "expected": val(55, 62),
             }
-            for d in range(3)
-            for k in ("ordinary", "excursion")
+            for d in range(4)
         ],
         "persistence": [
             {
                 "origin": o,
                 "people": people(),
                 "new_ties": val(0, 10),
-                "share": val(0, 100),
-                **ci(0, 100),
+                "share": est["estimate"],
+                "lo": est["lo"],
+                "hi": est["hi"],
             }
             for o in ("ordinary", "excursion")
+            for est in [around(15, 60, 4, 12)]
         ],
         "moments_latency": [
             {
@@ -168,8 +179,22 @@ def synthetic_aggregates(seed: int = 0) -> dict:
             }
         ],
         "places": [
-            {"setting": s, "people": people(), "rate": val(0, 5), **ci(0, 5)}
-            for s in ("dining", "lecture", "outdoors")
+            {
+                "setting": s,
+                "people": people(),
+                "rate": est["estimate"],
+                "lo": est["lo"],
+                "hi": est["hi"],
+            }
+            for s in (
+                "plenum",
+                "course_block",
+                "meal_time",
+                "kua_evening",
+                "late_evening",
+                "other_daytime",
+            )
+            for est in [around(0.5, 5, 0.2, 1)]
         ],
         # Effects in SD around 0; rate ratios around 1 (always positive). Each interval holds
         # its estimate.

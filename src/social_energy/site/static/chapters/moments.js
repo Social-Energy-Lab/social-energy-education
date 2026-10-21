@@ -1,7 +1,7 @@
 // Chapter: do people press together? A headline figure (shared presses against chance), then two
 // bar charts of the same ratio: by the time between two presses, and by the size of the group
 // that pressed. A bar at the 1× line means as often as chance would give.
-import { bandStart, block, caption, emptyNote, finite, numberFormat, onResize, ratioBars } from "./chart.js";
+import { bandStart, block, caption, emptyNote, finite, hbars, numberFormat, onResize } from "./chart.js";
 
 /** Rows of a ratio section as bars ordered by where their band starts; rows without a ratio go. */
 function bars(rows, key) {
@@ -79,13 +79,14 @@ export function render(el, agg, t, opts = {}) {
       const named = rows.map((r) => {
         const name = `${String(r[key]).replace("-", "–")} ${unit}`;
         const range = finite(r.lo) && finite(r.hi) ? ` (${fmt(r.lo)}–${fmt(r.hi)})` : "";
-        return { ...r, name, tip: `${name}: ${fmt(r.ratio)}×${range}` };
+        return { ...r, value: r.ratio, name, tip: `${name}: ${fmt(r.ratio)}×${range}` };
       });
-      ratioBars(fig, named, {
+      hbars(fig, named, {
         label: `${title}. ${t(aria)}`,
         axis: t("ch_moments_ratio"),
+        tick: (d) => `${fmt(d)}×`,
+        refAt: 1,
         reference: t("ch_moments_reference"),
-        fmt,
         reduced: opts.reduced,
         el,
       });

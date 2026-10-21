@@ -222,3 +222,82 @@ test("forestRows: rows with an unknown scale or a missing number are left out", 
   );
   assert.deepEqual(nullChapter.forestRows(undefined), []);
 });
+
+// ----------------------------------------------------------------- chapters 2, 3 and 5
+
+const day = await load("chapters/day.js").catch(() => ({}));
+const circles = await load("chapters/circles.js").catch(() => ({}));
+const places = await load("chapters/places.js").catch(() => ({}));
+
+test("heatCells: one cell per row with the chosen value; rows without it are dropped", () => {
+  const rows = [
+    { day: 0, phase: 0, people: 9, others: 2.5, share_no_one: 10 },
+    { day: 0, phase: 1, people: 9, others: null, share_no_one: 20 },
+    { day: 1, phase: 0, people: 9, share_no_one: 30 },
+    { day: 1, phase: 1, people: 9, others: Number.NaN, share_no_one: 40 },
+  ];
+  assert.deepEqual(day.heatCells(rows, "others"), [{ day: 0, phase: 0, value: 2.5 }]);
+  assert.deepEqual(
+    day.heatCells(rows, "share_no_one").map((c) => c.value),
+    [10, 20, 30, 40],
+  );
+  assert.deepEqual(day.heatCells(undefined, "others"), []);
+});
+
+test("markSpecial: the day in which a special day starts carries its label", () => {
+  const days = [
+    { index: 0, start_bin: 0 },
+    { index: 1, start_bin: 282 },
+    { index: 2, start_bin: 570 },
+    { index: 3, start_bin: 858 },
+  ];
+  const special = [
+    { start_bin: 288, end_bin: 576, label: "excursion" },
+    { start_bin: 900, end_bin: 1000, label: "rotation" },
+  ];
+  assert.deepEqual(
+    circles.markSpecial(days, special).map((d) => [d.index, d.special]),
+    [
+      [0, null],
+      [1, "excursion"],
+      [2, null],
+      [3, "rotation"],
+    ],
+  );
+  assert.deepEqual(
+    circles.markSpecial(days, undefined).map((d) => d.special),
+    [null, null, null, null],
+  );
+});
+
+test("showBin: mid-afternoon of the first special day, in the camp's time zone", () => {
+  // 05:30 UTC is 07:30 in Berlin summer time; 15:00 is seven and a half hours later.
+  const meta = {
+    t0: "2026-08-14T05:30:00Z",
+    bin_seconds: 300,
+    timezone: "Europe/Berlin",
+    special_days: [
+      { start_bin: 576, end_bin: 864, label: "rotation" },
+      { start_bin: 288, end_bin: 576, label: "excursion" },
+    ],
+  };
+  assert.equal(circles.showBin(meta), 288 + 90);
+  assert.equal(circles.showBin({ ...meta, special_days: [] }), null);
+  assert.equal(circles.showBin(null), null);
+  // A special day that starts after the hour is shown from its start.
+  const late = { ...meta, special_days: [{ start_bin: 288 + 100, end_bin: 576, label: "x" }] };
+  assert.equal(circles.showBin(late), 388);
+});
+
+test("placeRows: settings with a rate, highest first", () => {
+  const rows = [
+    { setting: "meal_time", rate: 1.2, lo: 0.8, hi: 1.6 },
+    { setting: "plenum", rate: 3.1, lo: 2.2, hi: 4 },
+    { setting: "night", rate: null },
+    { setting: "course_block", rate: 1.9, lo: 1.5, hi: 2.4 },
+  ];
+  assert.deepEqual(
+    places.placeRows(rows).map((r) => r.setting),
+    ["plenum", "course_block", "meal_time"],
+  );
+});

@@ -43,7 +43,7 @@ async function loadChapter(name) {
 }
 
 async function renderChapters() {
-  const opts = { reduced, player, lang: getLang };
+  const opts = { reduced, player, lang: getLang, meta: site?.meta ?? null };
   await Promise.all(
     CHAPTERS.map(async (name) => {
       const el = chartFor(name);

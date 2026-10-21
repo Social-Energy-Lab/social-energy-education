@@ -130,29 +130,33 @@ export function whenSeen(el, reduced, grow, target = el) {
 
 export const GROW_MS = 700;
 
-/** Horizontal bars of a ratio against chance, with intervals and a reference line at 1×. */
-export function ratioBars(host, rows, { label, axis, reference, fmt, reduced, el }) {
+/**
+ * Horizontal bars with intervals. rows: [{name, value, lo, hi, tip}]. opts: label (summary),
+ * axis (title), tick (formats a tick), refAt (a reference line's value, or null), reference
+ * (its label), reduced, el (the chapter, for the scroll-in growth).
+ */
+export function hbars(host, rows, { label, axis, tick, refAt = null, reference, reduced, el }) {
   const rowH = 34;
-  const top = reference ? 24 : 8;
+  const top = refAt !== null && reference ? 24 : 8;
   const bottom = 40;
   const height = top + rows.length * rowH + bottom;
   const { svg, width } = svgIn(host, height, label);
   const labelW = Math.min(width * 0.45, textWidth(svg, rows.map((r) => r.name)) + 14);
   const right = 16;
-  const max = d3.max(rows, (r) => Math.max(r.ratio, finite(r.hi) ? r.hi : r.ratio)) ?? 1;
+  const max = d3.max(rows, (r) => Math.max(r.value, finite(r.hi) ? r.hi : r.value)) ?? 1;
   const x = d3
     .scaleLinear()
-    .domain([0, Math.max(1.2, max * 1.05)])
+    .domain([0, Math.max(refAt === null ? 0 : refAt * 1.2, max * 1.05) || 1])
     .nice()
     .range([labelW, width - right]);
   const y = (i) => top + i * rowH;
-  const ticks = Math.max(3, Math.min(6, Math.floor((width - labelW) / 70)));
+  const ticks = x.ticks(Math.max(3, Math.min(6, Math.floor((width - labelW) / 70))));
 
   svg
     .append("g")
     .attr("class", "grid")
     .selectAll("line")
-    .data(x.ticks(ticks))
+    .data(ticks)
     .join("line")
     .attr("x1", (d) => x(d))
     .attr("x2", (d) => x(d))
@@ -160,12 +164,12 @@ export function ratioBars(host, rows, { label, axis, reference, fmt, reduced, el
     .attr("y2", height - bottom);
   const ax = svg.append("g").attr("class", "axis").attr("transform", `translate(0,${height - bottom})`);
   ax.selectAll("text")
-    .data(x.ticks(ticks))
+    .data(ticks)
     .join("text")
     .attr("x", (d) => x(d))
     .attr("y", 16)
     .attr("text-anchor", "middle")
-    .text((d) => `${fmt(d)}×`);
+    .text(tick);
   ax.append("text")
     .attr("class", "axis-title")
     .attr("x", width - right)
@@ -205,40 +209,88 @@ export function ratioBars(host, rows, { label, axis, reference, fmt, reduced, el
     .attr("y2", rowH / 2)
     .attr("opacity", 0);
 
-  svg
-    .append("line")
-    .attr("class", "reference")
-    .attr("x1", x(1))
-    .attr("x2", x(1))
-    .attr("y1", top - 6)
-    .attr("y2", height - bottom);
-  if (reference) {
+  if (refAt !== null) {
     svg
-      .append("text")
-      .attr("class", "reference-label")
-      .attr("x", x(1))
-      .attr("y", top - 10)
-      .attr("text-anchor", x(1) > width / 2 ? "end" : "start")
-      .text(reference);
+      .append("line")
+      .attr("class", "reference")
+      .attr("x1", x(refAt))
+      .attr("x2", x(refAt))
+      .attr("y1", top - 6)
+      .attr("y2", height - bottom);
+    if (reference) {
+      svg
+        .append("text")
+        .attr("class", "reference-label")
+        .attr("x", x(refAt))
+        .attr("y", top - 10)
+        .attr("text-anchor", x(refAt) > width / 2 ? "end" : "start")
+        .text(reference);
+    }
   }
 
-  whenSeen(el, reduced, (instant) => {
-    const w = (r) => Math.max(0, x(r.ratio) - x(0));
-    if (instant) {
-      bars.attr("width", w);
-      whisk.attr("opacity", 1);
-      return;
-    }
-    bars
-      .transition()
-      .duration(GROW_MS)
-      .delay((_, i) => i * 80)
-      .ease(d3.easeCubicOut)
-      .attr("width", w);
-    whisk
-      .transition()
-      .delay(GROW_MS)
-      .duration(300)
-      .attr("opacity", 1);
-  }, host);
+  whenSeen(
+    el,
+    reduced,
+    (instant) => {
+      const w = (r) => Math.max(0, x(r.value) - x(0));
+      if (instant) {
+        bars.attr("width", w);
+        whisk.attr("opacity", 1);
+        return;
+      }
+      bars
+        .transition()
+        .duration(GROW_MS)
+        .delay((_, i) => i * 80)
+        .ease(d3.easeCubicOut)
+        .attr("width", w);
+      whisk.transition().delay(GROW_MS).duration(300).attr("opacity", 1);
+    },
+    host,
+  );
+}
+
+/** A day as the page shows it: an index into meta.days or an ISO date, else as it is. */
+export function dayLabel(day, meta, lang, narrow = false) {
+  const opts = narrow ? { day: "numeric" } : { weekday: "short", day: "numeric" };
+  const m = metaDay(day, meta);
+  if (m) {
+    const at = new Date(Date.parse(meta.t0) + m.start_bin * meta.bin_seconds * 1000);
+    return new Intl.DateTimeFormat(lang, { ...opts, timeZone: meta.timezone }).format(at);
+  }
+  if (typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    const at = new Date(`${day}T12:00:00Z`);
+    return new Intl.DateTimeFormat(lang, { ...opts, timeZone: "UTC" }).format(at);
+  }
+  return String(day);
+}
+
+/** The local date (YYYY-MM-DD) of `bin` in the camp's time zone. */
+export function localDate(meta, bin) {
+  const at = new Date(Date.parse(meta.t0) + bin * meta.bin_seconds * 1000);
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: meta.timezone,
+  }).format(at);
+}
+
+/** The meta.days entry a row's day refers to: by index, or by local date; else null. */
+export function metaDay(day, meta) {
+  const days = meta?.days ?? [];
+  if (typeof day === "number") return days.find((d) => d.index === day) ?? null;
+  if (typeof day === "string" && meta?.t0) {
+    return days.find((d) => localDate(meta, d.start_bin) === day) ?? null;
+  }
+  return null;
+}
+
+/** Sort key for a day: its index or its ISO date, both order correctly. */
+export const dayOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** A phase as the page shows it: an index into meta.phases or a name, through phase_<name>. */
+export function phaseLabel(phase, meta, t) {
+  const name = typeof phase === "number" ? (meta?.phases?.[phase] ?? String(phase)) : phase;
+  return named(t, "phase", name);
 }

@@ -77,6 +77,12 @@ export default {
   ch_day_show_alone: "Mit niemandem",
   ch_day_axis_day: "Tag",
   ch_day_axis_phase: "Tageszeit",
+  ch_day_toggle:
+    "Was die Farbe zeigt",
+  ch_day_aria:
+    "Eine Zeile je Tag, eine Spalte je Tageszeit; je kräftiger die Farbe, desto höher der Wert. Jedes Feld nennt seinen Wert.",
+  ch_day_legend:
+    "Je kräftiger ein Feld, desto höher der Wert. „Andere in der Nähe“ ist ein Durchschnitt pro Person, „Mit niemandem“ ein Anteil in Prozent. Ein leeres Feld: zu wenige Personen für eine Zahl.",
 
   ch_circles_title:
     "Bleiben die Kurse unter sich?",
@@ -90,6 +96,12 @@ export default {
   ch_circles_observed: "Über Kursgrenzen",
   ch_circles_expected: "Bei zufälliger Mischung",
   ch_circles_persistence: "Wieder zusammen in den drei Tagen danach",
+  ch_circles_aria:
+    "Eine Linie zeigt je Tag den Anteil der Verbindungen über Kursgrenzen, eine gestrichelte Linie den Anteil bei zufälliger Mischung; besondere Tage sind hinterlegt.",
+  ch_circles_aria_persistence:
+    "Ein Balken je Art des Tages, an dem die Verbindung entstand; seine Länge zeigt den Anteil, der in den drei Tagen danach wieder vorkam.",
+  ch_circles_share_axis:
+    "Anteil in Prozent",
   origin_ordinary: "Gewöhnlicher Tag",
   origin_excursion: "Exkursionstag",
   origin_rotation: "Rotationstag",
@@ -122,6 +134,8 @@ export default {
   ch_places_body:
     "Wir haben die Drücke nach Situationen sortiert: Kurs, Plenum, Essen, Abendprogramm und mehr. Die Einteilung stammt von uns, aus dem Programm und den Räumen. Auf eine Stunde im Plenum kamen {plenum_vs_course}-mal so viele Drücke wie auf eine Stunde im Kurs.",
   ch_places_rate: "Drücke pro zehn Stunden",
+  ch_places_aria:
+    "Ein Balken je Situation, sortiert nach der Zahl der Drücke pro zehn Stunden; die dünne Linie zeigt die Spanne der Unsicherheit.",
   setting_plenum: "Plenum",
   setting_course_block: "Kurs",
   setting_meal_time: "Essen",

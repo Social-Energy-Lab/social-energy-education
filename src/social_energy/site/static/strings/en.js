@@ -76,6 +76,12 @@ export default {
   ch_day_show_alone: "With no one",
   ch_day_axis_day: "Day",
   ch_day_axis_phase: "Time of day",
+  ch_day_toggle:
+    "What the colour shows",
+  ch_day_aria:
+    "One row per day, one column per time of day; the stronger the colour, the higher the value. Each cell states its value.",
+  ch_day_legend:
+    "The stronger a cell, the higher the value. “Others close by” is an average per person, “With no one” a share in percent. An empty cell: too few people for a number.",
 
   ch_circles_title:
     "Do courses keep to themselves?",
@@ -89,6 +95,12 @@ export default {
   ch_circles_observed: "Across courses",
   ch_circles_expected: "If mixing were random",
   ch_circles_persistence: "Together again within the next three days",
+  ch_circles_aria:
+    "A line shows the share of ties across course lines for each day, a dashed line the share random mixing would give; special days are shaded.",
+  ch_circles_aria_persistence:
+    "One bar per kind of day the tie formed on; its length shows the share that came back in the three days after.",
+  ch_circles_share_axis:
+    "Share in percent",
   origin_ordinary: "Ordinary day",
   origin_excursion: "Excursion day",
   origin_rotation: "Rotation day",
@@ -121,6 +133,8 @@ export default {
   ch_places_body:
     "We sorted the presses by situation: course, plenary, meals, evening programme and more. The grouping is ours, made from the programme and the rooms. An hour in the plenary brought {plenum_vs_course} times as many presses as an hour in a course.",
   ch_places_rate: "Presses per ten hours",
+  ch_places_aria:
+    "One bar per situation, sorted by presses per ten hours; the thin line shows the range of uncertainty.",
   setting_plenum: "Plenary",
   setting_course_block: "Course",
   setting_meal_time: "Meals",
