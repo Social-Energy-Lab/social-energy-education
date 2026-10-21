@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** none
-**Next:** EDA enters the exploratory tier (EDA around self-report presses, per-phase arousal, co-present wearers at minute level)
+**Next:** the research team's review of the wear, SCR and artifact thresholds; PPG heart rate on 19–28 Aug
 
 **Goal:** `social_energy.eda` turns Shimmer SD-card logs and Shimmer Base CSV exports into canonical per-device tables (per-second signal, wear bouts, skin-conductance responses) in UTC, flagged not dropped, and resolves them to people through the spine.
 
@@ -10,6 +10,7 @@
 
 - **Branch:** `feat/eda-ingest`.
 - **Done:** `social_energy.eda` with `sd` (decoder), `calibration`, `timeline` (tick cleaning, segments, end and start anchors, hidden whole-wrap gaps, drift fit), `export` (clock repaired modulo 512 s), `ingest` (per device and run; byte-level dedupe; SD over export per second), `features` (wear bouts, SCRs, artifact rules after Kleckner et al. 2018 plus fall and notch rules), `person` (person-minutes through the spine, consent and exclusions). `synth.eda` writes SD cards with the real traps; oracle, golden and CLI tests, each shown to fail under a mutation. `social-energy ingest-eda` writes `derived/eda/{files,seconds,scr,wear,person_minutes}.parquet` + `qa.json`. `study.yaml` carries the window, rotation and the measured clock offset of the imported copy.
+- **Exploratory tier (2026-10-21):** `studies/dsa-2026/analyses/exploratory_eda.py` (around presses, settings, synchrony; both SCR rules). A usable minute holds at least 30 clean worn seconds. Wear time confounds setting contrasts (tonic level settles after the electrodes go on), so setting effects are also reported with clock hour and wear time. Results in the private note `dsa-2026/notes/exploratory-eda-2026-10-21.md`.
 - **Run on DSA 2026 (2026-10-21):** the delivery's assignment table is in the local spine (`spine/add_eda_from_assignment.py`, with exclusions from its field comments). Per-day recording and wear spans agree with the field notes' start and stop times. Counts and checks are in the private note `dsa-2026/notes/eda-ingest-2026-10-21.md`.
 
 ## Context
