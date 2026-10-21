@@ -54,8 +54,11 @@ def read_chunk(path: Path) -> SdChunk:
     divisor = int.from_bytes(raw[0:2], "little") if len(raw) >= 2 else 0
     n_blocks = max(0, (len(raw) - HEADER_BYTES) // BLOCK_BYTES)
     end = HEADER_BYTES + n_blocks * BLOCK_BYTES
-    blocks = np.frombuffer(raw, dtype=np.uint8, count=end - HEADER_BYTES, offset=HEADER_BYTES)
-    rec = blocks.reshape(n_blocks, BLOCK_BYTES)[:, FILLER_BYTES:].reshape(-1, RECORD_BYTES)
+    if n_blocks:
+        blocks = np.frombuffer(raw, dtype=np.uint8, count=end - HEADER_BYTES, offset=HEADER_BYTES)
+        rec = blocks.reshape(n_blocks, BLOCK_BYTES)[:, FILLER_BYTES:].reshape(-1, RECORD_BYTES)
+    else:
+        rec = np.zeros((0, RECORD_BYTES), np.uint8)
     u = rec.astype(np.int64)
     gsr = u[:, 11] | (u[:, 12] << 8)
     return SdChunk(

@@ -119,3 +119,11 @@ def test_gsr_floor_clamps_to_125_us(monkeypatch):
 def test_accel_and_ppg_units():
     assert calibration.accel_g(np.array([8192, -4096])).tolist() == [1.0, -0.5]
     assert math.isclose(calibration.ppg_mv(np.array([2250]))[0], 1648.3516483516482)
+
+
+@pytest.mark.parametrize("content", [b"", b"\x00" * 100])
+def test_empty_or_header_only_chunks_decode_to_no_records(tmp_path, content):
+    path = tmp_path / "000"
+    path.write_bytes(content)
+    c = sd.read_chunk(path)
+    assert len(c.ticks) == 0 and c.acc.shape == (0, 3) and c.size == len(content)
