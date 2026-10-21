@@ -1,6 +1,6 @@
 # The explorer runs locally, on an ID-free bundle
 
-**Date:** 2026-10-01 · **Status:** adopted
+**Date:** 2026-10-01 · **Status:** adopted · amended 2026-10-21 by [public-site.md](public-site.md)
 
 ## Context
 
@@ -27,11 +27,11 @@ anonymised data in publications.
 - **Filters happen once, at export**, in study code (`studies/<id>/analyses/explorer_export.py`),
   with the same consent and exclusion filters as the analyses. The browser chooses within data
   already allowed and cannot widen it.
-- **A public mode is a separate step**: aggregate views only, or a synthetic camp, once the project
-  lead and the data protection office have said what counts as fully anonymised
-  (`docs/plans/ideas/explorer-public-mode.md`).
 
 ## Consequences
 
 - Each collaborator who uses team mode needs the data root on their own machine.
 - Screens and screenshots of team mode are pseudonymised data and are handled as such.
+
+The amendment changes nothing here: team mode stays local. The public route is the site, built
+from the public bundle and a release asset ([public-site.md](public-site.md)).

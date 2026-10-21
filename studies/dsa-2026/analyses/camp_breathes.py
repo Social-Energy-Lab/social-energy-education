@@ -19,7 +19,8 @@ force simulation stepped every frame, so they move continuously. The home ring i
 that makes mixing readable, not a finding `[inferred]`.
 
 The video shows individual, unlabelled participants. It is for internal meetings of the research
-team only and is never published or committed.
+team only and is never published or committed. The public animation is the site
+(``docs/decisions/public-site.md``), built from the public bundle.
 
     uv run --extra analysis python studies/dsa-2026/analyses/camp_breathes.py [--preview]
     uv run --extra analysis python studies/dsa-2026/analyses/camp_breathes.py --day 2026-08-20 \\
