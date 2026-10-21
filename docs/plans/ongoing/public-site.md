@@ -325,8 +325,9 @@ bundler); Node's built-in test runner for pure JS (`tests/js/*.test.mjs`, run by
     - `moments_size`: `size, people, ratio, ratio_lo, ratio_hi`
     - `moments_headline`: `people, observed, null_mean, ratio, lo, hi`
     - `places`: `setting, people, rate, lo, hi`
-    - `confirmatory`: `test, label, people, estimate, lo, hi, scale` (`scale` ∈ `"sd"`, `"rr"`)
+    - `confirmatory`: `test, people, estimate, lo, hi, scale` (`scale` ∈ `"sd"`, `"rr"`; no `label`: the page names each test from the copy)
     - `numbers`: flat dict of named numbers used by copy placeholders (no `people` rule; values must be numbers)
+  - Every value is a finite number, or a string from a fixed set (`aggregates.CATEGORIES`): setting, kind/origin, test, scale, band/size, day, phase; a row with any other value is dropped by `check_aggregates` and refused by the validator, which also checks the nested meta objects, each `.bin` size and that every row sits in a shown bin.
   - `check_aggregates(agg: dict, min_group: int = 5) -> dict` — returns a copy with rows whose `people` is missing or `< min_group` dropped, and any row key outside its section removed.
   - `synthetic_aggregates(seed: int = 0) -> dict` — every section populated with plausible random values, `people >= 5`.
   - `validate_site_data(data_dir: Path, min_group: int = 5) -> dict` — reads `meta.json`, the `.bin` files and `aggregates.json`; raises `SiteDataError(ValueError)` naming the first offending field; returns meta.

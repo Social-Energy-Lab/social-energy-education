@@ -33,14 +33,18 @@ def _edit_meta(out, fn):
 
 def test_check_drops_small_and_missing_people():
     agg = {
-        "places": [{"setting": "a", "people": 4}, {"setting": "b"}, {"setting": "c", "people": 5}]
+        "places": [
+            {"setting": "plenum", "people": 4},
+            {"setting": "night"},
+            {"setting": "meal_time", "people": 5},
+        ]
     }
-    assert check_aggregates(agg)["places"] == [{"setting": "c", "people": 5}]
+    assert check_aggregates(agg)["places"] == [{"setting": "meal_time", "people": 5}]
 
 
 def test_check_strips_unknown_keys():
-    agg = {"places": [{"setting": "a", "people": 9, "course": "X"}]}
-    assert check_aggregates(agg)["places"] == [{"setting": "a", "people": 9}]
+    agg = {"places": [{"setting": "plenum", "people": 9, "course": "X"}]}
+    assert check_aggregates(agg)["places"] == [{"setting": "plenum", "people": 9}]
     out = check_aggregates({"numbers": {"n_presses": 3, "bogus": 1, "company_gain": "x"}})
     assert out["numbers"] == {"n_presses": 3}
 
@@ -114,13 +118,13 @@ def test_validator_refuses_missing_people_unknown_section_key_and_number(tmp_pat
 def test_check_drops_suppressed_rows_and_unknown_sections():
     agg = {
         "places": [
-            {"setting": "a", "people": 9, "suppressed": True},
-            {"setting": "b", "people": 9, "suppressed": False},
+            {"setting": "plenum", "people": 9, "suppressed": True},
+            {"setting": "night", "people": 9, "suppressed": False},
         ],
         "rooms": [{"people": 20}],
     }
     out = check_aggregates(agg)
-    assert out == {"places": [{"setting": "b", "people": 9}]}
+    assert out == {"places": [{"setting": "night", "people": 9}]}
 
 
 def test_non_finite_values_are_refused_and_dropped(tmp_path):
@@ -177,3 +181,109 @@ def test_synthetic_ratios_sit_inside_their_intervals_and_numbers_match_rows():
         share = {r["origin"]: r["share"] for r in agg["persistence"]}
         assert n["persistence_ordinary"] == share["ordinary"]
         assert n["persistence_excursion"] == share["excursion"]
+
+
+# --- values, not only keys: each probe is something a careless export could publish ----------
+
+
+def _refused(tmp_path, *, agg_fn=None, meta_fn=None, match):
+    agg = synthetic_aggregates()
+    if agg_fn:
+        agg_fn(agg)
+    out = _site(tmp_path, agg)
+    if meta_fn:
+        _edit_meta(out, meta_fn)
+    with pytest.raises(SiteDataError, match=match):
+        validate_site_data(out)
+
+
+def test_validator_refuses_a_list_value_in_a_row(tmp_path):
+    _refused(tmp_path, agg_fn=lambda a: a["day_phase"][0].update(others=["person:17"]),
+             match="day_phase")  # fmt: skip
+
+
+def test_validator_refuses_a_setting_outside_the_copy_keys(tmp_path):
+    _refused(tmp_path, agg_fn=lambda a: a["places"][0].update(setting="Kurs 3 Physik"),
+             match="setting")  # fmt: skip
+
+
+def test_validator_refuses_a_confirmatory_label(tmp_path):
+    _refused(tmp_path, agg_fn=lambda a: a["confirmatory"][0].update(label="Anna's course"),
+             match="label")  # fmt: skip
+
+
+def test_validator_refuses_free_text_in_special_days(tmp_path):
+    def fn(m):
+        m["special_days"] = [{"start_bin": 0, "end_bin": 2, "label": "excursion", "note": "x"}]
+
+    _refused(tmp_path, meta_fn=fn, match="special_days")
+
+
+def test_validator_refuses_a_special_day_label_outside_the_copy(tmp_path):
+    def fn(m):
+        m["special_days"] = [{"start_bin": 0, "end_bin": 2, "label": "trip with Mr X"}]
+
+    _refused(tmp_path, meta_fn=fn, match="special_days")
+
+
+def test_validator_refuses_a_free_text_shade_label(tmp_path):
+    _refused(tmp_path, meta_fn=lambda m: m["shade"][0].update(label="private"), match="shade")
+
+
+def test_validator_refuses_a_course_on_a_day(tmp_path):
+    _refused(tmp_path, meta_fn=lambda m: m["days"][0].update(course="Alpha"), match="days")
+
+
+def test_validator_refuses_free_text_in_phases(tmp_path):
+    _refused(tmp_path, meta_fn=lambda m: m["phases"].append("Kurs 3 mit Frau X"), match="phases")
+
+
+def test_validator_refuses_a_bin_file_longer_than_its_count(tmp_path):
+    out = _site(tmp_path)
+    with (out / "pairs.bin").open("ab") as f:
+        f.write(b"\0" * 6)
+    with pytest.raises(SiteDataError, match="pairs"):
+        validate_site_data(out)
+
+
+def test_validator_refuses_a_pair_in_a_hidden_bin(tmp_path):
+    import numpy as np
+
+    out = _site(tmp_path)
+    meta = json.loads((out / "meta.json").read_text())
+    n = meta["n_bins"]
+    bins = np.frombuffer((out / "bins.bin").read_bytes(), dtype=np.uint8)
+    hidden = int(np.flatnonzero(bins[2 * n :] == 0)[0])
+    count = meta["files"]["pairs"]["count"]
+    raw = np.frombuffer((out / "pairs.bin").read_bytes(), dtype="<u2").copy()
+    raw[0] = hidden  # the first pair's bin column
+    assert count >= 1
+    (out / "pairs.bin").write_bytes(raw.tobytes())
+    with pytest.raises(SiteDataError, match="pairs"):
+        validate_site_data(out)
+
+
+def test_validator_refuses_a_bin_index_past_the_end(tmp_path):
+    import numpy as np
+
+    out = _site(tmp_path)
+    meta = json.loads((out / "meta.json").read_text())
+    raw = np.frombuffer((out / "seen.bin").read_bytes(), dtype="<u2").copy()
+    raw[0] = meta["n_bins"]
+    (out / "seen.bin").write_bytes(raw.tobytes())
+    with pytest.raises(SiteDataError, match="seen"):
+        validate_site_data(out)
+
+
+def test_check_drops_rows_with_values_outside_the_enumerations():
+    agg = {
+        "places": [
+            {"setting": "plenum", "people": 9},
+            {"setting": "Kurs 3 Physik", "people": 9},
+            {"setting": "night", "people": 9, "rate": [1, 2]},
+        ],
+        "confirmatory": [{"test": "c1", "label": "c1", "people": 9, "scale": "sd"}],
+    }
+    out = check_aggregates(agg)
+    assert out["places"] == [{"setting": "plenum", "people": 9}]
+    assert out["confirmatory"] == [{"test": "c1", "people": 9, "scale": "sd"}]

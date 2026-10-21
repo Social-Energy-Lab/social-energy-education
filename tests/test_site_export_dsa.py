@@ -206,3 +206,12 @@ def test_latency_bands_are_in_seconds(script):
     assert [r["band"] for r in rows] == ["0-10", "60-120"]
     _, numbers, _ = run(script, {"moments_latency": rows})
     assert numbers["latency_0_10_ratio"] == 3.0
+
+
+def test_copy_keys_are_inside_the_site_enumerations(script):
+    from social_energy.site import aggregates
+
+    assert set(script.SETTINGS.values()) <= set(aggregates.SETTINGS)
+    assert {key for key, _ in script.TESTS.values()} <= set(aggregates.TESTS)
+    assert {scale for _, scale in script.TESTS.values()} <= set(aggregates.SCALES)
+    assert set(script.SPECIAL_DAYS) <= set(aggregates.DAY_KINDS)

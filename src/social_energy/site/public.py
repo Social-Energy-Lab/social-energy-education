@@ -49,6 +49,14 @@ PUBLIC_META_KEYS = {
     "shade",
     "files",
 }
+#: The keys of each ``meta.days`` entry, and of each ``special_days`` / ``shade`` entry.
+PUBLIC_DAY_KEYS = {"index", "label", "start_bin"}
+PUBLIC_SPAN_KEYS = {"start_bin", "end_bin", "label"}
+#: Special days are named by copy key (``label_<key>``), never by free text.
+SPECIAL_DAY_LABELS = ("excursion", "rotation", "arrival")
+#: The one label the writer gives every shaded span (``label_records_missing`` in the copy).
+SHADE_LABEL = "records missing"
+SHADE_LABELS = (SHADE_LABEL,)
 
 
 def _is_night(clock: time, start: time, end: time) -> bool:
@@ -69,7 +77,7 @@ def write_public_bundle(
     close_rssi: int = -65,
     night: tuple[str, str] = ("00:00", "06:00"),
     special_days: list[dict] = (),
-    shade_label: str = "records missing",
+    shade_label: str = SHADE_LABEL,
     synthetic: bool = False,
     seed: int | None = None,
 ) -> dict:

@@ -6,9 +6,9 @@ people (or none stated) is dropped. Only the keys listed here can ever reach the
 
 from __future__ import annotations
 
-import copy
 import math
 import random
+import re
 
 AGGREGATE_SECTIONS: dict[str, tuple[str, ...]] = {
     "day_phase": ("day", "phase", "people", "others", "share_no_one"),
@@ -18,10 +18,30 @@ AGGREGATE_SECTIONS: dict[str, tuple[str, ...]] = {
     "moments_size": ("size", "people", "ratio", "ratio_lo", "ratio_hi"),
     "moments_headline": ("people", "observed", "null_mean", "ratio", "lo", "hi"),
     "places": ("setting", "people", "rate", "lo", "hi"),
-    "confirmatory": ("test", "label", "people", "estimate", "lo", "hi", "scale"),
+    # No label: the page names each test from the copy (``test_<id>``).
+    "confirmatory": ("test", "people", "estimate", "lo", "hi", "scale"),
 }
 NUMBERS = "numbers"
 SCALES = ("sd", "rr")
+#: The copy's ``setting_<key>`` keys.
+SETTINGS = (
+    "plenum",
+    "course_block",
+    "meal_time",
+    "kua_evening",
+    "late_evening",
+    "other_daytime",
+    "night",
+)
+#: Kinds of day: ``origin_<key>`` in the copy, and ``label_<key>`` for the special ones.
+DAY_KINDS = ("ordinary", "excursion", "rotation")
+#: The pre-registered tests, by their ``test_<key>`` copy key.
+TESTS = ("c1", "c2", "c4_trust", "c4_lust")
+#: A lowercase ASCII word, as phase names are (``phase_<name>`` in the copy).
+SAFE_NAME = re.compile(r"[a-z][a-z_]{0,31}")
+#: A latency band or group size: a number, a range or an open end ("0-10", "3-4", "5+").
+BAND = re.compile(r"\d{1,5}(-\d{1,5}|\+)?")
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # Shares are percentages 0-100.
 NUMBER_KEYS = (
     "n_participants",
@@ -47,6 +67,48 @@ def is_number(v: object) -> bool:
     return isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
 
 
+def _index_or(pattern: re.Pattern):
+    def ok(v: object) -> bool:
+        if isinstance(v, int) and not isinstance(v, bool):
+            return 0 <= v < 1000
+        return isinstance(v, str) and pattern.fullmatch(v) is not None
+
+    return ok
+
+
+def _one_of(values: tuple[str, ...]):
+    return lambda v: isinstance(v, str) and v in values
+
+
+def _matches(pattern: re.Pattern):
+    return lambda v: isinstance(v, str) and pattern.fullmatch(v) is not None
+
+
+#: The categorical fields and what they may hold; every other field must be a finite number.
+CATEGORIES = {
+    "day": _index_or(ISO_DATE),
+    "phase": _index_or(SAFE_NAME),
+    "kind": _one_of(DAY_KINDS),
+    "origin": _one_of(DAY_KINDS),
+    "setting": _one_of(SETTINGS),
+    "test": _one_of(TESTS),
+    "scale": _one_of(SCALES),
+    "band": _matches(BAND),
+    "size": _matches(BAND),
+}
+
+
+def bad_field(row: dict, allowed: tuple[str, ...]) -> str | None:
+    """The first field of ``row`` that is unknown or holds a value the site may not show."""
+    for key, value in row.items():
+        if key not in allowed:
+            return key
+        check = CATEGORIES.get(key, is_number)
+        if not check(value):
+            return key
+    return None
+
+
 def check_aggregates(agg: dict, min_group: int = 5) -> dict:
     """Copy of ``agg`` with small or unstated-people rows dropped and unknown keys removed."""
     out = {}
@@ -55,13 +117,16 @@ def check_aggregates(agg: dict, min_group: int = 5) -> dict:
             out[section] = {k: v for k, v in rows.items() if k in NUMBER_KEYS and is_number(v)}
         elif section in AGGREGATE_SECTIONS:
             allowed = AGGREGATE_SECTIONS[section]
-            out[section] = [
-                {k: copy.deepcopy(v) for k, v in row.items() if k in allowed}
+            kept = (
+                # A missing value (None) is left out, as a key the row never had.
+                {k: v for k, v in row.items() if k in allowed and v is not None}
                 for row in rows
                 if is_number(row.get("people"))
                 and row["people"] >= min_group
                 and not row.get("suppressed")
-            ]
+            )
+            # A value outside its enumeration, or not a finite number, drops the whole row.
+            out[section] = [row for row in kept if bad_field(row, allowed) is None]
     return out
 
 
@@ -202,7 +267,7 @@ def synthetic_aggregates(seed: int = 0) -> dict:
         # Effects in SD around 0; rate ratios around 1 (always positive). Each interval holds
         # its estimate.
         "confirmatory": [
-            {"test": t, "label": t, "people": people(), "scale": sc, **around(*null_band)}
+            {"test": t, "people": people(), "scale": sc, **around(*null_band)}
             for t, sc, null_band in (
                 ("c1", "sd", (-0.6, 0.6, 0.1, 0.45)),
                 ("c2", "sd", (-0.6, 0.6, 0.1, 0.45)),

@@ -59,7 +59,7 @@ from social_energy.site.aggregates import (
     check_aggregates,
     is_number,
 )
-from social_energy.site.public import write_public_bundle
+from social_energy.site.public import SHADE_LABEL, write_public_bundle
 from social_energy.site.validate import validate_site_data
 from social_energy.spine import Spine
 from social_energy.study import StudyConfig
@@ -70,8 +70,6 @@ MAX_ZIP_BYTES = 3 * 1024 * 1024
 SPECIAL_DAYS = ("excursion", "rotation")
 #: The site shows no night (``privacy_night``), so the day chapter draws daytime phases only.
 HIDDEN_PHASES = {"night"}
-#: The bundle's label for ``explorer.shade``; the copy knows it as ``label_records_missing``.
-SHADE_LABEL = "records missing"
 #: The setting names of ``places_setting.csv`` -> the copy's ``setting_<key>``.
 SETTINGS = {
     "plenum": "plenum",
@@ -239,7 +237,7 @@ def confirmatory_rows(df: pl.DataFrame, log: list[str]) -> list[dict]:
             continue
         key, scale = TESTS[r["test"]]
         rows.append(
-            {"test": key, "label": key, "people": r["n"], "estimate": _r(r["std_estimate"]),
+            {"test": key, "people": r["n"], "estimate": _r(r["std_estimate"]),
              "lo": _r(r["std_lo"]), "hi": _r(r["std_hi"]), "scale": scale}
         )  # fmt: skip
     return rows
