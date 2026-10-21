@@ -21,6 +21,17 @@ class ScrConfig:
     min_amplitude_us: float = 0.05  # trough to peak
     min_rise_s: float = 0.5
     max_rise_s: float = 5.0
+    # Artifact rules (Kleckner et al. 2018, plus a fall-rate rule for pressure drops):
+    min_us: float = 0.05  # below: no skin contact
+    max_us: float = 60.0  # above: not physiological
+    max_rate_us_s: float = 10.0  # faster change in either direction
+    #: Faster relative fall per second than a recovery (half-recovery of ~2 s on a large
+    #: response falls ~10%/s of the level): a pressure or motion drop.
+    max_fall_per_s: float = 0.25
+    artifact_pad_s: float = 5.0  # around each bad bin
+    #: A rise out of a fall faster than this (share of the level per second, over the second
+    #: before the onset) is the recovery from a notch, not a response.
+    max_pre_onset_fall_per_s: float = 0.10
 
 
 @dataclass(frozen=True)
@@ -39,7 +50,33 @@ _SCR_SCHEMA = {
     "amplitude_us": pl.Float64,
     "rise_s": pl.Float64,
     "onset_us": pl.Float64,
+    "artifact": pl.Boolean,
 }
+
+
+def artifact_mask(x: np.ndarray, config: ScrConfig) -> np.ndarray:
+    """Bins of a ``rate_hz`` conductance series that are artifacts, or within
+    ``artifact_pad_s`` of one: out of range, changing faster than ``max_rate_us_s``, or
+    falling faster than ``max_fall_per_s`` of the level. Gaps (NaN) are not artifacts."""
+    x = np.asarray(x, float)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        bad = (x < config.min_us) | (x > config.max_us)
+        d = np.diff(x) * config.rate_hz
+        fast = np.abs(d) > config.max_rate_us_s
+        fall = -d / x[:-1] > config.max_fall_per_s
+    bad[1:] |= fast | fall
+    pad = round(config.artifact_pad_s * config.rate_hz)
+    if pad and bad.any():
+        bad = np.convolve(bad.astype(np.int64), np.ones(2 * pad + 1, np.int64), "same") > 0
+    return bad
+
+
+def artifact_seconds(t: np.ndarray, us: np.ndarray, config: ScrConfig) -> np.ndarray:
+    """Epoch seconds (int) that hold an artifact bin, for one continuous recording."""
+    times, x = _resample(np.asarray(t, float), np.asarray(us, float), config.rate_hz)
+    if not len(x):
+        return np.zeros(0, np.int64)
+    return np.unique(np.floor(times[artifact_mask(x, config)]).astype(np.int64))
 
 
 def _resample(t: np.ndarray, us: np.ndarray, rate: float) -> tuple[np.ndarray, np.ndarray]:
@@ -61,6 +98,15 @@ def _stretches(finite: np.ndarray) -> list[tuple[int, int]]:
     return list(zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1), strict=True))
 
 
+def _notch(s: np.ndarray, onset: int, config: ScrConfig) -> bool:
+    """Whether the smoothed signal fell into the trough at ``onset`` faster than a baseline
+    can."""
+    back = round(config.rate_hz)
+    if onset < back or s[onset - back] <= 0:
+        return False
+    return (s[onset - back] - s[onset]) / s[onset - back] > config.max_pre_onset_fall_per_s
+
+
 def detect_scr(t: np.ndarray, us: np.ndarray, config: ScrConfig) -> pl.DataFrame:
     """Trough-to-peak SCRs in one continuous recording (``t`` in epoch seconds, ``us`` µS).
 
@@ -68,9 +114,12 @@ def detect_scr(t: np.ndarray, us: np.ndarray, config: ScrConfig) -> pl.DataFrame
     local minimum before it (or the lowest point within ``max_rise_s``), the onset being the
     last point within 5% of the rise above that trough; a pair is an SCR when
     the rise reaches ``min_amplitude_us`` within ``min_rise_s``-``max_rise_s``. Gaps (NaN)
-    split the signal; no SCR spans one.
+    split the signal; no SCR spans one. An SCR whose rise touches an artifact
+    (``artifact_mask``), or that rises out of a notch (``max_pre_onset_fall_per_s``), is kept
+    and flagged ``artifact``.
     """
     times, x = _resample(np.asarray(t, float), np.asarray(us, float), config.rate_hz)
+    artifact = artifact_mask(x, config)
     w = max(1, round(config.smooth_s * config.rate_hz))
     max_rise = round(config.max_rise_s * config.rate_hz)
     rows = []
@@ -95,12 +144,22 @@ def detect_scr(t: np.ndarray, us: np.ndarray, config: ScrConfig) -> pl.DataFrame
                 lo = p - max_rise
                 o = lo + int(np.argmin(s[lo : p + 1]))
             amp = s[p] - s[o]
+            notch = _notch(s, o, config)
             # Onset: the last point before the peak still within 5% of the rise above the
             # trough, so a flat baseline does not stretch the rise back to its first sample.
             o = o + int(np.flatnonzero(s[o : p + 1] <= s[o] + ONSET_FRACTION * amp)[-1])
             rise = (p - o) / config.rate_hz
             if amp >= config.min_amplitude_us and config.min_rise_s <= rise <= config.max_rise_s:
-                rows.append((times[a + o], times[a + p], float(amp), rise, float(s[o])))
+                rows.append(
+                    (
+                        times[a + o],
+                        times[a + p],
+                        float(amp),
+                        rise,
+                        float(s[o]),
+                        bool(artifact[a + o : a + p + 1].any()) or notch,
+                    )
+                )
     return pl.DataFrame(rows, schema=_SCR_SCHEMA, orient="row")
 
 

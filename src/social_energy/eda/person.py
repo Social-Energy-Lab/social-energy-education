@@ -1,6 +1,8 @@
 """EDA per person-minute, resolved through the spine (AGENTS.md invariant 4).
 
-Only seconds that are ``ok`` and inside a wear bout count. People without EDA consent are
+Only seconds that are ``ok`` and inside a wear bout count; conductance is summarised over the
+ones without an artifact (``artifact_s`` says how many had one), and SCRs touching an artifact
+are not counted. People without EDA consent are
 removed entirely: their data may not be used, so it is not carried in a flag. Exclusion
 windows are flagged (``excluded``), so filtering them stays the analyst's visible choice.
 """
@@ -23,18 +25,20 @@ def person_minutes(tables: EdaTables, spine: Spine) -> tuple[pl.DataFrame, dict[
     no_consent = int((s["entity"].is_not_null() & ~s["entity"].is_in(consented)).sum())
     s = s.filter(pl.col("entity").is_in(consented))
     s = spine.flag_excluded(s, device_col="device", time_col="t", kind="eda")
+    clean = pl.col("conductance_us").filter(~pl.col("artifact"))
     minutes = s.group_by("entity", pl.col("t").dt.truncate("1m").alias("minute")).agg(
         pl.col("device").first(),
         pl.len().alias("worn_s"),
-        pl.col("conductance_us").mean().alias("conductance_us"),
-        pl.col("conductance_us").median().alias("conductance_median_us"),
+        pl.col("artifact").sum().alias("artifact_s"),
+        clean.mean().alias("conductance_us"),
+        clean.median().alias("conductance_median_us"),
         pl.col("motion_sd_g").mean().alias("motion_sd_g"),
         pl.col("hr_bpm").mean().alias("hr_bpm"),
         pl.col("source").first(),
         pl.col("excluded").any(),
     )
     scr = spine.resolve(
-        tables.scr.filter(pl.col("ok") & pl.col("worn")),
+        tables.scr.filter(pl.col("ok") & pl.col("worn") & ~pl.col("artifact")),
         device_col="device",
         time_col="onset",
         kind="eda",

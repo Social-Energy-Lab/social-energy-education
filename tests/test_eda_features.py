@@ -8,7 +8,13 @@ from datetime import UTC, datetime
 import numpy as np
 import polars as pl
 
-from social_energy.eda.features import ScrConfig, WearConfig, detect_scr, wear_bouts
+from social_energy.eda.features import (
+    ScrConfig,
+    WearConfig,
+    artifact_mask,
+    detect_scr,
+    wear_bouts,
+)
 
 T0 = int(datetime(2030, 1, 1, tzinfo=UTC).timestamp())
 
@@ -78,3 +84,53 @@ def test_wear_bouts_bridge_short_gaps_and_drop_short_bouts():
     assert a_flags["worn"].to_list() == [i < 700 for i in range(1000)]
     assert a_flags["contact"].to_list() == a.tolist()
     assert not flagged.filter(device="SH02")["worn"].any()
+
+
+def test_a_sudden_drop_is_an_artifact_and_its_recovery_is_not_an_scr():
+    """Flat 2.5 uS for 60 s. At 20 s a pressure artifact: the signal drops 0.4 uS within
+    0.25 s (64 %/s of the level, beyond the 25 %/s limit; a recovery falls ~10 %/s), climbs to
+    2.7 uS (overshooting) and settles back. At 45 s a real SCR (+0.3 uS). The overshoot looks
+    like an SCR but rises inside the artifact window (+-5 s around the drop): flagged. The
+    real one is not."""
+    t = np.arange(0, 60, 1 / 128)
+    us = 2.5 + _scr_wave(t, 45, 0.30)
+    drop = (t >= 20) & (t < 20.25)
+    us[drop] = 2.5 - 0.4 * (t[drop] - 20) / 0.25
+    climb = (t >= 20.25) & (t < 22.25)
+    us[climb] = 2.1 + 0.6 * (t[climb] - 20.25) / 2.0
+    settle = (t >= 22.25) & (t < 40)
+    us[settle] = 2.5 + 0.2 * np.exp(-(t[settle] - 22.25) / 3.0)
+    scr = detect_scr(T0 + t, us, ScrConfig())
+    clean = scr.filter(~pl.col("artifact"))
+    assert clean.height == 1 and abs(clean["onset_s"][0] - T0 - 45) <= 0.6
+    assert scr.filter("artifact").height >= 1
+
+
+def test_artifact_mask_marks_out_of_range_and_fast_changes():
+    """4 Hz bins: 1 uS throughout except bin 40 (0.01 uS, out of range) and a +3 uS jump at
+    bin 120 (12 uS/s, beyond 10). Each bad bin and 5 s (20 bins) either side are artifact."""
+    x = np.full(200, 1.0)
+    x[40] = 0.01
+    x[120:] = 4.0
+    mask = artifact_mask(x, ScrConfig())
+    assert mask[20:61].all() and not mask[:20].any() and not mask[61:99].any()
+    assert mask[100:141].all() and not mask[141:].any()
+
+
+def test_a_rise_out_of_a_notch_is_flagged():
+    """Flat 5 uS. At 20 s a notch: -0.9 uS over 1 s (18 %/s: under the 25 %/s artifact rule,
+    over the 10 %/s a baseline can fall before a real response), then a climb back with an
+    overshoot to 5.3 uS. The 'SCR' rising out of the notch is flagged; a real SCR at 45 s
+    rising from the flat baseline is not."""
+    t = np.arange(0, 60, 1 / 128)
+    us = 5.0 + _scr_wave(t, 45, 0.30)
+    fall = (t >= 20) & (t < 21)
+    us[fall] = 5.0 - 0.9 * (t[fall] - 20)
+    climb = (t >= 21) & (t < 23)
+    us[climb] = 4.1 + 1.2 * (t[climb] - 21) / 2.0
+    settle = (t >= 23) & (t < 40)
+    us[settle] = 5.0 + 0.3 * np.exp(-(t[settle] - 23) / 3.0)
+    scr = detect_scr(T0 + t, us, ScrConfig())
+    clean = scr.filter(~pl.col("artifact"))
+    assert clean.height == 1 and abs(clean["onset_s"][0] - T0 - 45) <= 0.6
+    assert scr.filter("artifact").height >= 1

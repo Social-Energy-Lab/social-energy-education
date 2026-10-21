@@ -19,7 +19,7 @@ import polars as pl
 
 from . import calibration, sd
 from .export import SATURATED_US, export_device, read_export
-from .features import ScrConfig, WearConfig, detect_scr, wear_bouts
+from .features import ScrConfig, WearConfig, artifact_seconds, detect_scr, wear_bouts
 from .timeline import ChunkInfo, TimelineConfig, place_run
 
 SECONDS_SCHEMA = {
@@ -153,6 +153,16 @@ def _seconds(
     )
 
 
+def _with_artifacts(
+    seconds: pl.DataFrame, t: np.ndarray, us: np.ndarray, config: ScrConfig
+) -> pl.DataFrame:
+    fin = np.isfinite(t)
+    bad = artifact_seconds(t[fin], us[fin], config)
+    return seconds.with_columns(
+        pl.col("t").dt.epoch("s").is_in(pl.Series(bad, dtype=pl.Int64).implode()).alias("artifact")
+    )
+
+
 def _scr_frame(
     device: str, source: str, run: str, t: np.ndarray, us: np.ndarray, config: ScrConfig
 ) -> pl.DataFrame:
@@ -185,7 +195,9 @@ def _process_run(device: str, run: sd.SdRun, keep: list[Path], config: EdaConfig
     us[us >= SATURATED_US] = np.nan
     acc = calibration.accel_g(np.concatenate([c.acc for c in chunks]))
     ppg = calibration.ppg_mv(np.concatenate([c.ppg for c in chunks]))
-    seconds = _seconds(device, "sd", run.name, tl.t, us, rng, acc, ppg)
+    seconds = _with_artifacts(
+        _seconds(device, "sd", run.name, tl.t, us, rng, acc, ppg), tl.t, us, config.scr
+    )
     scr = _scr_frame(
         device, "sd", run.name, tl.t[np.isfinite(tl.t)], us[np.isfinite(tl.t)], config.scr
     )
@@ -225,6 +237,7 @@ def _empty_scr() -> pl.DataFrame:
             "amplitude_us": pl.Float64,
             "rise_s": pl.Float64,
             "onset_us": pl.Float64,
+            "artifact": pl.Boolean,
             "device": pl.String,
             "source": pl.String,
             "run": pl.String,
@@ -304,20 +317,19 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
                 continue
             seen.add(digest)
             e = read_export(path, config.timeline())
-            dev_seconds.append(
-                _seconds(
-                    device,
-                    "export",
-                    path.name,
-                    e.t,
-                    e.conductance_us,
-                    e.gsr_range,
-                    e.acc_g,
-                    e.ppg_mv,
-                    e.hr_bpm,
-                    e.gap_ambiguous,
-                )
+            export_seconds = _seconds(
+                device,
+                "export",
+                path.name,
+                e.t,
+                e.conductance_us,
+                e.gsr_range,
+                e.acc_g,
+                e.ppg_mv,
+                e.hr_bpm,
+                e.gap_ambiguous,
             )
+            dev_seconds.append(_with_artifacts(export_seconds, e.t, e.conductance_us, config.scr))
             fin = np.isfinite(e.t)
             dev_scr.append(
                 _scr_frame(device, "export", path.name, e.t[fin], e.conductance_us[fin], config.scr)
@@ -360,7 +372,9 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
     seconds = (
         pl.concat(seconds_parts)
         if seconds_parts
-        else pl.DataFrame(schema={**SECONDS_SCHEMA, "duplicate": pl.Boolean})
+        else pl.DataFrame(
+            schema={**SECONDS_SCHEMA, "artifact": pl.Boolean, "duplicate": pl.Boolean}
+        )
     )
     t_s = pl.col("t").dt.epoch("s")
     seconds = seconds.with_columns(((t_s < lo) | (t_s >= hi)).alias("implausible_time"))
@@ -402,6 +416,7 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
             "amplitude_us",
             "rise_s",
             "onset_us",
+            "artifact",
             "ok",
             "worn",
         )
@@ -422,7 +437,9 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
     qa["seconds_implausible"] = int(seconds["implausible_time"].sum())
     qa["seconds_ok"] = int(seconds["ok"].sum())
     qa["seconds_worn"] = int((seconds["ok"] & seconds["worn"]).sum())
+    qa["seconds_worn_artifact"] = int((seconds["ok"] & seconds["worn"] & seconds["artifact"]).sum())
     qa["scr"] = scr.height
+    qa["scr_ok_worn_clean"] = int((scr["ok"] & scr["worn"] & ~scr["artifact"]).sum())
     qa["scr_ok_worn"] = int((scr["ok"] & scr["worn"]).sum())
     qa["wear_bouts"] = wear.height
     return EdaTables(files=files, seconds=seconds, scr=scr, wear=wear, qa=qa)
