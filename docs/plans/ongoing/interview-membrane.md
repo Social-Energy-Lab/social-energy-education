@@ -2,7 +2,7 @@
 
 **Priority:** high — target: a first exploratory result for the research-group talk on 2026-11-03
 **Gate:** none
-**Next:** project lead reviews the codebook and the first results (private note); decide the "now" scale before any recoding and what enters the preregistration
+**Next:** human check of the flagged and low-confidence codes; then pick one change measure for the preregistration from the three compared
 
 **Goal:** turn the membrane block of the in-person interviews into per-person codes (the state in
 everyday life, on arrival and at the interview, change, openers and closers, placed episodes) and
@@ -22,8 +22,10 @@ set them beside the sensor and survey measures as a first-person ground truth.
 - **Open:** the codebook is the analyst's draft and needs the project lead's review. Its open
   questions for the team are its `[unknown: …]` marker and the private note's list. The revised
   edge rule leaves almost everyone at the same "now" level, so the change over the academy is
-  carried mostly by the arrival code; a finer "now" scale or a separate amount-of-change code is the
-  first thing to settle before a second round.
+  carried mostly by the arrival code.
+- **Done (2026-10-22):** instead of choosing, all three change measures are coded and compared
+  (codebook, "Variants under comparison"; Álvaro: "we try everything"). The two new codes reach
+  higher coder agreement than the strict one. Results per measure in the private note.
 
 ## Why
 
