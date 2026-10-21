@@ -61,7 +61,8 @@ def test_all_zero_records_are_marked(tmp_path):
 
 
 def test_find_runs_reads_only_run_chunks_and_names_the_device(tmp_path):
-    """Session level optional; OS clutter and copy temporaries ignored; ' 2' runs kept apart."""
+    """Session level optional; OS clutter and copy temporaries ignored; ' 2' copies of runs
+    and of the whole data folder are read too (deduplication is by content, later)."""
     card = tmp_path / "SH03"
     for rel in [
         "data/day1_1/SH03-000/000",
@@ -71,14 +72,16 @@ def test_find_runs_reads_only_run_chunks_and_names_the_device(tmp_path):
         "data/SH03-001/.006.tmpcopy",
         "data/day1_1/SH03-000/.DS_Store",
         "data/.Spotlight-V100/Store-V2/x/000",
+        "data 2/SH03-000/000",
     ]:
         (card / rel).parent.mkdir(parents=True, exist_ok=True)
         (card / rel).write_bytes(b"x")
     runs = sd.find_runs(card)
     assert [(r.device, r.name, [p.name for p in r.chunks]) for r in runs] == [
-        ("SH03", "SH03-001", ["000"]),
-        ("SH03", "day1_1/SH03-000", ["000", "001"]),
-        ("SH03", "day1_1/SH03-000 2", ["000"]),
+        ("SH03", "data 2/SH03-000", ["000"]),
+        ("SH03", "data/SH03-001", ["000"]),
+        ("SH03", "data/day1_1/SH03-000", ["000", "001"]),
+        ("SH03", "data/day1_1/SH03-000 2", ["000"]),
     ]
 
 

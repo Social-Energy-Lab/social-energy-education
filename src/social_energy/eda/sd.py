@@ -23,6 +23,7 @@ TICK_WRAP = 1 << 24  # the counter is 24 bits: it wraps every 512 s
 
 RUN_RE = re.compile(r"(SH\d+)-\d{3}( \d+)?")
 CHUNK_RE = re.compile(r"\d{3}")
+DATA_RE = re.compile(r"data( \d+)?")
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,7 @@ class SdRun:
     """One recording run: ``<DEV>-<run>`` and its chunk files in order."""
 
     device: str
-    name: str  # path below data/, e.g. "day3_1787119190/SH10-000"
+    name: str  # path below the card, e.g. "data/day3_1787119190/SH10-000"
     chunks: tuple[Path, ...]
 
 
@@ -76,21 +77,23 @@ def read_chunk(path: Path) -> SdChunk:
 
 
 def find_runs(card: Path) -> list[SdRun]:
-    """Every ``<DEV>-<run>`` folder under ``card/data`` with its ``NNN`` chunks, sorted by name.
+    """Every ``<DEV>-<run>`` folder under the card's ``data`` folder (or a copy of it such as
+    ``data 2``) with its ``NNN`` chunks, sorted by name.
 
     Only three-digit chunk names count, so OS files (Spotlight indexes, ``.DS_Store``, copy
-    temporaries) are ignored. A copy's ``<DEV>-<run> 2`` is a run of its own; deduplication is
-    by content, later.
+    temporaries) are ignored. Copies (``<DEV>-<run> 2``, ``data 2``) are runs of their own;
+    deduplication is by content, later.
     """
-    data = Path(card) / "data"
+    card = Path(card)
     runs = []
-    for folder in sorted(p for p in data.rglob("*") if p.is_dir()):
-        m = RUN_RE.fullmatch(folder.name)
-        if not m or any(part.startswith(".") for part in folder.relative_to(data).parts):
-            continue
-        chunks = tuple(
-            sorted(p for p in folder.iterdir() if p.is_file() and CHUNK_RE.fullmatch(p.name))
-        )
-        if chunks:
-            runs.append(SdRun(m.group(1), folder.relative_to(data).as_posix(), chunks))
+    for data in sorted(p for p in card.iterdir() if p.is_dir() and DATA_RE.fullmatch(p.name)):
+        for folder in sorted(p for p in data.rglob("*") if p.is_dir()):
+            m = RUN_RE.fullmatch(folder.name)
+            if not m or any(part.startswith(".") for part in folder.relative_to(data).parts):
+                continue
+            chunks = tuple(
+                sorted(p for p in folder.iterdir() if p.is_file() and CHUNK_RE.fullmatch(p.name))
+            )
+            if chunks:
+                runs.append(SdRun(m.group(1), folder.relative_to(card).as_posix(), chunks))
     return sorted(runs, key=lambda r: r.name)
