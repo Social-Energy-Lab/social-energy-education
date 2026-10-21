@@ -54,7 +54,7 @@ export default {
   label_excursion: "Excursion day",
   label_rotation: "Rotation day",
   label_arrival: "Arrival day",
-  label_records_missing: "Records missing here, not encounters: the wristband batteries were running low.",
+  label_records_missing: "Many of the wristbands' own records are missing here — not the encounters.",
 
   intro_title: "Signatures of social energy",
   intro_body:

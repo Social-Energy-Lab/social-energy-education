@@ -55,7 +55,7 @@ export default {
   label_excursion: "Exkursionstag",
   label_rotation: "Rotationstag",
   label_arrival: "Anreisetag",
-  label_records_missing: "Hier fehlen Aufzeichnungen, nicht Begegnungen: Die Akkus der Armbänder wurden schwach.",
+  label_records_missing: "Hier fehlen viele Aufzeichnungen der Armbänder selbst – nicht die Begegnungen.",
 
   intro_title: "Signaturen sozialer Energie",
   intro_body:
