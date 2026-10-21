@@ -7,6 +7,14 @@ are rebuilt from the timestamps (ms x 32.768, modulo 2^24), cleaned and segmente
 on an SD card, the first segment placed at its first timestamp, and each later segment at
 the smallest gap after its predecessor that agrees with its own timestamp modulo 512 s. A gap
 beyond ``max_step_s`` could hide whole wraps: those segments are flagged ``gap_ambiguous``.
+
+Some exports carry no clock at all (``-1`` in every timestamp). They are not placed unless a
+start is given (``start_s``): then row ``i`` sits at ``start_s + i / sample_rate_hz`` and the
+file's clock is ``recovered``. Sampling pauses are invisible in such a file.
+
+The repaired export clock is the device's clock plus one constant per file (Shimmer Base
+subtracts one sync offset, or none); ``eda.ingest`` measures it against the SD card and
+corrects it with ``eda.clock``.
 """
 
 from __future__ import annotations
@@ -53,6 +61,7 @@ class ExportFile:
     ppg_mv: np.ndarray
     hr_bpm: np.ndarray  # NaN where the export has none
     qa: dict[str, Any]
+    segment: np.ndarray | None = None  # per row: its clock segment, -1 for bad rows
 
 
 def _separator(path: Path) -> str:
@@ -71,7 +80,41 @@ def export_device(path: Path) -> str:
         return f.readline().split(sep)[0].strip().strip('"').partition("_")[0]
 
 
-def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
+def _data_rows(path: Path) -> tuple[str, list[str]]:
+    sep = _separator(path)
+    with path.open(encoding="utf-8") as f:
+        for _ in range(3):
+            f.readline()
+        first = f.readline()
+    with path.open("rb") as f:
+        f.seek(0, 2)
+        size = f.tell()
+        f.seek(max(0, size - 4096))
+        tail = f.read().decode("utf-8", "replace").splitlines()
+    return sep, [first, *[x for x in tail if x.strip()][-1:]]
+
+
+def export_span(path: Path) -> tuple[float | None, float | None]:
+    """First and last timestamp (epoch seconds, as written; None for ``-1`` or unreadable)
+    without reading the file. The last one can carry spurious whole 512-s wraps."""
+    sep, (first, last) = _data_rows(Path(path))
+
+    def stamp(line: str) -> float | None:
+        try:
+            v = float(line.split(sep)[0].strip().strip('"'))
+        except ValueError:
+            return None
+        return v / 1000 if v > 0 else None
+
+    return stamp(first), stamp(last)
+
+
+def read_export(
+    path: Path,
+    config: TimelineConfig | None = None,
+    start_s: float | None = None,
+    sample_rate_hz: float = 128.0,
+) -> ExportFile:
     path = Path(path)
     config = config or TimelineConfig()
     df = pl.read_csv(
@@ -99,12 +142,24 @@ def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
 
     ts = df["ts_ms"].to_numpy()
     n = len(ts)
-    ticks = np.rint((ts - ts[0]) * TICK_HZ / 1000).astype(np.int64) % TICK_WRAP
-    good = clean_ticks(ticks, np.ones(n, bool), config)
+    has_time = np.isfinite(ts) & (ts > 0)
+    if n and not has_time.any():
+        # No clock in the file: placed only from a given start, by the sample index.
+        if start_s is not None:
+            clock = "recovered"
+            ts = (start_s + np.arange(n) / sample_rate_hz) * 1000
+            has_time[:] = True
+        else:
+            clock = "none"
+    first = ts[np.argmax(has_time)] if has_time.any() else 0.0
+    ticks = np.rint((np.where(has_time, ts, first) - first) * TICK_HZ / 1000).astype(np.int64)
+    ticks %= TICK_WRAP
+    good = clean_ticks(ticks, has_time, config)
     gi = np.flatnonzero(good)
     t = np.full(n, np.nan)
     ambiguous = np.zeros(n, bool)
     n_segments = n_ambiguous = 0
+    segment = np.full(n, -1, np.int64)
     if len(gi):
         d = tick_steps(ticks[gi])
         max_step = int(config.max_step_s * TICK_HZ)
@@ -127,6 +182,7 @@ def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
                     ambiguous[members] = True
                     n_ambiguous += 1
             t[members] = start + tau[seg == s]
+            segment[members] = s
             prev_end = t[members[-1]]
 
     us = df["us"].to_numpy()
@@ -138,6 +194,7 @@ def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
         t=t,
         bad=~good,
         gap_ambiguous=ambiguous,
+        segment=segment,
         conductance_us=np.where(valid, us, np.nan),
         gsr_valid=valid,
         gsr_range=df["gsr_range"].fill_nan(0).to_numpy().astype(np.int64),

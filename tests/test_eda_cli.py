@@ -20,6 +20,11 @@ def test_dsa_study_config_builds_eda_config():
     assert eda.valid_from == date(2026, 8, 14) and eda.valid_to == date(2026, 8, 29)
     assert eda.rotation_s == 3600
     assert 7199 < eda.mtime_to_utc_s < 7203
+    # The clock section: reference units, the zone days are cut in, co-motion windows.
+    assert "SH02" in eda.clock.reference_devices and "SH13" not in eda.clock.reference_devices
+    assert eda.clock.timezone == "Europe/Berlin"
+    lo, hi = eda.comotion_windows[0]
+    assert 0 < hi - lo < 4 * 3600
 
 
 def test_ingest_eda_cli_writes_tables_and_person_minutes(tmp_path, monkeypatch):
@@ -45,15 +50,22 @@ def test_ingest_eda_cli_writes_tables_and_person_minutes(tmp_path, monkeypatch):
                     "valid_to": day,
                     "mtime_to_utc_s": synth.spec.mtime_offset_s,
                     "rotation_s": synth.spec.chunk_s,
+                    "clock": {"reference_devices": ["SH03"]},
                 },
             }
         )
     )
     monkeypatch.setenv("SOCIAL_ENERGY_DATA", str(root))
-    assert cli.main(["ingest-eda", str(study / "study.yaml")]) == 0
     out = root / "synthetic-eda" / "derived" / "eda"
-    for name in ("files", "seconds", "scr", "wear", "person_minutes"):
+    out.mkdir(parents=True)
+    (out / "hr_minutes.parquet").write_bytes(b"another command's output")
+    (out / "seconds.parquet").write_bytes(b"stale")
+    assert cli.main(["ingest-eda", str(study / "study.yaml")]) == 0
+    for name in ("files", "seconds", "scr", "wear", "person_minutes", "clock", "comotion"):
         assert (out / f"{name}.parquet").exists(), name
+    assert (out / "hr_minutes.parquet").read_bytes() == b"another command's output"
+    clock = pl.read_parquet(out / "clock.parquet")
+    assert set(clock.filter(pl.col("run").str.ends_with("-000"))["kind"]) == {"sync", "master"}
     qa = json.loads((out / "qa.json").read_text())
     assert qa["ingest"]["wear_bouts"] == synth.truth_wear.height
     assert qa["person_minutes"]["people"] == 1

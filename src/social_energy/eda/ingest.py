@@ -3,6 +3,14 @@
 Pure: raw files in, ``polars`` frames out (AGENTS.md invariant 3). Devices are processed one
 at a time and runs one at a time, so a card of a week's recording never sits in memory whole.
 Nothing is resolved to people here; that is the spine's job (``person_minutes``).
+
+Two passes. The first places every SD run on its device's own clock and collects the sync
+records and run spans; ``eda.clock`` builds the per-run clock model from them. The second
+places the runs again, corrects their times through the model, and builds the tables.
+Exports are matched row for row against the SD run of the same device (their repaired
+clock is the device's plus a constant per clock segment) and corrected through that run's
+model; an export with no SD
+counterpart gets its unit's fallback, flagged ``clock_uncertain``.
 """
 
 from __future__ import annotations
@@ -18,9 +26,16 @@ import numpy as np
 import polars as pl
 
 from . import calibration, sd
-from .export import SATURATED_US, export_device, read_export
-from .features import ScrConfig, WearConfig, artifact_seconds, detect_scr, wear_bouts
-from .timeline import ChunkInfo, TimelineConfig, place_run
+from .clock import RECORDS_SCHEMA, RUNS_SCHEMA, ClockConfig, ClockModel, comotion
+from .export import SATURATED_US, export_device, export_span, read_export
+from .features import (
+    ScrConfig,
+    WearConfig,
+    artifact_seconds,
+    detect_scr,
+    wear_bouts,
+)
+from .timeline import ChunkInfo, RunTimeline, TimelineConfig, place_run
 
 SECONDS_SCHEMA = {
     "device": pl.String,
@@ -36,8 +51,16 @@ SECONDS_SCHEMA = {
     "ppg_mv": pl.Float32,
     "hr_bpm": pl.Float32,
     "gap_ambiguous": pl.Boolean,
+    "clock_uncertain": pl.Boolean,
+    "clock_correction_s": pl.Float32,
 }
 SOURCE_PRIORITY = {"sd": 0, "export": 1}
+#: Samples per key, and per confirmation, when matching an export's rows to its SD card.
+MATCH_KEY = 4
+MATCH_CONFIRM = 32
+MATCH_EVERY = 128 * 300  # rows between probes (5 min)
+#: Rate of the motion series used for the co-motion check.
+COMOTION_HZ = 64.0
 
 
 @dataclass(frozen=True)
@@ -55,6 +78,15 @@ class EdaConfig:
     drift_min_span_s: float = 7200.0
     scr: ScrConfig = field(default_factory=ScrConfig)
     wear: WearConfig = field(default_factory=WearConfig)
+    #: Correct device clocks through their sync records (``eda.clock``); False keeps them.
+    correct_clocks: bool = True
+    clock: ClockConfig = field(default_factory=ClockConfig)
+    #: Windows (UTC epoch seconds) in which devices lay together: the co-motion check.
+    comotion_windows: tuple[tuple[float, float], ...] = ()
+    comotion_window_s: float = 600.0  # sub-window length of the co-motion check
+    #: Export file name -> UTC epoch seconds of its first row, for exports without a clock.
+    export_starts: dict[str, float] = field(default_factory=dict)
+    sample_rate_hz: float = 128.0
 
     @property
     def window_s(self) -> tuple[float, float]:
@@ -83,6 +115,8 @@ class EdaTables:
     scr: pl.DataFrame  # one row per SCR
     wear: pl.DataFrame  # wear bouts per device
     qa: dict[str, Any]
+    clock: pl.DataFrame = field(default_factory=pl.DataFrame)  # one row per run's clock model
+    comotion: pl.DataFrame = field(default_factory=pl.DataFrame)  # co-motion residuals
 
 
 def _seconds(
@@ -96,6 +130,8 @@ def _seconds(
     ppg_mv: np.ndarray,
     hr_bpm: np.ndarray | None = None,
     ambiguous: np.ndarray | None = None,
+    uncertain: np.ndarray | None = None,
+    correction: np.ndarray | None = None,
 ) -> pl.DataFrame:
     placed = np.isfinite(t)
     if not placed.any():
@@ -122,10 +158,16 @@ def _seconds(
             )
         else:
             hr_mean = np.full(m, np.nan)
-    amb = (
-        np.bincount(inv, ambiguous[placed], minlength=m) > 0
-        if ambiguous is not None
-        else np.zeros(m, bool)
+
+    def any_of(flag: np.ndarray | None) -> np.ndarray:
+        if flag is None:
+            return np.zeros(m, bool)
+        return np.bincount(inv, flag[placed], minlength=m) > 0
+
+    corr = (
+        np.bincount(inv, correction[placed], minlength=m) / n
+        if correction is not None
+        else np.zeros(m)
     )
     return (
         pl.DataFrame(
@@ -142,7 +184,9 @@ def _seconds(
                 "motion_sd_g": mag_sd,
                 "ppg_mv": np.bincount(inv, ppg_mv[placed], minlength=m) / n,
                 "hr_bpm": hr_mean,
-                "gap_ambiguous": amb,
+                "gap_ambiguous": any_of(ambiguous),
+                "clock_uncertain": any_of(uncertain),
+                "clock_correction_s": corr,
             }
         )
         .with_columns(
@@ -178,7 +222,11 @@ def _sha256(path: Path) -> str:
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-def _process_run(device: str, run: sd.SdRun, keep: list[Path], config: EdaConfig):
+def place_sd_run(
+    run: sd.SdRun, keep: list[Path], config: EdaConfig
+) -> tuple[list[sd.SdChunk], list[ChunkInfo], RunTimeline]:
+    """Decode the chunks ``keep`` of ``run`` and place their records on the device's own
+    clock (correct it with ``ClockModel.correct``)."""
     chunks = [sd.read_chunk(p) for p in keep]
     present = {int(p.name) for p in run.chunks}
     infos = [
@@ -186,29 +234,135 @@ def _process_run(device: str, run: sd.SdRun, keep: list[Path], config: EdaConfig
             mtime_s=p.stat().st_mtime,
             truncated=c.size % 4096 == 0 and c.size != config.full_chunk_bytes,
             rotated=int(p.name) + 1 in present,
+            header_ticks=c.header.start_ticks if c.header is not None else None,
         )
         for p, c in zip(keep, chunks, strict=True)
     ]
     tl = place_run([c.ticks for c in chunks], [c.zero for c in chunks], infos, config.timeline())
+    return chunks, infos, tl
+
+
+def unique_sd_runs(
+    runs: list[sd.SdRun], seen: set[str]
+) -> tuple[list[tuple[sd.SdRun, list[Path]]], list[tuple[sd.SdRun, Path]]]:
+    """One device's runs, most complete copy first, each with its chunks not byte-identical
+    to one already taken (``seen`` holds their digests and is updated), and the skipped
+    copies."""
+    kept, copies = [], []
+    for run in sorted(runs, key=lambda r: (-len(r.chunks), r.name)):
+        keep = []
+        for p in run.chunks:
+            digest = _sha256(p)
+            if digest in seen:
+                copies.append((run, p))
+                continue
+            seen.add(digest)
+            keep.append(p)
+        if keep:
+            kept.append((run, keep))
+    return kept, copies
+
+
+def scan_run(device: str, run: sd.SdRun, keep: list[Path], config: EdaConfig):
+    """Pass 1: the run's span on the device clock, its master flag, and its sync records
+    (only those in a block whose first record is good and placed)."""
+    chunks, _, tl = place_sd_run(run, keep, config)
+    records = []
+    offset = 0
+    for c in chunks:
+        for blk, ticks in zip(c.sync_block, c.sync_offset_ticks, strict=True):
+            i = offset + int(blk) * sd.RECORDS_PER_BLOCK
+            if i < len(tl.t) and not tl.bad[i] and np.isfinite(tl.t[i]):
+                records.append((device, run.name, float(tl.t[i]), int(ticks) / sd.TICK_HZ))
+        offset += len(c.ticks)
+    fin = tl.t[np.isfinite(tl.t)]
+    span = (float(fin.min()), float(fin.max())) if len(fin) else None
+    # A unit flagged master with sync off leads no group.
+    master = any(c.header is not None and c.header.master and c.header.sync_on for c in chunks)
+    return records, span, master
+
+
+def _jerk(acc: np.ndarray) -> np.ndarray:
+    d = np.diff(np.asarray(acc, float), axis=0, prepend=np.asarray(acc[:1], float))
+    return np.sqrt((d**2).sum(axis=1))
+
+
+@dataclass
+class _ComotionGrid:
+    lo: float
+    hi: float
+    signals: dict[str, np.ndarray] = field(default_factory=dict)
+
+    def add(self, device: str, t: np.ndarray, jerk: np.ndarray) -> None:
+        m = np.isfinite(t) & (t >= self.lo) & (t < self.hi)
+        if not m.any():
+            return
+        n = int((self.hi - self.lo) * COMOTION_HZ)
+        grid = self.signals.setdefault(device, np.full(n, np.nan, np.float32))
+        i = np.clip(((t[m] - self.lo) * COMOTION_HZ).astype(np.int64), 0, n - 1)
+        np.fmax.at(grid, i, jerk[m].astype(np.float32))
+
+
+def _process_run(
+    device: str,
+    run: sd.SdRun,
+    keep: list[Path],
+    config: EdaConfig,
+    model: ClockModel | None,
+    grids: list[_ComotionGrid],
+    keep_series: bool,
+):
+    chunks, infos, tl = place_sd_run(run, keep, config)
+    t_dev = tl.t
+    if model is not None:
+        t, uncertain = model.correct(device, run.name, t_dev)
+        rc = model.runs.get((device, run.name))
+        kind = rc.kind if rc is not None else "rate"
+    else:
+        t, uncertain, kind = t_dev, np.zeros(len(t_dev), bool), "none"
+    uncertain = uncertain | tl.by_mtime
     rng = np.concatenate([c.gsr_range for c in chunks])
     us = calibration.gsr_microsiemens(rng, np.concatenate([c.gsr_adc for c in chunks]))
     us[us >= SATURATED_US] = np.nan
-    acc = calibration.accel_g(np.concatenate([c.acc for c in chunks]))
+    acc_raw = np.concatenate([c.acc for c in chunks])
+    acc = calibration.accel_g(acc_raw)
     ppg = calibration.ppg_mv(np.concatenate([c.ppg for c in chunks]))
     seconds = _with_artifacts(
-        _seconds(device, "sd", run.name, tl.t, us, rng, acc, ppg), tl.t, us, config.scr
+        _seconds(
+            device,
+            "sd",
+            run.name,
+            t,
+            us,
+            rng,
+            acc,
+            ppg,
+            uncertain=uncertain,
+            correction=t - t_dev,
+        ),
+        t,
+        us,
+        config.scr,
     )
-    scr = _scr_frame(
-        device, "sd", run.name, tl.t[np.isfinite(tl.t)], us[np.isfinite(tl.t)], config.scr
-    )
+    fin = np.isfinite(t)
+    scr = _scr_frame(device, "sd", run.name, t[fin], us[fin], config.scr)
+    if grids:
+        good = fin & ~tl.bad
+        jerk = np.full(len(t), np.nan)
+        jerk[good] = _jerk(acc_raw[good])
+        for g in grids:
+            g.add(device, t, jerk)
+    series = None
+    if keep_series and fin.any():
+        series = (t_dev, np.concatenate([c.ppg for c in chunks]).astype(np.int16))
     files = []
     offset = 0
     lo, hi = config.window_s
     for p, c, info in zip(keep, chunks, infos, strict=True):
         sl = slice(offset, offset + len(c.ticks))
         offset += len(c.ticks)
-        tt = tl.t[sl]
-        fin = tt[np.isfinite(tt)]
+        tt = t[sl]
+        ok = np.isfinite(tt)
         files.append(
             {
                 "device": device,
@@ -218,15 +372,19 @@ def _process_run(device: str, run: sd.SdRun, keep: list[Path], config: EdaConfig
                 "records": len(c.ticks),
                 "records_bad": int(tl.bad[sl].sum()),
                 "records_unanchored": int(tl.unanchored[sl].sum()),
-                "records_placed": len(fin),
-                "records_implausible": int(((fin < lo) | (fin >= hi)).sum()),
-                "start": float(fin.min()) if len(fin) else None,
-                "end": float(fin.max()) if len(fin) else None,
+                "records_placed": int(ok.sum()),
+                "records_implausible": int(((tt[ok] < lo) | (tt[ok] >= hi)).sum()),
+                "records_by_mtime": int(tl.by_mtime[sl].sum()),
+                "start": float(tt[ok].min()) if ok.any() else None,
+                "end": float(tt[ok].max()) if ok.any() else None,
                 "truncated": info.truncated,
                 "duplicate": False,
+                "clock_model": kind,
+                "clock_uncertain": bool(uncertain[sl][ok].any()) if ok.any() else None,
+                "clock_correction_s": float(np.median((tt - t_dev[sl])[ok])) if ok.any() else None,
             }
         )
-    return seconds, scr, files, tl.qa
+    return seconds, scr, files, tl.qa, series
 
 
 def _empty_scr() -> pl.DataFrame:
@@ -245,11 +403,38 @@ def _empty_scr() -> pl.DataFrame:
     )
 
 
+def _session(path: Path) -> str:
+    """``day3_Session1_SH14_Calibrated_SD.csv`` -> ``day3_Session1``."""
+    return path.name.rsplit("_SH", 1)[0]
+
+
+def build_clock_model(
+    kept: dict[str, list[tuple[sd.SdRun, list[Path]]]], config: EdaConfig
+) -> tuple[ClockModel, dict[str, list[tuple[str, float, float]]]]:
+    """Pass 1 over every kept SD run: the clock model, and each device's run spans."""
+    records, runs = [], []
+    spans: dict[str, list[tuple[str, float, float]]] = defaultdict(list)
+    for device, items in kept.items():
+        for run, keep in items:
+            rec, span, master = scan_run(device, run, keep, config)
+            records += rec
+            if span is not None:
+                runs.append((device, run.name, span[0], span[1], master))
+                spans[device].append((run.name, span[0], span[1]))
+    model = ClockModel(
+        pl.DataFrame(records, schema=RECORDS_SCHEMA, orient="row"),
+        pl.DataFrame(runs, schema=RUNS_SCHEMA, orient="row"),
+        config.clock,
+    )
+    return model, spans
+
+
 def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> EdaTables:
     """Every SD card in ``cards`` and every calibrated export in ``exports``, one device at a
     time. Byte-identical chunks and export files are read once (copies flagged ``duplicate``
     in ``files``); where SD and export cover the same device-second, the SD row is kept and
-    the other flagged ``duplicate`` in ``seconds``."""
+    the other flagged ``duplicate`` in ``seconds``. Times are corrected per run through the
+    clock model (``config.correct_clocks``)."""
     runs_by_device: dict[str, list[sd.SdRun]] = defaultdict(list)
     for card in cards:
         for run in sd.find_runs(Path(card)):
@@ -257,36 +442,59 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
     exports_by_device: dict[str, list[Path]] = defaultdict(list)
     for path in exports:
         exports_by_device[export_device(Path(path))].append(Path(path))
+    devices = sorted(set(runs_by_device) | set(exports_by_device))
 
     qa: dict[str, Any] = defaultdict(int)
     files_rows: list[dict] = []
+    seen: dict[str, set[str]] = {d: set() for d in devices}
+    kept: dict[str, list[tuple[sd.SdRun, list[Path]]]] = {}
+    for device in devices:
+        kept[device], copies = unique_sd_runs(runs_by_device[device], seen[device])
+        for run, p in copies:
+            files_rows.append(
+                {
+                    "device": device,
+                    "source": "sd",
+                    "run": run.name,
+                    "path": p.as_posix(),
+                    "duplicate": True,
+                }
+            )
+            qa["chunks_duplicate"] += 1
+
+    model, run_spans = build_clock_model(kept, config) if config.correct_clocks else (None, {})
+    spans = {p: export_span(p) for d in devices for p in exports_by_device[d]}
+    # Exports without a clock are placed from the corrected start of the other exports of
+    # their session (the units were started together), so their devices come last.
+    raw_starts: dict[str, list[float]] = defaultdict(list)
+    for p, (first, _) in spans.items():
+        if first is not None:
+            raw_starts[_session(p)].append(first)
+    starts: dict[str, list[float]] = defaultdict(list)
+    clockless = {d for d in devices for p in exports_by_device[d] if spans[p][0] is None}
+    devices = [d for d in devices if d not in clockless] + sorted(clockless)
+    grids = [_ComotionGrid(lo, hi) for lo, hi in config.comotion_windows]
+
     seconds_parts, scr_parts = [], []
     lo, hi = config.window_s
-    for device in sorted(set(runs_by_device) | set(exports_by_device)):
-        seen: set[str] = set()
+    for device in devices:
         dev_seconds, dev_scr = [], []
-        # Most complete copy first, so a partial copy's chunks are the ones skipped.
-        for run in sorted(runs_by_device[device], key=lambda r: (-len(r.chunks), r.name)):
-            keep = []
-            for p in run.chunks:
-                digest = _sha256(p)
-                if digest in seen:
-                    files_rows.append(
-                        {
-                            "device": device,
-                            "source": "sd",
-                            "run": run.name,
-                            "path": p.as_posix(),
-                            "duplicate": True,
-                        }
-                    )
-                    qa["chunks_duplicate"] += 1
-                    continue
-                seen.add(digest)
-                keep.append(p)
-            if not keep:
-                continue
-            seconds, scr, files, tqa = _process_run(device, run, keep, config)
+        exp_spans = [
+            # Wide: an export's clock can be off by whole 512-s wraps.
+            (a - 12 * 3600, b + 12 * 3600)
+            for p in exports_by_device[device]
+            for a, b in [spans[p]]
+            if a
+        ]
+        series: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+        for run, keep in kept[device]:
+            span = next((s for s in run_spans.get(device, []) if s[0] == run.name), None)
+            near = span is not None and any(a < span[2] and b > span[1] for a, b in exp_spans)
+            seconds, scr, files, tqa, ser = _process_run(
+                device, run, keep, config, model, grids, near
+            )
+            if ser is not None:
+                series[run.name] = ser
             dev_seconds.append(seconds)
             dev_scr.append(scr)
             files_rows += files
@@ -296,14 +504,17 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
                 "records_zero",
                 "records_bad",
                 "records_unanchored",
+                "records_by_mtime",
                 "segments",
                 "segments_unanchored",
+                "segments_by_mtime",
                 "hidden_gaps",
+                "mtime_disagreements",
             ):
                 qa[f"sd_{k}"] += tqa[k]
         for path in sorted(exports_by_device[device]):
             digest = _sha256(path)
-            if digest in seen:
+            if digest in seen[device]:
                 files_rows.append(
                     {
                         "device": device,
@@ -315,26 +526,36 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
                 )
                 qa["export_files_duplicate"] += 1
                 continue
-            seen.add(digest)
-            e = read_export(path, config.timeline())
+            seen[device].add(digest)
+            start = config.export_starts.get(path.name)
+            if start is None and spans[path][0] is None:
+                peers = starts.get(_session(path)) or raw_starts.get(_session(path))
+                if peers:
+                    start = float(np.median(peers))
+            e = read_export(path, config.timeline(), start, config.sample_rate_hz)
+            t, unc, info = _correct_export(device, path, e, series, model, config)
             export_seconds = _seconds(
                 device,
                 "export",
                 path.name,
-                e.t,
+                t,
                 e.conductance_us,
                 e.gsr_range,
                 e.acc_g,
                 e.ppg_mv,
                 e.hr_bpm,
                 e.gap_ambiguous,
+                unc,
+                t - e.t,
             )
-            dev_seconds.append(_with_artifacts(export_seconds, e.t, e.conductance_us, config.scr))
-            fin = np.isfinite(e.t)
+            dev_seconds.append(_with_artifacts(export_seconds, t, e.conductance_us, config.scr))
+            fin = np.isfinite(t)
             dev_scr.append(
-                _scr_frame(device, "export", path.name, e.t[fin], e.conductance_us[fin], config.scr)
+                _scr_frame(device, "export", path.name, t[fin], e.conductance_us[fin], config.scr)
             )
-            placed = e.t[fin]
+            placed = t[fin]
+            if len(placed) and e.qa["clock"] != "recovered":
+                starts[_session(path)].append(float(placed[0]))
             files_rows.append(
                 {
                     "device": device,
@@ -352,12 +573,18 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
                     "duplicate": False,
                     "clock": e.qa["clock"],
                     "segments_gap_ambiguous": e.qa["segments_gap_ambiguous"],
+                    "clock_uncertain": bool(unc[fin].any()) if fin.any() else None,
+                    "clock_correction_s": (float(np.median((t - e.t)[fin])) if fin.any() else None),
+                    **info,
                 }
             )
             qa["export_files"] += 1
             qa["export_records"] += e.qa["records"]
             qa["export_records_bad"] += e.qa["records_bad"]
             qa["export_segments_gap_ambiguous"] += e.qa["segments_gap_ambiguous"]
+            qa[f"export_files_clock_{e.qa['clock']}"] += 1
+            qa[f"export_files_{info['clock_model']}"] += 1
+            del e
         if dev_seconds:
             s = (
                 pl.concat(dev_seconds)
@@ -385,6 +612,7 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
     seconds = seconds.join(
         flagged.select("device", "t", "contact", "worn"), on=["device", "t"], how="left"
     ).with_columns(pl.col("contact", "worn").fill_null(False))
+    wear = _wear_uncertain(wear, seconds)
 
     scr = pl.concat(scr_parts, how="vertical_relaxed") if scr_parts else _empty_scr()
     scr = (
@@ -401,12 +629,18 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
         )
         .join(
             seconds.select(
-                "device", "source", "run", pl.col("t").dt.epoch("s").alias("_sec"), "ok", "worn"
+                "device",
+                "source",
+                "run",
+                pl.col("t").dt.epoch("s").alias("_sec"),
+                "ok",
+                "worn",
+                "clock_uncertain",
             ),
             on=["device", "source", "run", "_sec"],
             how="left",
         )
-        .with_columns(pl.col("ok", "worn").fill_null(False))
+        .with_columns(pl.col("ok", "worn", "clock_uncertain").fill_null(False))
         .select(
             "device",
             "source",
@@ -419,6 +653,7 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
             "artifact",
             "ok",
             "worn",
+            "clock_uncertain",
         )
         .sort("device", "onset")
     )
@@ -436,10 +671,302 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
     qa["seconds_duplicate"] = int(seconds["duplicate"].sum())
     qa["seconds_implausible"] = int(seconds["implausible_time"].sum())
     qa["seconds_ok"] = int(seconds["ok"].sum())
-    qa["seconds_worn"] = int((seconds["ok"] & seconds["worn"]).sum())
-    qa["seconds_worn_artifact"] = int((seconds["ok"] & seconds["worn"] & seconds["artifact"]).sum())
+    worn_ok = seconds["ok"] & seconds["worn"]
+    qa["seconds_worn"] = int(worn_ok.sum())
+    qa["seconds_worn_artifact"] = int((worn_ok & seconds["artifact"]).sum())
+    qa["seconds_worn_clock_uncertain"] = int((worn_ok & seconds["clock_uncertain"]).sum())
     qa["scr"] = scr.height
     qa["scr_ok_worn_clean"] = int((scr["ok"] & scr["worn"] & ~scr["artifact"]).sum())
     qa["scr_ok_worn"] = int((scr["ok"] & scr["worn"]).sum())
     qa["wear_bouts"] = wear.height
-    return EdaTables(files=files, seconds=seconds, scr=scr, wear=wear, qa=qa)
+    clock = model.summary() if model is not None else pl.DataFrame()
+    if model is not None:
+        qa["clock"] = model.qa
+    comotion_table = _comotion_uncertain(_comotion_table(grids, config), seconds)
+    qa["comotion"] = comotion_summary(comotion_table)
+    return EdaTables(
+        files=files,
+        seconds=seconds,
+        scr=scr,
+        wear=wear,
+        qa=qa,
+        clock=clock,
+        comotion=comotion_table,
+    )
+
+
+def _keys(v: np.ndarray) -> np.ndarray:
+    """``MATCH_KEY`` consecutive 12-bit values packed into one integer, per position."""
+    v = np.asarray(v, np.int64) & 0xFFF
+    n = max(len(v) - MATCH_KEY + 1, 0)
+    k = np.zeros(n, np.int64)
+    for j in range(MATCH_KEY):
+        k = (k << 12) | v[j : j + n]
+    return k
+
+
+class _SdIndex:
+    """One SD run's PPG sequence, indexed for exact lookups of an export's rows."""
+
+    def __init__(self, t: np.ndarray, ppg: np.ndarray):
+        self.t, self.ppg = t, ppg
+        keys = _keys(ppg)
+        self.order = np.argsort(keys, kind="stable")
+        self.keys = keys[self.order]
+
+    def find(self, pat: np.ndarray) -> int | None:
+        """The one placed record where ``pat`` starts, or None if none or several."""
+        key = _keys(pat[:MATCH_KEY])[0]
+        lo, hi = np.searchsorted(self.keys, [key, key + 1])
+        hits = [
+            int(i)
+            for i in self.order[lo : min(hi, lo + 50)]
+            if i + len(pat) <= len(self.ppg)
+            and np.array_equal(self.ppg[i : i + len(pat)], pat)
+            and np.isfinite(self.t[i])
+        ]
+        return hits[0] if len(hits) == 1 else None
+
+
+def _row_lags(
+    e, adc: np.ndarray, sd: dict[str, _SdIndex]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per export row: the lag (export time - device time) of the nearest probe of its own
+    clock segment, within ``2 * MATCH_EVERY`` rows, that found its samples on an SD run (NaN
+    where none did; a segment with no probe in reach borrows a neighbouring one's); that
+    probe's run (None where none); and whether the row is flagged (its segment's probes on
+    either side disagree, or its lag is borrowed)."""
+    n = len(adc)
+    seg = e.segment if e.segment is not None else np.where(np.isfinite(e.t), 0, -1)
+    probes = np.arange(0, max(n - MATCH_CONFIRM, 0), MATCH_EVERY)
+    p_lag = np.full(len(probes), np.nan)
+    p_run = np.full(len(probes), None, dtype=object)
+    for j, r in enumerate(probes):
+        pat = adc[r : r + MATCH_CONFIRM]
+        if seg[r] < 0 or np.ptp(pat) < 3:  # a bad row, or flat (off the finger): not unique
+            continue
+        for run, idx in sd.items():
+            i = idx.find(pat)
+            if i is not None:
+                p_lag[j], p_run[j] = e.t[r] - idx.t[i], run
+                break
+    lag = np.full(n, np.nan)
+    row_run = np.full(n, None, dtype=object)
+    disagree = np.zeros(n, bool)
+    ok = np.flatnonzero(np.isfinite(p_lag))
+    if not len(ok):
+        return lag, row_run, disagree
+    pos, pl_, pr = probes[ok], p_lag[ok], p_run[ok]
+    rows = np.arange(n)
+    reach = 2 * MATCH_EVERY
+
+    def nearest(cands: np.ndarray, rws: np.ndarray, sgs: np.ndarray | None) -> np.ndarray:
+        """Index into ``cands`` of the nearest probe (in segment ``sgs`` if given), -1 if none
+        within ``reach``."""
+        out = np.full(len(rws), -1, np.int64)
+        if sgs is None:
+            groups = [(np.arange(len(rws)), np.arange(len(cands)))]
+        else:
+            groups = [
+                (np.flatnonzero(sgs == g), np.flatnonzero(seg[pos[cands]] == g))
+                for g in np.unique(sgs)
+            ]
+        for ri, ci in groups:
+            if not len(ri) or not len(ci):
+                continue
+            cp = pos[cands[ci]]
+            k = np.searchsorted(cp, rws[ri])
+            lo, hi = np.clip(k - 1, 0, len(cp) - 1), np.clip(k, 0, len(cp) - 1)
+            pick = np.where(np.abs(rws[ri] - cp[lo]) <= np.abs(cp[hi] - rws[ri]), lo, hi)
+            fine = np.abs(rws[ri] - cp[pick]) <= reach
+            out[ri[fine]] = ci[pick[fine]]
+        return out
+
+    good = seg >= 0
+    all_p = np.arange(len(pos))
+    own = np.full(n, -1, np.int64)
+    own[good] = nearest(all_p, rows[good], seg[good])
+    # A row whose own clock segment has no probe in reach borrows a neighbour's lag: flagged.
+    other = np.full(n, -1, np.int64)
+    need = good & (own < 0)
+    other[need] = nearest(all_p, rows[need], None)
+    pick = np.where(own >= 0, own, other)
+    usable = pick >= 0
+    lag[usable] = pl_[pick[usable]]
+    row_run[usable] = pr[pick[usable]]
+    # Flag rows between two probes of their segment that disagree, and borrowed rows.
+    k = np.searchsorted(pos, rows)
+    left, right = np.clip(k - 1, 0, len(pos) - 1), np.clip(k, 0, len(pos) - 1)
+    same = (seg[pos[left]] == seg) & (seg[pos[right]] == seg) & (left != right)
+    disagree = ((same & (np.abs(pl_[left] - pl_[right]) > 0.05)) | (own < 0)) & usable
+    return lag, row_run, disagree
+
+
+def _correct_export(
+    device: str,
+    path: Path,
+    e,
+    series: dict[str, tuple[np.ndarray, np.ndarray]],
+    model: ClockModel | None,
+    config: EdaConfig,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    """Corrected times, ``clock_uncertain`` and file info for one export.
+
+    An export's rows are its SD card's records where both exist, and its repaired clock is
+    the device's plus a constant that can change by whole 512-s wraps (after a long gap, or
+    where the card has a gap the export has not). So every ``MATCH_EVERY`` rows a probe of
+    ``MATCH_CONFIRM`` PPG samples is looked up exactly on the device's SD runs; each row takes
+    the lag of its nearest successful probe in the same clock segment (within twice the probe
+    spacing), and that run's clock model. Rows between disagreeing probes are flagged. Rows no
+    probe reaches keep the export's own clock with the unit's fallback (flagged)."""
+    info: dict[str, Any] = {
+        "export_offset_s": None,
+        "export_rows_matched": 0,
+        "export_lag_changes": 0,
+        "matched_run": None,
+    }
+    n = len(e.t)
+    if model is None:
+        info["clock_model"] = "none"
+        return e.t, np.zeros(n, bool), info
+    t = np.full(n, np.nan)
+    unc = np.ones(n, bool)
+    lag = np.full(n, np.nan)
+    row_run = np.full(n, None, dtype=object)
+    disagree = np.zeros(n, bool)
+    if np.isfinite(e.t).any() and series and e.qa["clock"] != "recovered":
+        adc = np.rint(np.nan_to_num(e.ppg_mv) * 4095 / 3000).astype(np.int64)
+        sd = {run: _SdIndex(st, sp) for run, (st, sp) in series.items()}
+        lag, row_run, disagree = _row_lags(e, adc, sd)
+        del sd
+    matched = np.isfinite(lag)
+    if matched.any():
+        runs = [r for r in row_run[matched]]
+        for run in sorted(set(runs)):
+            rows = matched & (row_run == run)
+            t[rows], u = model.correct(device, run, e.t[rows] - lag[rows])
+            unc[rows] = u | disagree[rows]
+        main = max(set(runs), key=runs.count)
+        rc = model.runs.get((device, main))
+        info.update(
+            export_offset_s=float(lag[matched][0]),
+            export_rows_matched=int(matched.sum()),
+            export_lag_changes=int((np.abs(np.diff(lag[matched])) > 256).sum()),
+            matched_run=main,
+            clock_model=f"sd-{rc.kind if rc else 'rate'}",
+        )
+    else:
+        info["clock_model"] = "rate"
+    rest = ~matched & np.isfinite(e.t)
+    if rest.any():
+        t[rest], _ = model.correct(device, path.name, e.t[rest])
+        unc[rest] = True
+    if e.qa["clock"] == "recovered":
+        unc = np.ones(n, bool)
+    return t, unc, info
+
+
+def _wear_uncertain(wear: pl.DataFrame, seconds: pl.DataFrame) -> pl.DataFrame:
+    """``clock_uncertain`` on a bout: any of its worn seconds has an uncertain clock."""
+    unc = seconds.filter(pl.col("ok") & pl.col("clock_uncertain"))
+    by_device = {d: np.sort(g["t"].dt.epoch("s").to_numpy()) for (d,), g in unc.group_by("device")}
+    flags = []
+    for device, a, b in zip(
+        wear["device"].to_list(),
+        wear["start"].dt.epoch("s").to_numpy(),
+        wear["end"].dt.epoch("s").to_numpy(),
+        strict=True,
+    ):
+        x = by_device.get(device)
+        flags.append(x is not None and np.searchsorted(x, b) > np.searchsorted(x, a))
+    return wear.with_columns(pl.Series("clock_uncertain", flags, dtype=pl.Boolean))
+
+
+def _comotion_table(grids: list[_ComotionGrid], config: EdaConfig) -> pl.DataFrame:
+    tz = config.clock.timezone
+    parts = []
+    for g in grids:
+        if len(g.signals) < 2:
+            continue
+        res = comotion(g.signals, g.lo, COMOTION_HZ, window_s=config.comotion_window_s)
+        if res.height:
+            parts.append(
+                res.with_columns(
+                    pl.lit(g.lo).alias("window_start_s"),
+                    pl.lit(g.hi).alias("window_end_s"),
+                )
+            )
+    if not parts:
+        return pl.DataFrame(
+            schema={
+                "device": pl.String,
+                "day": pl.Date,
+                "residual_s": pl.Float64,
+                "pairs": pl.Int64,
+                "pairs_in_window": pl.Int32,
+                "window_start": pl.Datetime("us", "UTC"),
+                "window_end": pl.Datetime("us", "UTC"),
+            }
+        )
+    out = pl.concat(parts, how="vertical_relaxed")
+    as_dt = [
+        (pl.col(f"window_{x}_s") * 1e6).cast(pl.Int64).cast(pl.Datetime("us", "UTC"))
+        for x in ("start", "end")
+    ]
+    return out.with_columns(
+        as_dt[0].alias("window_start"),
+        as_dt[1].alias("window_end"),
+        as_dt[0].dt.convert_time_zone(tz).dt.date().alias("day"),
+    ).select(
+        "device", "day", "residual_s", "pairs", "pairs_in_window", "window_start", "window_end"
+    )
+
+
+def _comotion_uncertain(table: pl.DataFrame, seconds: pl.DataFrame) -> pl.DataFrame:
+    """``clock_uncertain`` per co-motion row: any of the device's seconds in the window is."""
+    flags = []
+    for d, a, b in zip(
+        table["device"].to_list(),
+        table["window_start"].to_list(),
+        table["window_end"].to_list(),
+        strict=True,
+    ):
+        part = seconds.filter(
+            (pl.col("device") == d) & (pl.col("t") >= a) & (pl.col("t") < b) & ~pl.col("duplicate")
+        )
+        flags.append(bool(part["clock_uncertain"].any()))
+    return table.with_columns(pl.Series("clock_uncertain", flags, dtype=pl.Boolean))
+
+
+def comotion_summary(table: pl.DataFrame, min_pairs: int = 2) -> dict[str, Any]:
+    """Absolute co-motion residuals per device-day (the median over its windows), for
+    device-days resting on at least ``min_pairs`` pairs (one pair cannot say which device is
+    off): overall, for clocks the sync records measured, and for fallback clocks."""
+    if not table.height:
+        return {"device_days": 0}
+    per = (
+        table.filter(pl.col("pairs") >= min_pairs)
+        .group_by("device", "day")
+        .agg(pl.col("residual_s").median(), pl.col("clock_uncertain").any())
+    )
+
+    def stats(x: pl.DataFrame) -> dict[str, Any]:
+        if not x.height:
+            return {"device_days": 0}
+        a = x["residual_s"].abs()
+        return {
+            "device_days": x.height,
+            "median_abs_s": round(float(a.median()), 3),
+            "max_abs_s": round(float(a.max()), 3),
+            "within_1s": int((a <= 1.0).sum()),
+        }
+
+    return {
+        **stats(per),
+        "measured": stats(per.filter(~pl.col("clock_uncertain"))),
+        "fallback": stats(per.filter("clock_uncertain")),
+        "device_days_one_pair": table.filter(pl.col("pairs") < min_pairs)
+        .select("device", "day")
+        .unique()
+        .height,
+    }
