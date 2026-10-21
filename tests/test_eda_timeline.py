@@ -13,6 +13,11 @@ WRAP = 1 << 24
 CFG = TimelineConfig(anchor_from_s=0.0, anchor_to_s=1e7)
 
 
+def close(a, b, atol=1e-6):
+    """Absolute tolerance only: a relative one would accept hours on epoch-second times."""
+    return np.allclose(a, b, rtol=0, atol=atol)
+
+
 def ticks(start: int, n: int) -> list[int]:
     return [(start + 256 * i) % WRAP for i in range(n)]
 
@@ -40,7 +45,7 @@ def test_wrap_glitches_and_pause_on_one_anchor():
     assert tl.bad.tolist() == [i in (5, 8) for i in range(len(seq))]
     expected = [8168.1875 + i / 128 for i in range(200)]
     expected += [8168.1875 + 199 / 128 + 28.703125 + j / 128 for j in range(200)]
-    assert np.allclose(tl.t[~tl.bad], expected)
+    assert close(tl.t[~tl.bad], expected)
     assert np.isnan(tl.t[tl.bad]).all()
     assert tl.qa["segments"] == 1 and tl.qa["records_bad"] == 2
 
@@ -88,7 +93,7 @@ def test_drift_is_fitted_when_anchors_span_long_enough():
     infos = [ChunkInfo(mtime_s=50 + 1.001 * tau) for tau in taus_last]
     tl = run(chunks, infos, TimelineConfig(anchor_from_s=0, anchor_to_s=1e7, drift_min_span_s=5))
     tau = np.arange(3840) / 128
-    assert np.allclose(tl.t, 50 + 1.001 * tau, atol=1e-6)
+    assert close(tl.t, 50 + 1.001 * tau)
     assert math.isclose(tl.qa["segment_rates_ppm"][0], 1000.0, rel_tol=1e-6)
 
 
@@ -150,8 +155,8 @@ def test_a_rotated_chunk_that_lost_its_tail_is_placed_by_its_start():
         cfg,
     )
     assert tl.qa["segments"] == 2 and tl.qa["segments_unanchored"] == 0
-    assert np.allclose(tl.t[:1280], 900 + np.arange(1280) / 128)
-    assert np.allclose(tl.t[1280:], 1000 + np.arange(1280) / 128)
+    assert close(tl.t[:1280], 900 + np.arange(1280) / 128)
+    assert close(tl.t[1280:], 1000 + np.arange(1280) / 128)
 
 
 def test_a_gap_of_whole_wraps_is_found_from_the_anchors():
@@ -171,8 +176,8 @@ def test_a_gap_of_whole_wraps_is_found_from_the_anchors():
         ],
     )
     assert tl.qa["segments"] == 2 and tl.qa["hidden_gaps"] == 1
-    assert np.allclose(tl.t[:1280], 1000 + np.arange(1280) / 128)
-    assert np.allclose(tl.t[1280:], 4584 + np.arange(1280, 3840) / 128)
+    assert close(tl.t[:1280], 1000 + np.arange(1280) / 128)
+    assert close(tl.t[1280:], 4584 + np.arange(1280, 3840) / 128)
 
 
 def test_one_stray_anchor_does_not_split_a_segment():
@@ -187,4 +192,4 @@ def test_one_stray_anchor_does_not_split_a_segment():
         ],
     )
     assert tl.qa["segments"] == 1 and tl.qa["hidden_gaps"] == 0
-    assert np.allclose(tl.t, 1000 + np.arange(3840) / 128)
+    assert close(tl.t, 1000 + np.arange(3840) / 128)

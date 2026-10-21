@@ -64,11 +64,11 @@ class RunTimeline:
     qa: dict[str, Any]
 
 
-def _steps(v: np.ndarray) -> np.ndarray:
+def tick_steps(v: np.ndarray) -> np.ndarray:
     return (v[1:] - v[:-1]) % TICK_WRAP
 
 
-def _clean(ticks: np.ndarray, good: np.ndarray, config: TimelineConfig) -> np.ndarray:
+def clean_ticks(ticks: np.ndarray, good: np.ndarray, config: TimelineConfig) -> np.ndarray:
     max_step = int(config.max_step_s * TICK_HZ)
     good = good.copy()
     while True:
@@ -76,7 +76,7 @@ def _clean(ticks: np.ndarray, good: np.ndarray, config: TimelineConfig) -> np.nd
         if len(idx) == 0:
             return good
         v = ticks[idx]
-        ok = _steps(v) <= max_step
+        ok = tick_steps(v) <= max_step
         in_ok = np.r_[False, ok]
         out_ok = np.r_[ok, False]
         lone = ~in_ok & ~out_ok
@@ -203,7 +203,7 @@ def place_run(
     T = np.concatenate(ticks) if ticks else np.zeros(0, np.int64)
     Z = np.concatenate(zero) if zero else np.zeros(0, bool)
     chunk_of = np.concatenate([np.full(len(t), i) for i, t in enumerate(ticks)]) if ticks else T
-    good = _clean(T, ~Z, config)
+    good = clean_ticks(T, ~Z, config)
     n = len(T)
     t = np.full(n, np.nan)
     segment = np.full(n, -1)
@@ -211,7 +211,7 @@ def place_run(
 
     idx = np.flatnonzero(good)
     max_step = int(config.max_step_s * TICK_HZ)
-    d = _steps(T[idx]) if len(idx) else np.zeros(0, np.int64)
+    d = tick_steps(T[idx]) if len(idx) else np.zeros(0, np.int64)
     hidden: set[int] = set()
     while True:
         brk = np.r_[True, d > max_step] if len(idx) else np.zeros(0, bool)
