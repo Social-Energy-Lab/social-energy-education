@@ -1,0 +1,154 @@
+"""Shimmer Base calibrated CSV exports: read one file and repair its clock.
+
+The export's timestamps come from the device's 24-bit tick counter, unwrapped by software
+that inserts spurious whole 512-s periods (docs/context/instruments/eda.md). Two facts make
+them repairable: the first row is right, and every row is right modulo 512 s. So the ticks
+are rebuilt from the timestamps (ms x 32.768, modulo 2^24), cleaned and segmented exactly as
+on an SD card, the first segment placed at its first timestamp, and each later segment at
+the smallest gap after its predecessor that agrees with its own timestamp modulo 512 s. A gap
+beyond ``max_step_s`` could hide whole wraps: those segments are flagged ``gap_ambiguous``.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import polars as pl
+
+from .sd import TICK_HZ, TICK_WRAP
+from .timeline import TimelineConfig, clean_ticks, tick_steps
+
+STANDARD_GRAVITY = 9.80665
+#: Shimmer clamps skin resistance at 8 kOhm (125 uS) and writes ~0.00022 uS for an open input.
+SATURATED_US = 125.0
+SENTINEL_MAX_US = 0.0003
+
+#: A device in a sync group exports the synchronised clock; one outside it, its own.
+_CLOCKS = {"TimestampSync_Unix_CAL": "sync", "Timestamp_Unix_CAL": "device"}
+_COLUMNS = {
+    "LIS2DW12_ACC_X_CAL": "ax",
+    "LIS2DW12_ACC_Y_CAL": "ay",
+    "LIS2DW12_ACC_Z_CAL": "az",
+    "GSR_Range_CAL": "gsr_range",
+    "GSR_Skin_Conductance_CAL": "us",
+    "PPG_A1_CAL": "ppg_mv",
+    "PPGtoHR_CAL": "hr",
+}
+
+
+@dataclass(frozen=True)
+class ExportFile:
+    path: Path
+    device: str
+    t: np.ndarray  # UTC epoch seconds; NaN for bad rows
+    bad: np.ndarray
+    gap_ambiguous: np.ndarray
+    conductance_us: np.ndarray  # NaN where not a reading
+    gsr_valid: np.ndarray
+    gsr_range: np.ndarray
+    acc_g: np.ndarray  # (n, 3)
+    ppg_mv: np.ndarray
+    hr_bpm: np.ndarray  # NaN where the export has none
+    qa: dict[str, Any]
+
+
+def _separator(path: Path) -> str:
+    with path.open(encoding="utf-8") as f:
+        first = f.readline().strip().strip('"')
+    if not first.startswith("sep="):
+        raise ValueError(f"{path}: not a Shimmer export (no sep= line)")
+    return first[4:] or ","
+
+
+def export_device(path: Path) -> str:
+    """The device an export belongs to, from its column names (without reading the data)."""
+    sep = _separator(path)
+    with path.open(encoding="utf-8") as f:
+        f.readline()
+        return f.readline().split(sep)[0].strip().strip('"').partition("_")[0]
+
+
+def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
+    path = Path(path)
+    config = config or TimelineConfig()
+    df = pl.read_csv(
+        path,
+        separator=_separator(path),
+        skip_rows=1,
+        skip_rows_after_header=1,
+        infer_schema_length=0,
+    )
+    names = {}
+    device = clock = None
+    for col in df.columns:
+        prefix, _, rest = col.partition("_")
+        if rest in _COLUMNS:
+            names[col] = _COLUMNS[rest]
+            device = device or prefix
+        elif rest in _CLOCKS and clock != "sync":
+            names = {c: n for c, n in names.items() if n != "ts_ms"}
+            names[col] = "ts_ms"
+            clock = _CLOCKS[rest]
+    missing = ({*_COLUMNS.values(), "ts_ms"}) - set(names.values())
+    if missing or device is None:
+        raise ValueError(f"{path}: missing calibrated columns {sorted(missing)}")
+    df = df.select(pl.col(c).cast(pl.Float64).alias(n) for c, n in names.items())
+
+    ts = df["ts_ms"].to_numpy()
+    n = len(ts)
+    ticks = np.rint((ts - ts[0]) * TICK_HZ / 1000).astype(np.int64) % TICK_WRAP
+    good = clean_ticks(ticks, np.ones(n, bool), config)
+    gi = np.flatnonzero(good)
+    t = np.full(n, np.nan)
+    ambiguous = np.zeros(n, bool)
+    n_segments = n_ambiguous = 0
+    if len(gi):
+        d = tick_steps(ticks[gi])
+        max_step = int(config.max_step_s * TICK_HZ)
+        brk = np.r_[True, d > max_step]
+        seg = np.cumsum(brk) - 1
+        tau = np.cumsum(np.r_[0, np.where(brk[1:], 0, d)])
+        tau = (tau - tau[np.flatnonzero(brk)][seg]) / TICK_HZ
+        wrap_s = TICK_WRAP / TICK_HZ
+        prev_end = None
+        n_segments = int(seg[-1]) + 1
+        for s in range(n_segments):
+            members = gi[seg == s]
+            own = ts[members[0]] / 1000
+            if prev_end is None:
+                start = own
+            else:
+                gap = (own - prev_end) % wrap_s
+                start = prev_end + gap
+                if gap > config.max_step_s:
+                    ambiguous[members] = True
+                    n_ambiguous += 1
+            t[members] = start + tau[seg == s]
+            prev_end = t[members[-1]]
+
+    us = df["us"].to_numpy()
+    valid = np.isfinite(us) & (us < SATURATED_US) & (us > SENTINEL_MAX_US)
+    hr = df["hr"].to_numpy()
+    return ExportFile(
+        path=path,
+        device=device,
+        t=t,
+        bad=~good,
+        gap_ambiguous=ambiguous,
+        conductance_us=np.where(valid, us, np.nan),
+        gsr_valid=valid,
+        gsr_range=df["gsr_range"].fill_nan(0).to_numpy().astype(np.int64),
+        acc_g=df.select("ax", "ay", "az").to_numpy() / STANDARD_GRAVITY,
+        ppg_mv=df["ppg_mv"].to_numpy(),
+        hr_bpm=np.where(hr > 0, hr, np.nan),
+        qa={
+            "clock": clock,
+            "records": n,
+            "records_bad": int((~good).sum()),
+            "segments": n_segments,
+            "segments_gap_ambiguous": n_ambiguous,
+        },
+    )

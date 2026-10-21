@@ -15,6 +15,11 @@ social-energy purge-device studies/<id>/study.yaml --device N [--dry-run | --app
     remove them, keep the delivery manifest as SHA256SUMS.as-delivered, recompute SHA256SUMS and
     append the counts to raw/beacons/IMPORT.md. Dry run by default.
 
+social-energy ingest-eda studies/<id>/study.yaml
+    Shimmer SD cards under raw/eda/sd-cards/<card>/ and calibrated exports under
+    raw/eda/imported/*/ -> derived/eda/: files, seconds, scr and wear parquet, plus
+    person_minutes.parquet (through the spine, EDA consent only) and qa.json. One device and
+    one run at a time.
 social-energy extract-acoustics studies/<id>/study.yaml [--delete-wavs]
     AudioMoth WAVs under raw/audiomoth/<device>/ -> derived/acoustics/<device>/.
 
@@ -69,6 +74,9 @@ from .beacons import (
     ingest_with_witnesses,
     purge_devices,
 )
+from .eda.ingest import ingest_eda
+from .eda.person import person_minutes
+from .spine import Spine
 from .study import StudyConfig
 from .survey import (
     ingest_zeitgeist,
@@ -196,6 +204,32 @@ def purge_device(study: StudyConfig, devices: list[int], apply: bool = False) ->
             f"Add {', '.join(map(str, missing))} to beacons.purged_devices in "
             f"$SOCIAL_ENERGY_DATA/{study.study_id}/local.yaml so a re-import is refused."
         )
+    return 0
+
+
+def ingest_eda_command(study: StudyConfig) -> int:
+    layout = paths.study(study.study_id)
+    raw = layout.raw / "eda"
+    cards = sorted(p for p in (raw / "sd-cards").glob("*") if p.is_dir())
+    exports = sorted((raw / "imported").glob("*/*_Calibrated_SD.csv"))
+    if not cards and not exports:
+        print(f"No SD cards or calibrated exports under {raw}")
+        return 1
+    tables = ingest_eda(cards, exports, study.eda_config())
+    out = layout.derived / "eda"
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    for name in ("files", "seconds", "scr", "wear"):
+        getattr(tables, name).write_parquet(out / f"{name}.parquet")
+    qa = {"ingest": tables.qa}
+    if (layout.spine / "meta.yaml").exists():
+        minutes, minutes_qa = person_minutes(tables, Spine.load(layout.spine))
+        minutes.write_parquet(out / "person_minutes.parquet")
+        qa["person_minutes"] = minutes_qa
+    (out / "qa.json").write_text(json.dumps(qa, indent=2), encoding="utf-8")
+    print(json.dumps(qa, indent=2))
+    print(f"Wrote {out}")
     return 0
 
 
@@ -343,6 +377,7 @@ def check_survey(study: StudyConfig) -> int:
 COMMANDS = {
     "init-spine": init_spine,
     "ingest-beacons": ingest_beacons,
+    "ingest-eda": ingest_eda_command,
     "extract-acoustics": extract_acoustics,
     "fetch-zeitgeist": fetch_zeitgeist,
     "ingest-survey": ingest_survey,

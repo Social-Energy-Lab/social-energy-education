@@ -207,6 +207,8 @@ class Spine:
                 "_end": [i.end for i in items],
             },
             schema_overrides={
+                # An empty spine table still joins on string keys.
+                **{name: pl.String for name, values in columns.items() if not values},
                 "_start": pl.Datetime("us", "UTC"),
                 "_end": pl.Datetime("us", "UTC"),
             },

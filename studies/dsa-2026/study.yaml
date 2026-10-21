@@ -66,6 +66,17 @@ eda:
   session_days: [2026-08-15, 2026-08-16, 2026-08-17, 2026-08-19, 2026-08-20, 2026-08-21,
                  2026-08-22, 2026-08-23, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-28]
   note: no sensors on the excursion day (2026-08-18)
+  # Plausibility window, UTC dates inclusive: times and chunk anchors outside it are suspect
+  # (cards were read out in October, and recorded while docked then).
+  valid_from: 2026-08-14
+  valid_to: 2026-08-29
+  # Chunk modification times in raw/eda/sd-cards as imported on 2026-10-21 from the delivery
+  # zip: stored naive time + 7200 s = device clock in UTC (the zip kept no zone), and the
+  # file closes ~1 s after its last record. Measured against the Shimmer export's first
+  # timestamp on every device-day both cover (median of per-device-day medians, 2026-10-21).
+  # Re-measure on any other copy: a copy that keeps true modification times needs another value.
+  mtime_to_utc_s: 7201.0
+  rotation_s: 3600  # devices close a chunk and open the next every hour of wall time
 
 acoustics:
   devices:
