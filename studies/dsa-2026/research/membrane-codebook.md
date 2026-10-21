@@ -56,6 +56,11 @@ Rules:
   agrees with a suggestion ("yes, thinner"), code it and set `led` to true for that code.
 - "It depends" with a stated usual tendency gets that tendency. With no tendency it is 3, and
   `varies` is true.
+- 5 needs the participant to say the barrier is gone or nearly gone, or that they now let almost
+  everything and everyone in. A clear opening that the participant qualifies (still careful with
+  some, still needs time alone) is 4. When torn between 4 and 5, code 4 and set confidence to
+  `medium`. The same edge rule applies at the closed end: 1 only for "hardly anything gets
+  through".
 - Compare states only within one interview. A 4 here means "rather open, as this person describes
   their own range", not a level comparable across people. Analyses use the changes below, and the
   levels only with this caveat.
@@ -101,7 +106,11 @@ placed episode can be compared with the same person's presses and company that d
 ### Interview context
 
 - `block`: true if the interview has a membrane block at all.
-- `primed`: true if the interviewer refers to the lecture or the person says they heard it.
+- `primed`: true only if the academy-wide lecture on the membrane is named, by either side
+  ("the talk yesterday", "the lecture", the speaker's name). A vague reference ("the metaphor is
+  going around", "you may have heard of it") is not enough.
+- `known_elsewhere`: true if the metaphor is said to be known without naming the lecture (it
+  circulates, the participant had heard of it before). Never true when `primed` is.
 - `led`: per state code, true if the value rests on agreeing with an option the interviewer offered.
 - `interview_day`: from the recording, always set. Analyses adjust for it, since later interviews
   see more of the academy.
