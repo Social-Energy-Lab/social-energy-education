@@ -130,12 +130,18 @@ def check_aggregates(agg: dict, min_group: int = 5) -> dict:
     return out
 
 
-def synthetic_aggregates(seed: int = 0) -> dict:
-    """Plausible random values for every section; ``people >= 5``. For previews and tests."""
+def synthetic_aggregates(
+    seed: int = 0, *, n_participants: int = 60, n_presses: int | None = None
+) -> dict:
+    """Plausible random values for every section; ``5 <= people <= n_participants``.
+
+    For previews and tests. Pass the synthetic camp's node and press counts so the copy's
+    numbers describe the camp the hero plays.
+    """
     rng = random.Random(seed)
 
     def people() -> int:
-        return rng.randint(5, 60)
+        return rng.randint(5, n_participants)
 
     def val(lo: float, hi: float) -> float:
         return round(rng.uniform(lo, hi), 3)
@@ -215,6 +221,9 @@ def synthetic_aggregates(seed: int = 0) -> dict:
     ]
 
     numbers = {k: synthetic_number(k) for k in NUMBER_KEYS}
+    numbers["n_participants"] = n_participants
+    if n_presses is not None:
+        numbers["n_presses"] = n_presses
     # The copy's numbers are the rows the charts draw, so text and chart agree.
     numbers["cascade_excess"] = headline["ratio"]
     numbers["cascade_excess_lo"] = headline["lo"]
@@ -227,6 +236,9 @@ def synthetic_aggregates(seed: int = 0) -> dict:
     numbers["mixing_excursion"] = next(r["cross_share"] for r in mixing if r["kind"] == "excursion")
     for r in persistence:
         numbers[f"persistence_{r['origin']}"] = r["share"]
+    # One sample for all four tests, as in the study, and the copy's count is that sample.
+    n_confirmatory = people()
+    numbers["n_confirmatory"] = n_confirmatory
     return {
         # Four camp days and six daytime phases (indices into meta.phases), day 1 the special
         # day, as in the synthetic camp that build.py writes.
@@ -267,7 +279,7 @@ def synthetic_aggregates(seed: int = 0) -> dict:
         # Effects in SD around 0; rate ratios around 1 (always positive). Each interval holds
         # its estimate.
         "confirmatory": [
-            {"test": t, "people": people(), "scale": sc, **around(*null_band)}
+            {"test": t, "people": n_confirmatory, "scale": sc, **around(*null_band)}
             for t, sc, null_band in (
                 ("c1", "sd", (-0.6, 0.6, 0.1, 0.45)),
                 ("c2", "sd", (-0.6, 0.6, 0.1, 0.45)),

@@ -118,7 +118,7 @@ def synthetic_site_data(
     third = inp.n_bins // 3
     pairs = _course_pairs(inp, nodes, (third, 2 * third), timezone, seed)
     inp = replace(inp, nodes=nodes, pairs=pairs.cast(inp.pairs.schema))
-    write_public_bundle(
+    meta = write_public_bundle(
         inp,
         out_dir,
         config,
@@ -127,7 +127,11 @@ def synthetic_site_data(
         synthetic=True,
         seed=seed,
     )
-    agg = check_aggregates(synthetic_aggregates(seed), min_group=config.min_group)
+    # The copy's counts describe the camp the hero plays.
+    synthetic = synthetic_aggregates(
+        seed, n_participants=len(meta["nodes"]), n_presses=meta["files"]["presses"]["count"]
+    )
+    agg = check_aggregates(synthetic, min_group=config.min_group)
     (out_dir / "aggregates.json").write_text(
         json.dumps(agg, indent=1, allow_nan=False), encoding="utf-8"
     )

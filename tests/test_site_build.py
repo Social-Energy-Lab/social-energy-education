@@ -143,3 +143,14 @@ def test_synthetic_camp_has_course_structure(built):
     assert cross[~on].mean() < 0.3
     assert cross[on].mean() > cross[~on].mean() + 0.15
     assert n < 150_000
+
+
+def test_synthetic_numbers_match_the_synthetic_camp(built):
+    meta = json.loads((built / "data" / "meta.json").read_text())
+    agg = json.loads((built / "data" / "aggregates.json").read_text())
+    n = agg["numbers"]
+    assert n["n_participants"] == len(meta["nodes"])
+    assert n["n_presses"] == meta["files"]["presses"]["count"]
+    assert n["n_confirmatory"] <= n["n_participants"]
+    people = [r["people"] for s, rows in agg.items() if s != "numbers" for r in rows]
+    assert max(people) <= n["n_participants"]
