@@ -1,12 +1,16 @@
 """Heart rate from the raw PPG of SD cards and exports, per device, window and minute.
 
 ``eda.ppg`` does the signal processing; this module reads the samples one device and one
-run at a time (SD chunks are decoded and placed exactly as ``eda.ingest`` does; an export is
-read for its clock, PPG and Shimmer's own heart rate only), so memory stays at one run's
-worth. Windows are flagged, never dropped (AGENTS.md invariant 3): one source per
-device-window (SD first, as in ``seconds``), ``implausible_time`` outside the study window,
-``worn`` from the wear bouts. Nothing is resolved to people here; ``with_heart_rate`` joins
-the device-minutes onto the spine-resolved person-minutes.
+run at a time (an export for its clock, PPG and Shimmer's own heart rate only), so memory
+stays at one run's worth plus the PPG of the SD runs an export is matched against. Every
+sample gets the time ``eda.ingest`` gives it: the same first pass builds the same per-run
+clock model (``ClockPlan``), SD runs are corrected through it, and exports are matched row
+for row to their card and corrected through that run's model. Windows are flagged, never
+dropped (AGENTS.md invariant 3): one source per device-window (SD first, as in ``seconds``),
+``implausible_time`` outside the study window, ``worn`` from the wear bouts,
+``clock_uncertain`` where any sample's clock fell back (``eda.clock``), with the run's
+``clock_model``. Nothing is resolved to people here; ``with_heart_rate`` joins the
+device-minutes onto the spine-resolved person-minutes.
 
 Two checks of the method on the data itself:
 
@@ -31,13 +35,22 @@ import polars as pl
 
 from . import calibration, sd
 from .export import export_device, read_export_pulse
-from .ingest import SOURCE_PRIORITY, EdaConfig, _sha256, place_sd_run, unique_sd_runs
+from .ingest import (
+    SOURCE_PRIORITY,
+    EdaConfig,
+    _sha256,
+    place_sd_run,
+    plan_clocks,
+    unique_sd_runs,
+)
 from .ppg import WINDOW_SCHEMA, PpgConfig, analyse
 
 
 @dataclass(frozen=True)
 class HeartTables:
-    beats: pl.DataFrame  # one row per beat: device, source, run, t, ibi_ms, plausible, ok
+    beats: (
+        pl.DataFrame
+    )  # one per beat: device, source, run, t, ibi_ms, plausible, ok, clock_uncertain
     windows: pl.DataFrame  # one row per device, source, run and window
     minutes: pl.DataFrame  # one row per device-minute (ok windows only)
     qa: dict[str, Any]
@@ -78,10 +91,22 @@ def _export_hr(t: np.ndarray, hr: np.ndarray, window_s: int) -> pl.DataFrame:
     )
 
 
-def _ambiguous(t: np.ndarray, amb: np.ndarray, window_s: int) -> pl.DataFrame:
-    fin = np.isfinite(t) & amb
+def _flagged(t: np.ndarray, flag: np.ndarray, window_s: int, name: str) -> pl.DataFrame:
+    """The windows with any placed sample flagged, as ``w`` (window index) and ``name``."""
+    fin = np.isfinite(t) & flag
     w = np.unique(np.floor(t[fin] / window_s).astype(np.int64))
-    return pl.DataFrame({"w": w, "gap_ambiguous": np.ones(len(w), bool)})
+    return pl.DataFrame({"w": w, name: np.ones(len(w), bool)})
+
+
+def _with_flags(
+    win: pl.DataFrame, t: np.ndarray, flags: dict[str, np.ndarray], window_s: int
+) -> pl.DataFrame:
+    win = win.with_columns((pl.col("t").dt.epoch("s") // window_s).alias("w"))
+    for name, flag in flags.items():
+        win = win.join(_flagged(t, flag, window_s, name), on="w", how="left").with_columns(
+            pl.col(name).fill_null(False)
+        )
+    return win.drop("w")
 
 
 def _tag(frame: pl.DataFrame, device: str, source: str, run: str) -> pl.DataFrame:
@@ -128,49 +153,70 @@ def heart_rate(
     for path in exports:
         exports_by_device[export_device(Path(path))].append(Path(path))
 
+    devices = sorted(set(runs_by_device) | set(exports_by_device))
+
     qa: dict[str, Any] = defaultdict(int)
+    seen: dict[str, set[str]] = {d: set() for d in devices}
+    kept = {}
+    for device in devices:
+        kept[device], copies = unique_sd_runs(runs_by_device[device], seen[device])
+        qa["chunks_duplicate"] += len(copies)
+    # The ingest's pass 1: the same clock model, so the same corrected times.
+    plan = plan_clocks(kept, exports_by_device, config)
     parts: list[pl.DataFrame] = []
     beat_parts: list[pl.DataFrame] = []
-    for device in sorted(set(runs_by_device) | set(exports_by_device)):
-        seen: set[str] = set()
-        kept, copies = unique_sd_runs(runs_by_device[device], seen)
-        qa["chunks_duplicate"] += len(copies)
-        for run, keep in kept:
+    for device in plan.devices:
+        series: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+        for run, keep in kept[device]:
             chunks, _, tl = place_sd_run(run, keep, config)
-            mv = calibration.ppg_mv(np.concatenate([c.ppg for c in chunks]))
+            raw = np.concatenate([c.ppg for c in chunks])
             del chunks
-            beats, win = analyse(tl.t, mv, ppg)
+            t, uncertain, kind = plan.sd_times(device, run.name, tl)
+            near = plan.near_export(device, run.name, exports_by_device[device])
+            if near and np.isfinite(t).any():  # kept for the exports' row-for-row match
+                series[run.name] = (tl.t, raw.astype(np.int16))
+            beats, win = analyse(t, calibration.ppg_mv(raw), ppg)
+            del raw
             qa["sd_runs"] += 1
-            qa["sd_samples_placed"] += int(np.isfinite(tl.t).sum())
+            qa["sd_samples_placed"] += int(np.isfinite(t).sum())
             qa["sd_beats"] += beats.height
             beat_parts.append(_beats(beats, device, "sd", run.name))
             parts.append(
-                _tag(win, device, "sd", run.name).with_columns(
+                _tag(
+                    _with_flags(win, t, {"clock_uncertain": uncertain}, w), device, "sd", run.name
+                ).with_columns(
                     pl.lit(None, pl.Float32).alias("hr_export_bpm"),
                     pl.lit(None, pl.Int32).alias("hr_export_samples"),
                     pl.lit(False).alias("gap_ambiguous"),
+                    pl.lit(kind).alias("clock_model"),
                 )
             )
         for path in sorted(exports_by_device[device]):
             digest = _sha256(path)
-            if digest in seen:
+            if digest in seen[device]:
                 qa["export_files_duplicate"] += 1
                 continue
-            seen.add(digest)
-            e = read_export_pulse(path, config.timeline())
-            beats, win = analyse(e.t, e.ppg_mv, ppg)
+            seen[device].add(digest)
+            start = plan.export_start(path, config)
+            e = read_export_pulse(path, config.timeline(), start, config.sample_rate_hz)
+            t, uncertain, info = plan.correct_export(device, path, e, series, config)
+            beats, win = analyse(t, e.ppg_mv, ppg)
             qa["export_files"] += 1
-            qa["export_samples_placed"] += int(np.isfinite(e.t).sum())
+            qa["export_samples_placed"] += int(np.isfinite(t).sum())
             qa["export_beats"] += beats.height
+            qa[f"export_files_clock_{e.qa['clock']}"] += 1
             beat_parts.append(_beats(beats, device, "export", path.name))
+            flags = {"gap_ambiguous": e.gap_ambiguous, "clock_uncertain": uncertain}
             win = (
-                win.with_columns((pl.col("t").dt.epoch("s") // w).alias("w"))
-                .join(_export_hr(e.t, e.hr_bpm, w), on="w", how="left")
-                .join(_ambiguous(e.t, e.gap_ambiguous, w), on="w", how="left")
-                .with_columns(pl.col("gap_ambiguous").fill_null(False))
+                _with_flags(win, t, flags, w)
+                .with_columns((pl.col("t").dt.epoch("s") // w).alias("w"))
+                .join(_export_hr(t, e.hr_bpm, w), on="w", how="left")
                 .drop("w")
+                .with_columns(pl.lit(info["clock_model"]).alias("clock_model"))
             )
             parts.append(_tag(win, device, "export", path.name))
+            del e
+        del series
         if log:
             log(f"{device}: {qa['sd_beats'] + qa['export_beats']} beats so far")
 
@@ -182,6 +228,8 @@ def heart_rate(
         "hr_export_bpm": pl.Float32,
         "hr_export_samples": pl.Int32,
         "gap_ambiguous": pl.Boolean,
+        "clock_uncertain": pl.Boolean,
+        "clock_model": pl.String,
     }
     windows = (
         pl.concat([p.select(list(schema)).cast(schema) for p in parts])
@@ -213,6 +261,7 @@ def heart_rate(
     qa["windows_implausible"] = int(windows["implausible_time"].sum())
     qa["windows_ok"] = int(windows["ok"].sum())
     qa["windows_ok_quality"] = int((windows["ok"] & windows["quality_ok"]).sum())
+    qa["windows_ok_clock_uncertain"] = int((windows["ok"] & windows["clock_uncertain"]).sum())
     if wear is not None:
         worn = windows["ok"] & windows["worn"]
         qa["windows_ok_worn"] = int(worn.sum())
@@ -223,12 +272,14 @@ def heart_rate(
     beats = (
         beats.with_columns(pl.col("t").dt.truncate(f"{w}s").alias("_w"))
         .join(
-            windows.select("device", "source", "run", pl.col("t").alias("_w"), "ok"),
+            windows.select(
+                "device", "source", "run", pl.col("t").alias("_w"), "ok", "clock_uncertain"
+            ),
             on=["device", "source", "run", "_w"],
             how="left",
         )
         .drop("_w")
-        .with_columns(pl.col("ok").fill_null(False))
+        .with_columns(pl.col("ok", "clock_uncertain").fill_null(False))
     )
     qa["beats"] = beats.height
     qa["beats_ok"] = int(beats["ok"].sum())
@@ -238,7 +289,8 @@ def heart_rate(
 
 def device_minutes(windows: pl.DataFrame, ppg: PpgConfig | None = None) -> pl.DataFrame:
     """Per device-minute over ``ok`` windows: ``hr_bpm`` is the median heart rate of the
-    good-quality windows (null if none), ``hr_quality`` the share of the minute they cover."""
+    good-quality windows (null if none), ``hr_quality`` the share of the minute they cover,
+    ``clock_uncertain`` whether any of its windows' clocks fell back."""
     ppg = ppg or PpgConfig()
     per_minute = 60 // ppg.window_s
     good = pl.col("quality_ok")
@@ -251,6 +303,7 @@ def device_minutes(windows: pl.DataFrame, ppg: PpgConfig | None = None) -> pl.Da
             good.sum().cast(pl.Int16).alias("hr_windows_good"),
             pl.col("hr_bpm").filter(good).median().cast(pl.Float32).alias("hr_bpm"),
             pl.col("worn").any().alias("worn"),
+            pl.col("clock_uncertain").any().alias("clock_uncertain"),
         )
         .with_columns((pl.col("hr_windows_good") / per_minute).cast(pl.Float32).alias("hr_quality"))
         .sort("device", "minute")
@@ -258,10 +311,17 @@ def device_minutes(windows: pl.DataFrame, ppg: PpgConfig | None = None) -> pl.Da
 
 
 def with_heart_rate(person_minutes: pl.DataFrame, minutes: pl.DataFrame) -> pl.DataFrame:
-    """The person-minute table with ``hr_ppg_bpm`` and ``hr_quality`` joined on device and
-    minute. Its own columns, ``hr_bpm`` (the export's) included, are left as they are."""
+    """The person-minute table with ``hr_ppg_bpm``, ``hr_quality`` and ``hr_clock_uncertain``
+    joined on device and minute. Its own columns, ``hr_bpm`` (the export's) and
+    ``clock_uncertain`` included, are left as they are."""
     return person_minutes.join(
-        minutes.select("device", "minute", pl.col("hr_bpm").alias("hr_ppg_bpm"), "hr_quality"),
+        minutes.select(
+            "device",
+            "minute",
+            pl.col("hr_bpm").alias("hr_ppg_bpm"),
+            "hr_quality",
+            pl.col("clock_uncertain").alias("hr_clock_uncertain"),
+        ),
         on=["device", "minute"],
         how="left",
     )

@@ -1,15 +1,21 @@
 """Oracle test: synthetic SD cards (and a hand-written export) -> heart rate from the raw
 PPG -> the true beats and rates come back; a dead sensor and unworn time are never good."""
 
+from dataclasses import replace
+
 import numpy as np
 import polars as pl
 import pytest
 
+from social_energy.eda.clock import ClockConfig
 from social_energy.eda.heart import agreement, heart_rate, usability, with_heart_rate
 from social_energy.eda.ingest import EdaConfig, ingest_eda
 from social_energy.eda.person import person_minutes
 from social_energy.spine import Spine
 from social_energy.synth.eda import EdaSpec, generate_eda, pulse_wave
+
+#: A full 10-s window: SH01's clock runs 3 % slow, so it holds 9.7 s of 128-Hz samples.
+FULL_S = 9.6
 
 
 @pytest.fixture(scope="module")
@@ -25,6 +31,7 @@ def config(synth):
         valid_to=day,
         mtime_to_utc_s=synth.spec.mtime_offset_s,
         rotation_s=synth.spec.chunk_s,
+        clock=ClockConfig(reference_devices=("SH03",)),
     )
 
 
@@ -36,6 +43,13 @@ def tables(synth, config):
 @pytest.fixture(scope="module")
 def heart(synth, config, tables):
     return heart_rate(synth.cards, [], config, wear=tables.wear)
+
+
+def _beats_on_reference(synth, device: str) -> np.ndarray:
+    """The true beats of ``device`` on the reference clock the correction targets: UTC is the
+    reference group's clock, and the reference SH03 reads its offset ahead of true time."""
+    ref = next(off for d, _, _, off in synth.spec.clocks if d == "SH03")
+    return synth.truth_beats.filter(device=device)["t"].dt.epoch("us").to_numpy() / 1e6 + ref
 
 
 def _truth_hr(beats: np.ndarray, start: float, w: int = 10) -> float:
@@ -51,7 +65,7 @@ def _truth_hr(beats: np.ndarray, start: float, w: int = 10) -> float:
 def test_the_true_beats_come_back_where_the_sensor_works(synth, heart):
     """SH01's worn time: every true beat within 40 ms of an ok detected beat (placement plus
     the 128 Hz grid), and at most 1% extra detections."""
-    truth = synth.truth_beats.filter(device="SH01")["t"].dt.epoch("us").to_numpy() / 1e6
+    truth = _beats_on_reference(synth, "SH01")
     got = heart.beats.filter(pl.col("device") == "SH01", pl.col("ok"))
     got_t = np.sort(got["t"].dt.epoch("us").to_numpy() / 1e6)
     worn = got_t[(got_t >= truth[0] - 1) & (got_t <= truth[-1] + 1)]
@@ -64,9 +78,9 @@ def test_the_true_beats_come_back_where_the_sensor_works(synth, heart):
 def test_worn_windows_give_the_true_heart_rate(synth, heart):
     """SH01's worn, ok windows: at least 90% good quality, each good one within 2 bpm of the
     true rate."""
-    truth = synth.truth_beats.filter(device="SH01")["t"].dt.epoch("us").to_numpy() / 1e6
+    truth = _beats_on_reference(synth, "SH01")
     win = heart.windows.filter(pl.col("device") == "SH01", pl.col("ok"), pl.col("worn"))
-    full = win.filter(pl.col("covered_s") >= 9.9)
+    full = win.filter(pl.col("covered_s") >= FULL_S)
     assert full["quality_ok"].mean() >= 0.9
     good = full.filter("quality_ok")
     want = np.array([_truth_hr(truth, t.timestamp()) for t in good["t"]])
@@ -79,7 +93,7 @@ def test_a_dead_sensor_and_unworn_time_are_flagged_not_dropped(heart):
     w = heart.windows.filter("ok")
     sh02 = w.filter(device="SH02")
     assert sh02.height > 200 and not sh02["quality_ok"].any()
-    off = w.filter(pl.col("device") == "SH01", ~pl.col("worn"), pl.col("covered_s") >= 9.9)
+    off = w.filter(pl.col("device") == "SH01", ~pl.col("worn"), pl.col("covered_s") >= FULL_S)
     assert off.height > 50 and not off["quality_ok"].any()
 
 
@@ -105,6 +119,9 @@ def test_minutes_and_the_person_join(synth, heart, tables):
     joined = with_heart_rate(pm, heart.minutes)
     assert joined.select(pm.columns).equals(pm)
     assert joined["hr_ppg_bpm"].drop_nulls().len() >= 0.8 * pm.height
+    assert (
+        joined["hr_clock_uncertain"].drop_nulls().len() == joined["hr_quality"].drop_nulls().len()
+    )
 
 
 def test_usability_tells_the_dead_sensor_apart(heart):
@@ -158,3 +175,64 @@ def test_sd_wins_over_an_export_of_the_same_windows(synth, config, tmp_path):
     sd = agreement(h.windows).filter(samples="sd", device="SH01")
     assert sd["n"].sum() >= 3
     assert h.windows.filter("ok").select("device", "t").is_unique().all()
+
+
+@pytest.fixture(scope="module")
+def with_exports(tmp_path_factory, config):
+    synth = generate_eda(EdaSpec(exports=True), tmp_path_factory.mktemp("eda-exports"))
+    tables = ingest_eda(synth.cards, synth.exports, config)
+    return synth, tables, heart_rate(synth.cards, synth.exports, config, wear=tables.wear)
+
+
+def _nearest_error(got: np.ndarray, truth: np.ndarray) -> np.ndarray:
+    """Per detected beat, the distance to the nearest true beat."""
+    i = np.clip(np.searchsorted(truth, got), 1, len(truth) - 1)
+    return np.minimum(np.abs(truth[i] - got), np.abs(truth[i - 1] - got))
+
+
+def test_heart_rate_times_follow_the_clock_correction(with_exports):
+    """SH01's clock runs 3 % slow (54 s behind after 30 min). Its beats from the SD card and
+    from its export (the device clock minus a sync offset, with a 512-s misplaced segment)
+    land on the true beats, as the ingest's corrected seconds do. Beats where the export's
+    clock is uncertain are excepted; the clockless SH04 export is uncertain throughout."""
+    synth, _, heart = with_exports
+    truth = _beats_on_reference(synth, "SH01")
+    beats = heart.beats.filter(pl.col("device") == "SH01", pl.col("plausible"))
+    on_time = beats.filter(
+        pl.col("t").dt.epoch("us") / 1e6 > truth[0] + 1,
+        pl.col("t").dt.epoch("us") / 1e6 < truth[-1] - 1,
+    )
+    for source in ("sd", "export"):
+        got = on_time.filter(source=source)
+        if source == "export":
+            got = got.filter(~pl.col("clock_uncertain"))
+        assert got.height > 500, source
+        err = _nearest_error(got["t"].dt.epoch("us").to_numpy() / 1e6, truth)
+        assert np.quantile(err, 0.95) < 0.040, source
+    sh04 = heart.windows.filter(device="SH04")
+    assert sh04.height > 100 and sh04["clock_uncertain"].all()
+
+
+def _flags_agree(tables, heart) -> pl.DataFrame:
+    sec = tables.seconds.group_by("device", "source", "run", pl.col("t").dt.truncate("10s")).agg(
+        pl.col("clock_uncertain").any().alias("sec_uncertain")
+    )
+    w = heart.windows.join(sec, on=["device", "source", "run", "t"], how="inner")
+    assert w.height >= 0.95 * heart.windows.height
+    assert (w["clock_uncertain"] == w["sec_uncertain"]).all()
+    return w
+
+
+def test_windows_carry_the_ingests_clock_flags(with_exports, synth, config):
+    """A window is ``clock_uncertain`` exactly where one of the ingest's seconds of the same
+    device, source and run inside it is: the two commands place samples identically. With
+    the sync records all refused (none within 0.1 s), every SD run takes the fallback."""
+    _, tables, heart = with_exports
+    w = _flags_agree(tables, heart)
+    assert w.filter(source="export")["clock_uncertain"].sum() > 0
+    assert set(heart.windows["clock_model"]) >= {"sync", "master"}
+    blind = replace(config, clock=replace(config.clock, max_offset_s=0.1))
+    tables = ingest_eda(synth.cards, [], blind)
+    w = _flags_agree(tables, heart_rate(synth.cards, [], blind))
+    assert w.filter(source="sd")["clock_uncertain"].all()
+    assert set(w["clock_model"]) == {"rate"}

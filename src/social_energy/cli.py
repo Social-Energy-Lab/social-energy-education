@@ -18,15 +18,20 @@ social-energy purge-device studies/<id>/study.yaml --device N [--dry-run | --app
 social-energy ingest-eda studies/<id>/study.yaml
     Shimmer SD cards under raw/eda/sd-cards/<card>/ and calibrated exports under
     raw/eda/imported/*/ -> derived/eda/: files, seconds, scr and wear parquet, plus
-    person_minutes.parquet (through the spine, EDA consent only) and qa.json. One device and
-    one run at a time.
+    person_minutes.parquet (through the spine, EDA consent only), clock.parquet (the clock
+    model per run), comotion.parquet (the co-motion check) and qa.json. Device clocks are
+    corrected through the cards' sync records. Replaces only its own outputs. One device and
+    one run at a time (the cards are read twice: clock scan, then tables).
 
 social-energy eda-heart-rate studies/<id>/study.yaml
     Heart rate from the raw PPG of the same cards and exports -> derived/eda/: hr_beats,
     hr_windows (10 s, with quality flags), hr_minutes (per device-minute; joins onto
     person_minutes by device and minute), hr_agreement (against the exports' own heart
     rate) and hr_usability (per device-day) parquet, plus hr_qa.json. Reads wear.parquet from
-    ingest-eda to flag worn windows; writes nothing else. One device and one run at a time.
+    ingest-eda to flag worn windows; writes nothing else. Times are corrected through the
+    same clock model as ingest-eda (flagged clock_uncertain where it falls back). One device
+    and one run at a time (the cards are read twice, as by ingest-eda).
+
 social-energy extract-acoustics studies/<id>/study.yaml [--delete-wavs]
     AudioMoth WAVs under raw/audiomoth/<device>/ -> derived/acoustics/<device>/.
 
@@ -221,7 +226,8 @@ def purge_device(study: StudyConfig, devices: list[int], apply: bool = False) ->
 
 
 INGEST_EDA_OUTPUTS = tuple(
-    f"{n}.parquet" for n in ("files", "seconds", "scr", "wear", "person_minutes")
+    f"{n}.parquet"
+    for n in ("files", "seconds", "scr", "wear", "clock", "comotion", "person_minutes")
 )
 
 
@@ -241,10 +247,10 @@ def ingest_eda_command(study: StudyConfig) -> int:
     tables = ingest_eda(cards, exports, study.eda_config())
     out = layout.derived / "eda"
     out.mkdir(parents=True, exist_ok=True)
-    # Only this command's own outputs are replaced (eda-heart-rate writes beside them).
+    # Only this command's own outputs are replaced (other commands write beside them).
     for name in (*INGEST_EDA_OUTPUTS, "qa.json"):
         (out / name).unlink(missing_ok=True)
-    for name in ("files", "seconds", "scr", "wear"):
+    for name in ("files", "seconds", "scr", "wear", "clock", "comotion"):
         getattr(tables, name).write_parquet(out / f"{name}.parquet")
     qa = {"ingest": tables.qa}
     if (layout.spine / "meta.yaml").exists():

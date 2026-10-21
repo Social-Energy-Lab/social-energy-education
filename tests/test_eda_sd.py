@@ -130,3 +130,52 @@ def test_empty_or_header_only_chunks_decode_to_no_records(tmp_path, content):
     path.write_bytes(content)
     c = sd.read_chunk(path)
     assert len(c.ticks) == 0 and c.acc.shape == (0, 3) and c.size == len(content)
+
+
+def test_header_carries_the_device_clock_and_sync_flags(tmp_path):
+    """Header bytes (made up): rtc difference 1_000_000 s in ticks (BE, bytes 44-51), device
+    clock 40-bit count 2^32 + 5 * 32768 ticks (byte 251 high, 252-255 LE), master 0x37,
+    sync bit set. Start = (2^32 + 163840) / 32768 + 1_000_000 = 1_131_077.0 s."""
+    h = bytearray(sd.HEADER_BYTES)
+    h[0:2] = (256).to_bytes(2, "little")
+    h[16], h[17] = 0x37, 0x01
+    h[44:52] = (1_000_000 * 32768).to_bytes(8, "big")
+    h[52:56] = (1_786_000_000).to_bytes(4, "big")
+    h[251] = 1
+    h[252:256] = (5 * 32768).to_bytes(4, "little")
+    path = tmp_path / "000"
+    path.write_bytes(bytes(h))
+    hdr = sd.read_chunk(path).header
+    assert hdr.divisor == 256 and hdr.master and hdr.sync_on
+    assert hdr.config_time_s == 1_786_000_000
+    assert math.isclose(hdr.start_s, (2**32 + 163840) / 32768 + 1_000_000)
+    h[16], h[17] = 0x35, 0x00
+    path.write_bytes(bytes(h))
+    hdr = sd.read_chunk(path).header
+    assert not hdr.master and not hdr.sync_on
+
+
+def test_sync_slots_hold_signed_offsets_and_lookalikes_are_screened():
+    """Slots: untouched (0xFF); +2.5 s (sign 0, 81920 ticks); -0.25 s (sign 1, 8192 ticks);
+    all zero (a zeroed block); sign 7 (not a sign); a value of 2^40 ticks (too large)."""
+    slots = np.full((6, 9), 0xFF, np.uint8)
+    slots[1] = [0, *(81920).to_bytes(8, "little")]
+    slots[2] = [1, *(8192).to_bytes(8, "little")]
+    slots[3] = 0
+    slots[4] = [7, *(100).to_bytes(8, "little")]
+    slots[5] = [0, *(1 << 40).to_bytes(8, "little")]
+    block, ticks = sd.sync_slots(slots)
+    assert block.tolist() == [1, 2] and ticks.tolist() == [81920, -8192]
+
+
+def test_read_chunk_finds_the_sync_record_of_its_block(tmp_path):
+    recs = [_record(256 * i) for i in range(76)]
+    raw = bytearray(_chunk(recs))
+    raw[sd.HEADER_BYTES + sd.BLOCK_BYTES : sd.HEADER_BYTES + sd.BLOCK_BYTES + 9] = bytes(
+        [1, *(98304).to_bytes(8, "little")]
+    )
+    path = tmp_path / "000"
+    path.write_bytes(bytes(raw))
+    c = sd.read_chunk(path)
+    assert c.sync_block.tolist() == [1] and c.sync_offset_ticks.tolist() == [-98304]
+    assert c.ticks[38] == 256 * 38  # the records around the slot are untouched
