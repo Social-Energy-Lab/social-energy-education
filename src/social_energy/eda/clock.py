@@ -22,6 +22,19 @@ hour, the offset between their own clock and the sync master's into the SD card 
    without reference records) gets its unit's typical rate, counted from the start of the run
    (devices are re-set when started), and is flagged ``clock_uncertain``. So are times more
    than ``max_extrapolation_s`` outside the records of a fitted run.
+5. **Box anchors** (optional, ``anchors``; measured by ``eda.box``): the error of a run at a
+   moment the units lay together, against units whose clocks the records measured. A
+   fallback run is followed piecewise-linearly through its anchors and the re-set at its start
+   (``kind == "box"``; an anchor from the morning box, ``position == "head"``, replaces the
+   re-set, which a unit started without the base does not get);
+   a fitted run gains its anchors as knots beyond its records; an ambiguous master takes the
+   curve its anchors agree with. Anchors of one run that disagree beyond
+   ``anchor_tolerance_s``, or a measured clock the box contradicts, keep the run flagged. So
+   does a box-only run of a unit drifting faster than ``box_drift_limit_s_per_h``: its
+   correction improves, but stays a few seconds off between anchors.
+
+Every corrected time also has a **source** (``SOURCES``): ``sync`` (the records or the
+reference curves), ``box`` (box anchors), ``rate`` (the unit's rate, extrapolated).
 
 Corrected time = device time - e + ``reference_to_utc_s``: the reference group's own error
 against UTC is a study fact (measured against external events), not something the sync
@@ -39,6 +52,9 @@ import numpy as np
 import polars as pl
 
 RECORDS_SCHEMA = {"device": pl.String, "run": pl.String, "t": pl.Float64, "offset_s": pl.Float64}
+#: What placed a corrected time, best first (``ClockModel.correct_full``; ``none``: no model).
+SOURCES = ("sync", "box", "rate", "none")
+SOURCE_DTYPE = pl.Enum(SOURCES)
 RUNS_SCHEMA = {
     "device": pl.String,
     "run": pl.String,
@@ -64,6 +80,12 @@ class ClockConfig:
     max_rate: float = 0.05  # |clock rate| beyond 5 % is not a clock
     max_extrapolation_s: float = 3 * 3600.0
     ambiguity_s: float = 2.0
+    #: Box anchors of one run, or a box anchor and a measured clock, agree within this.
+    anchor_tolerance_s: float = 1.0
+    #: A run the box alone anchors (no records) is trusted only if its clock drifts less than
+    #: this (s per hour): a drifting clock's rate changes within a day, and an anchor or two
+    #: cannot follow it (the leave-one-out validation measures how far it strays).
+    box_drift_limit_s_per_h: float = 1.0
     #: Rate (seconds per hour, negative = slow) for units with no fitted run at all.
     fallback_rates_s_per_h: dict[str, float] = field(default_factory=dict)
 
@@ -97,6 +119,22 @@ def _merge(t: np.ndarray, v: np.ndarray, merge_s: float) -> tuple[np.ndarray, np
     n = g + 1
     cnt = np.bincount(groups, minlength=n)
     return np.bincount(groups, t, n) / cnt, np.bincount(groups, v, n) / cnt
+
+
+def _merge_spread(
+    t: np.ndarray, v: np.ndarray, merge_s: float
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """``_merge``, plus the largest spread of the values merged into one knot."""
+    kt, kv = _merge(t, v, merge_s)
+    order = np.argsort(t)
+    t, v = t[order], v[order]
+    spread, start, lo, hi = 0.0, t[0], v[0], v[0]
+    for i in range(1, len(t)):
+        if t[i] - start > merge_s:
+            start, lo, hi = t[i], v[i], v[i]
+        lo, hi = min(lo, v[i]), max(hi, v[i])
+        spread = max(spread, float(hi - lo))
+    return kt, kv, spread
 
 
 def robust_line(
@@ -163,6 +201,10 @@ class RunClock:
     inliers: int = 0
     curve: int | None = None
     rate_fitted: bool = True  # False: the rate is the unit's, not this run's
+    anchors: int = 0  # box anchors used
+    anchor_span: tuple[float, float] | None = None  # device times covered by records and anchors
+    box_disagrees: bool = False  # the box contradicts this run's measured clock
+    curves: list = field(default_factory=list)  # an ambiguous master's candidate curves
 
 
 def _solve(r: Piecewise, t_dev: np.ndarray, sign: float, base: np.ndarray) -> np.ndarray:
@@ -176,14 +218,28 @@ def _solve(r: Piecewise, t_dev: np.ndarray, sign: float, base: np.ndarray) -> np
 class ClockModel:
     """Per-run clock corrections built from every device's sync records."""
 
-    def __init__(self, records: pl.DataFrame, runs: pl.DataFrame, config: ClockConfig):
+    def __init__(
+        self,
+        records: pl.DataFrame,
+        runs: pl.DataFrame,
+        config: ClockConfig,
+        anchors: pl.DataFrame | None = None,
+    ):
+        """``anchors``: box anchors (``eda.box.solve``), rows with ``device``, ``run``,
+        ``tau`` (device time), ``error_s``, ``status`` (``anchor`` rows are used,
+        ``disagree`` rows flag their run) and optionally ``position`` (``head``: the morning
+        box, before the run's first wear)."""
         self.config = config
         self.tz = ZoneInfo(config.timezone)
         records = records.filter(pl.col("offset_s").abs() < config.max_offset_s)
+        self.records, self.runs_table = records, runs
         self.curves: dict[str, list[Piecewise]] = {}
         self.runs: dict[tuple[str, str], RunClock] = {}
         self.qa: dict[str, Any] = {}
         self._build(records, runs)
+        if anchors is not None and anchors.height:
+            self._apply_anchors(anchors)
+        self._count()
 
     def _day(self, t: float) -> str:
         return datetime.fromtimestamp(t, UTC).astimezone(self.tz).date().isoformat()
@@ -262,17 +318,79 @@ class ClockModel:
             self.runs[(row["device"], row["run"])] = self.rate_clock(
                 row["device"], row["run"], row["start"], row["end"]
             )
+
+    def _count(self) -> None:
         kinds: dict[str, int] = {}
         for rc in self.runs.values():
             kinds[rc.kind] = kinds.get(rc.kind, 0) + 1
         self.qa = {
-            "records": records.height,
+            "records": self.records.height,
             "reference_days": len(self.curves),
             "curves": sum(len(c) for c in self.curves.values()),
             "runs_by_kind": kinds,
             "runs_uncertain": sum(rc.uncertain for rc in self.runs.values()),
+            "runs_box_anchored": sum(rc.anchors > 0 for rc in self.runs.values()),
+            "runs_box_disagree": sum(rc.box_disagrees for rc in self.runs.values()),
             "unit_rates_s_per_h": {d: round(r * 3600, 2) for d, r in self.unit_rates.items()},
         }
+
+    def _apply_anchors(self, anchors: pl.DataFrame) -> None:
+        cfg = self.config
+        tol = cfg.anchor_tolerance_s
+        for (device, run), part in anchors.group_by("device", "run", maintain_order=True):
+            rc = self.runs.get((device, run))
+            if rc is None:
+                continue
+            if (part["status"] == "disagree").any():
+                rc.box_disagrees = rc.uncertain = True
+            use = part.filter(pl.col("status") == "anchor").sort("tau")
+            if not use.height:
+                continue
+            t, e = use["tau"].to_numpy(), use["error_s"].to_numpy()
+            if rc.kind == "rate":
+                kt, kv, spread = _merge_spread(t, e, cfg.merge_s)
+                head = "position" in use.columns and (use["position"] == "head").any()
+                if not head:
+                    kt, kv = np.r_[rc.start, kt], np.r_[0.0, kv]  # the re-set at the start
+                slope = _fit(kt, kv, cfg)
+                fitted = slope is not None and abs(slope) <= cfg.max_rate
+                rc.slope = slope if fitted else self.unit_rate(device)
+                rc.kind, rc.rate_fitted = "box", fitted
+                rc.error = Piecewise(kt, kv, rc.slope)
+                # The assumed re-set is not a measurement: far from the box, a drifting
+                # unit's clock is as much a guess as on records.
+                rc.anchor_span = (float(t.min()), float(t.max()))
+                # A rate the anchors imply that no clock has is a disagreement too.
+                implausible = slope is not None and not fitted
+                drifting = abs(rc.slope) * 3600 > cfg.box_drift_limit_s_per_h
+                rc.uncertain = rc.box_disagrees or bool(spread > tol) or implausible or drifting
+            elif rc.kind == "sync":
+                kt, kv, spread = _merge_spread(
+                    np.r_[rc.error.t, t], np.r_[rc.error.v, e], cfg.merge_s
+                )
+                slope = _fit(kt, kv, cfg)
+                if slope is not None and abs(slope) <= cfg.max_rate:
+                    rc.slope, rc.rate_fitted = slope, True
+                rc.error = Piecewise(kt, kv, rc.slope)
+                rc.anchor_span = (float(kt[0]), float(kt[-1]))
+                rc.uncertain = rc.uncertain or bool(spread > tol)
+            elif rc.kind == "master" and rc.curves:
+                # An ambiguous master takes the curve its anchors agree with.
+                gaps = [
+                    float(np.median(np.abs(_solve(c, t, -1.0, np.zeros(len(t))) - e)))
+                    for c in rc.curves
+                ]
+                k = int(np.argmin(gaps))
+                if gaps[k] > tol:
+                    continue
+                c = rc.curves[k]
+                rc.error = lambda x, c=c: _solve(
+                    c, np.asarray(x, float), -1.0, np.zeros(np.size(x))
+                )
+                rc.curve, rc.uncertain = k, rc.box_disagrees
+            else:
+                continue
+            rc.anchors = len(t)
 
     def unit_rate(self, device: str) -> float:
         if device in self.unit_rates:
@@ -375,6 +493,7 @@ class ClockModel:
             uncertain=uncertain,
             slope=slope,
             curve=k,
+            curves=curves if uncertain else [],
         )
 
     def correct(
@@ -382,6 +501,13 @@ class ClockModel:
     ) -> tuple[np.ndarray, np.ndarray]:
         """Corrected UTC seconds and the ``clock_uncertain`` flag for device times ``t`` of a
         run (NaN stays NaN). An unknown run gets the fallback from its first time."""
+        out, unc, _ = self.correct_full(device, run, t, rc)
+        return out, unc
+
+    def correct_full(
+        self, device: str, run: str, t: np.ndarray, rc: RunClock | None = None
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """``correct``, plus each time's source as an index into ``SOURCES``."""
         t = np.asarray(t, float)
         fin = np.isfinite(t)
         if rc is None:
@@ -392,6 +518,7 @@ class ClockModel:
             rc = self.rate_clock(device, run, lo, hi)
         out = np.full(len(t), np.nan)
         unc = np.full(len(t), rc.uncertain)
+        src = np.full(len(t), {"sync": 0, "master": 0, "box": 1}.get(rc.kind, 2), np.int8)
         if fin.any():
             x = t[fin]
             lo, hi = x.min(), x.max()
@@ -399,12 +526,18 @@ class ClockModel:
             grid = np.arange(lo, hi + 10.0, 10.0)
             e = np.interp(x, grid, np.asarray(rc.error(grid), float))
             out[fin] = x - e + self.config.reference_to_utc_s
-            if rc.span is not None and rc.kind == "sync" and abs(rc.slope) * 3600 > 1.0:
-                # Far from its records, a drifting unit's rate is a guess.
+            if rc.kind in ("sync", "box") and abs(rc.slope) * 3600 > 1.0:
+                # Far from its records and anchors, a drifting unit's rate is a guess.
                 m = self.config.max_extrapolation_s
-                far = (x < rc.span[0] - m) | (x > rc.span[1] + m)
-                unc[np.flatnonzero(fin)[far]] = True
-        return out, unc
+                idx = np.flatnonzero(fin)
+                if rc.span is not None:  # beyond the records, inside the anchors: the box's
+                    src[idx[(x < rc.span[0] - m) | (x > rc.span[1] + m)]] = 1
+                cover = rc.anchor_span or rc.span
+                if cover is not None:
+                    far = idx[(x < cover[0] - m) | (x > cover[1] + m)]
+                    unc[far] = True
+                    src[far] = 2
+        return out, unc, src
 
     def summary(self) -> pl.DataFrame:
         rows = []
@@ -423,6 +556,8 @@ class ClockModel:
                     "error_start_s": e0,
                     "error_end_s": e1,
                     "uncertain": rc.uncertain,
+                    "anchors": rc.anchors,
+                    "box_disagrees": rc.box_disagrees,
                 }
             )
         return pl.DataFrame(
@@ -439,8 +574,49 @@ class ClockModel:
                 "error_start_s": pl.Float64,
                 "error_end_s": pl.Float64,
                 "uncertain": pl.Boolean,
+                "anchors": pl.Int64,
+                "box_disagrees": pl.Boolean,
             },
         )
+
+
+def window_lags(
+    x: np.ndarray,
+    y: np.ndarray,
+    hz: float,
+    window_s: float,
+    max_lag_s: float,
+    min_peak: float = 0.2,
+    min_ratio: float = 1.5,
+    guard_s: float = 0.5,
+) -> list[tuple[float, float]]:
+    """Lags of ``y`` behind ``x`` (two motion signals on one ``hz`` grid; positive: ``y``
+    shows each event later) over consecutive ``window_s`` sub-windows, searched within
+    ``max_lag_s``. Only confident windows are returned (normalised peak >= ``min_peak``, and
+    ``min_ratio`` over the highest value more than ``guard_s`` from it), as (centre of the window in
+    seconds from the start of ``x``, lag in s)."""
+    w = int(window_s * hz)
+    L = int(max_lag_s * hz)
+    n = min(len(x), len(y))
+    out = []
+    size = 1 << int(np.ceil(np.log2(w + 2 * L)))
+    guard = int(guard_s * hz)
+    for s in range(L, n - w - L, w):
+        xa = x[s : s + w]
+        yb = y[s - L : s + w + L]
+        if np.isnan(xa).mean() > 0.2 or np.isnan(yb).mean() > 0.2:
+            continue
+        xa = np.nan_to_num(xa - np.nanmean(xa))
+        yb = np.nan_to_num(yb - np.nanmean(yb))
+        c = np.fft.irfft(np.conj(np.fft.rfft(xa, size)) * np.fft.rfft(yb, size), size)
+        c = c[: 2 * L + 1] / (np.sqrt((xa * xa).sum() * (yb[L : L + w] ** 2).sum()) + 1e-12)
+        k = int(np.argmax(c))
+        pk = c[k]
+        rest = np.r_[c[: max(0, k - guard)], c[k + guard + 1 :]]
+        ratio = pk / max(rest.max() if len(rest) else 0.0, 1e-9)
+        if pk >= min_peak and ratio >= min_ratio:
+            out.append(((s + w / 2) / hz, (k - L) / hz))
+    return out
 
 
 def comotion(
@@ -460,31 +636,13 @@ def comotion(
     the next peak) agree within ``agree_s`` of their median. Returns one row per device:
     the median of its confident pair lags (positive = its clock reads late), and the pairs."""
     devices = sorted(signals)
-    w = int(window_s * hz)
-    L = int(max_lag_s * hz)
     pair_rows = []
     for i, a in enumerate(devices):
         for b in devices[i + 1 :]:
-            x, y = signals[a], signals[b]
-            n = min(len(x), len(y))
-            lags = []
-            for s in range(L, n - w - L, w):
-                xa = x[s : s + w]
-                yb = y[s - L : s + w + L]
-                if np.isnan(xa).mean() > 0.2 or np.isnan(yb).mean() > 0.2:
-                    continue
-                xa = np.nan_to_num(xa - np.nanmean(xa))
-                yb = np.nan_to_num(yb - np.nanmean(yb))
-                size = 1 << int(np.ceil(np.log2(len(yb) + w)))
-                c = np.fft.irfft(np.conj(np.fft.rfft(xa, size)) * np.fft.rfft(yb, size), size)
-                c = c[: 2 * L + 1] / (np.sqrt((xa * xa).sum() * (yb[L : L + w] ** 2).sum()) + 1e-12)
-                k = int(np.argmax(c))
-                pk = c[k]
-                guard = int(0.5 * hz)
-                rest = np.r_[c[: max(0, k - guard)], c[k + guard + 1 :]]
-                ratio = pk / max(rest.max() if len(rest) else 0.0, 1e-9)
-                if pk >= min_peak and ratio >= min_ratio:
-                    lags.append((k - L) / hz)
+            found = window_lags(
+                signals[a], signals[b], hz, window_s, max_lag_s, min_peak, min_ratio
+            )
+            lags = [lag for _, lag in found]
             if len(lags) >= min_windows:
                 med = float(np.median(lags))
                 agree = [x for x in lags if abs(x - med) <= agree_s]

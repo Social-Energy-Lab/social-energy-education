@@ -11,6 +11,7 @@ import numpy as np
 import polars as pl
 import pytest
 
+from social_energy.eda.box import BoxConfig
 from social_energy.eda.clock import ClockConfig
 from social_energy.eda.ingest import EdaConfig, ingest_eda
 from social_energy.eda.person import person_minutes
@@ -197,3 +198,58 @@ def test_an_export_without_a_clock_is_placed_from_its_session(with_exports):
     minutes, _ = person_minutes(t, Spine.load(synth.spine_dir))
     sh04 = minutes.filter(entity="person:14")
     assert sh04.height > 30 and sh04["clock_uncertain"].all()
+    assert set(sh04["clock_source"]) == {"rate"}
+
+
+# SH05 never writes a sync record (sync on, but silent) and truly loses 0.025 % (0.9 s/h,
+# under the 1 s/h a box-only clock may drift) from its start, when it was set to the
+# reference's time (SH03 reads 0.2 s ahead of true time); its configured fallback rate is 0.
+# It lies in the box with the others.
+SILENT = ("SH05", "silent", -0.00025, 0.2)
+BOX = BoxConfig(window_s=120.0, max_lag_s=20.0, min_stretch_s=300.0)
+
+
+@pytest.fixture(scope="module")
+def silent(tmp_path_factory):
+    spec = EdaSpec(clocks=(*EdaSpec().clocks, SILENT))
+    synth = generate_eda(spec, tmp_path_factory.mktemp("silent"))
+    with_box = ingest_eda(synth.cards, [], config_for(synth, box=BOX))
+    without = ingest_eda(synth.cards, [], config_for(synth, box=BoxConfig(enabled=False)))
+    return synth, with_box, without
+
+
+def _sh05_at(tables, synth, minute):
+    t = synth.spec.start + timedelta(minutes=minute)
+    return tables.seconds.filter((pl.col("device") == "SH05") & (pl.col("t") == t)).row(
+        0, named=True
+    )
+
+
+def test_the_box_measures_a_unit_without_sync_records(silent):
+    """At true minute 20, SH05 reads 0.00025 x 1200 = 0.3 s behind: the box-anchored model
+    corrects it by +0.3 s (within 0.05), with source ``box`` and no flag. Without the box it
+    keeps its fallback (rate 0: no correction), flagged."""
+    synth, with_box, without = silent
+    row = _sh05_at(with_box, synth, 20)
+    assert abs(row["clock_correction_s"] - 0.3) < 0.05
+    assert row["clock_source"] == "box" and not row["clock_uncertain"]
+    sh05 = with_box.seconds.filter(device="SH05")
+    assert not sh05["clock_uncertain"].any() and set(sh05["clock_source"]) == {"box"}
+    clock = with_box.clock.filter((pl.col("device") == "SH05") & pl.col("run").str.ends_with("0"))
+    assert clock["kind"].to_list() == ["box"] and clock["anchors"].item() == 1
+    assert abs(clock["rate_s_per_h"].item() + 0.9) < 0.1
+    box = with_box.box.filter(device="SH05").row(0, named=True)
+    assert box["status"] == "anchor" and box["triangle"]
+    # The measured units are checked by the same box, within a tenth of a second.
+    known = with_box.box.filter(pl.col("device") != "SH05")
+    assert set(known["status"]) == {"check"} and known["residual_s"].abs().max() < 0.1
+    # Leave-one-out: SH01 (3 % slow) without its records comes back from the box, where its
+    # fallback would be the unit's own rate (no other run): no correction at all. SH03, the
+    # only reference unit, cannot: without its records no clock is measured.
+    loo = with_box.box_loo.sort("device")
+    assert loo["device"].to_list() == ["SH01", "SH03"] and loo["anchors"].to_list() == [1, 0]
+    sh01 = loo.row(0, named=True)
+    assert sh01["box_max_abs_s"] < 0.5 and sh01["fallback_max_abs_s"] > 60
+    old = _sh05_at(without, synth, 20)
+    assert abs(old["clock_correction_s"]) < 0.01
+    assert old["clock_source"] == "rate" and old["clock_uncertain"]

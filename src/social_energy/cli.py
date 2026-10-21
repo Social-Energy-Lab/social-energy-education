@@ -19,9 +19,11 @@ social-energy ingest-eda studies/<id>/study.yaml
     Shimmer SD cards under raw/eda/sd-cards/<card>/ and calibrated exports under
     raw/eda/imported/*/ -> derived/eda/: files, seconds, scr and wear parquet, plus
     person_minutes.parquet (through the spine, EDA consent only), clock.parquet (the clock
-    model per run), comotion.parquet (the co-motion check) and qa.json. Device clocks are
-    corrected through the cards' sync records. Replaces only its own outputs. One device and
-    one run at a time (the cards are read twice: clock scan, then tables).
+    model per run), comotion.parquet (the co-motion check), box, box_pairs and box_loo
+    parquet (box co-motion anchors, their pairs, and their leave-one-out validation) and
+    qa.json. Device clocks are corrected through the cards' sync records, and where a unit has
+    none through the box it lay in with measured units. Replaces only its own outputs. One
+    device and one run at a time (the cards are read twice: clock scan, then tables).
 social-energy extract-acoustics studies/<id>/study.yaml [--delete-wavs]
     AudioMoth WAVs under raw/audiomoth/<device>/ -> derived/acoustics/<device>/.
 
@@ -214,10 +216,8 @@ def purge_device(study: StudyConfig, devices: list[int], apply: bool = False) ->
     return 0
 
 
-INGEST_EDA_OUTPUTS = tuple(
-    f"{n}.parquet"
-    for n in ("files", "seconds", "scr", "wear", "clock", "comotion", "person_minutes")
-)
+EDA_TABLES = ("files", "seconds", "scr", "wear", "clock", "comotion", "box", "box_pairs", "box_loo")
+INGEST_EDA_OUTPUTS = tuple(f"{n}.parquet" for n in (*EDA_TABLES, "person_minutes"))
 
 
 def ingest_eda_command(study: StudyConfig) -> int:
@@ -234,7 +234,7 @@ def ingest_eda_command(study: StudyConfig) -> int:
     # Only this command's own outputs are replaced (other commands write beside them).
     for name in (*INGEST_EDA_OUTPUTS, "qa.json"):
         (out / name).unlink(missing_ok=True)
-    for name in ("files", "seconds", "scr", "wear", "clock", "comotion"):
+    for name in EDA_TABLES:
         getattr(tables, name).write_parquet(out / f"{name}.parquet")
     qa = {"ingest": tables.qa}
     if (layout.spine / "meta.yaml").exists():

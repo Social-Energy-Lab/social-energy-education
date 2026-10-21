@@ -6,7 +6,8 @@ are not counted. People without EDA consent are
 removed entirely: their data may not be used, so it is not carried in a flag. Exclusion
 windows are flagged (``excluded``), so filtering them stays the analyst's visible choice.
 So are minutes whose device clock could not be measured (``clock_uncertain``: any second of
-the minute placed by the fallback clock model, ``eda.clock``).
+the minute placed by the fallback clock model, ``eda.clock``); ``clock_source`` is the worst
+source of the minute's seconds (``sync``, then ``box``, then ``rate``).
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from typing import Any
 import polars as pl
 
 from ..spine import Spine
+from .clock import SOURCE_DTYPE
 from .ingest import EdaTables
 
 
@@ -29,6 +31,11 @@ def person_minutes(tables: EdaTables, spine: Spine) -> tuple[pl.DataFrame, dict[
     s = spine.flag_excluded(s, device_col="device", time_col="t", kind="eda")
     clean = pl.col("conductance_us").filter(~pl.col("artifact"))
     uncertain = pl.col("clock_uncertain").any() if "clock_uncertain" in s.columns else pl.lit(False)
+    source = (
+        pl.col("clock_source").max()
+        if "clock_source" in s.columns
+        else pl.lit("none", dtype=SOURCE_DTYPE)
+    )
     minutes = s.group_by("entity", pl.col("t").dt.truncate("1m").alias("minute")).agg(
         pl.col("device").first(),
         pl.len().alias("worn_s"),
@@ -40,6 +47,7 @@ def person_minutes(tables: EdaTables, spine: Spine) -> tuple[pl.DataFrame, dict[
         pl.col("source").first(),
         pl.col("excluded").any(),
         uncertain.alias("clock_uncertain"),
+        source.alias("clock_source"),
     )
     scr = spine.resolve(
         tables.scr.filter(pl.col("ok") & pl.col("worn") & ~pl.col("artifact")),
