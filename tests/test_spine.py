@@ -114,6 +114,14 @@ def test_excluded_flags_device_and_person_windows(spine_dir):
     assert out["excluded"].to_list() == [True, False, True, False]
 
 
+def test_excluded_is_all_false_when_the_study_has_no_exclusions(spine_dir):
+    _dump(spine_dir, "exclusions.yaml", [])
+    spine = Spine.load(spine_dir)
+    df = pl.DataFrame({"observer": [202], "t": [berlin("2026-08-15 15:45:00")]})
+    out = spine.flag_excluded(df, device_col="observer", time_col="t", kind="beacon")
+    assert out["excluded"].to_list() == [False]
+
+
 def test_consent_by_module(spine_dir):
     spine = Spine.load(spine_dir)
     assert spine.consented("beacons") == {"201", "202"}

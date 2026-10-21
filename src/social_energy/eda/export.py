@@ -63,6 +63,14 @@ def _separator(path: Path) -> str:
     return first[4:] or ","
 
 
+def export_device(path: Path) -> str:
+    """The device an export belongs to, from its column names (without reading the data)."""
+    sep = _separator(path)
+    with path.open(encoding="utf-8") as f:
+        f.readline()
+        return f.readline().split(sep)[0].strip().strip('"').partition("_")[0]
+
+
 def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
     path = Path(path)
     config = config or TimelineConfig()
