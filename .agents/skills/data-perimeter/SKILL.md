@@ -23,6 +23,10 @@ Ask yourself: *could this line, file or number help someone learn something abou
 
 Allowed: instrument-level facts (firmware behaviour, file formats, thresholds), non-personal study config (dates, rooms, programme types), and **synthetic** data from `social_energy.synth` or hand-written fixtures in `tests/fixtures/`.
 
+## The public site asset
+
+One route lets derived data reach the public: the site data asset (`site_export.py` → validated → GitHub release asset `site-data-dsa-2026`), under `docs/decisions/public-site.md`. It holds the public bundle and aggregates with cells under 5 dropped, is checked by `validate_site_data` locally and again in `pages.yml`, and never enters git. The copy in git uses placeholders instead of the findings' numbers.
+
 ## The private context library
 
 Full source documents (field logs, ethics application, consent forms, survey versions, team slides, unpublished manuscripts) are kept as markdown in `$SOCIAL_ENERGY_DATA/<study>/context/`, indexed by its `README.md` with a sensitivity column: **P** personal, **U** unpublished, **I** internal, **R** public reference.

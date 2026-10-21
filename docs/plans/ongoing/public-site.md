@@ -1,15 +1,20 @@
 # Public site: DSA 2026 as animations
 
 **Priority:** high — target: live for the research-group talk on 2026-11-03
-**Gate:** none to build; uploading the real site data waits on Álvaro's review of a local preview
-**Next:** Task 1 of the implementation plan below
+**Gate:** decision:Álvaro reviews the real-data preview (`$SOCIAL_ENERGY_DATA/dsa-2026/derived/site/preview/`) before the release upload
+**Next:** merge `feat/public-site`, enable Pages (synthetic demo goes live), then Álvaro's preview review → Task 10
 
 **Goal:** a public web page, served by GitHub Pages from this repo, where anyone curious about the
 DSA 2026 results — the lab, colleagues, and the participants themselves — can watch the camp as an
 animated co-presence network and follow the main results as a short animated story.
 
-Replaces [`explorer-public-mode.md`](../ideas/explorer-public-mode.md) (its follow-ups move to the end of
-this file; delete that plan when this one is promoted).
+Replaced `explorer-public-mode.md` (deleted; its follow-ups are at the end of this file).
+
+## Handoff
+
+- **Branch:** `feat/public-site` — Tasks 1–9 built and reviewed (per-task reviews plus a final whole-branch review, all clean).
+- **Real data:** `studies/dsa-2026/analyses/site_export.py` has run; data, zip, preview and screenshots are under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/site/`; numbers and checks in the private note `dsa-2026/notes/site-export-2026-10-21.md`.
+- **Open:** the group-size chart is empty until `exploratory_cascades.py` writes a people count per group size; the copy awaits Álvaro's review and Mahdi's read of the German; the `[unknown: …]` on Mahdi's approval in `docs/decisions/public-site.md`.
 
 ## Why
 
@@ -325,8 +330,9 @@ bundler); Node's built-in test runner for pure JS (`tests/js/*.test.mjs`, run by
     - `moments_size`: `size, people, ratio, ratio_lo, ratio_hi`
     - `moments_headline`: `people, observed, null_mean, ratio, lo, hi`
     - `places`: `setting, people, rate, lo, hi`
-    - `confirmatory`: `test, label, people, estimate, lo, hi, scale` (`scale` ∈ `"sd"`, `"rr"`)
+    - `confirmatory`: `test, people, estimate, lo, hi, scale` (`scale` ∈ `"sd"`, `"rr"`; no `label`: the page names each test from the copy)
     - `numbers`: flat dict of named numbers used by copy placeholders (no `people` rule; values must be numbers)
+  - Every value is a finite number, or a string from a fixed set (`aggregates.CATEGORIES`): setting, kind/origin, test, scale, band/size, day, phase; a row with any other value is dropped by `check_aggregates` and refused by the validator, which also checks the nested meta objects, each `.bin` size and that every row sits in a shown bin.
   - `check_aggregates(agg: dict, min_group: int = 5) -> dict` — returns a copy with rows whose `people` is missing or `< min_group` dropped, and any row key outside its section removed.
   - `synthetic_aggregates(seed: int = 0) -> dict` — every section populated with plausible random values, `people >= 5`.
   - `validate_site_data(data_dir: Path, min_group: int = 5) -> dict` — reads `meta.json`, the `.bin` files and `aggregates.json`; raises `SiteDataError(ValueError)` naming the first offending field; returns meta.

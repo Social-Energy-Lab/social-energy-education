@@ -77,3 +77,34 @@ decides whether it is a reportable data breach (GDPR Art. 33, 72-hour clock).
 Before the first publication of a new study's material, re-read
 [`data-perimeter`](../../.agents/skills/data-perimeter/SKILL.md) and check the study's
 `README.md` and plans for counts, anecdotes and names that belong in the private half.
+
+## 5. Publishing the site
+
+The public site (`docs/decisions/public-site.md`) is built from a data asset that stays out of git.
+First time only, enable Pages from Actions:
+
+```bash
+gh api -X POST repos/Social-Energy-Lab/social-energy-education/pages -f build_type=workflow
+```
+
+```bash
+# 1. Export the public bundle and aggregates (writes data/ and site-data.zip).
+uv run --extra analysis python studies/dsa-2026/analyses/site_export.py
+
+# 2. Preview the real-data build locally and review it (desktop and phone).
+uv run social-energy site-build studies/dsa-2026/study.yaml --out /tmp/site-preview \
+    --data $SOCIAL_ENERGY_DATA/dsa-2026/derived/site/data
+python3 -m http.server -d /tmp/site-preview --bind 127.0.0.1 8000
+
+# 3. After review, publish the asset: first time ...
+gh release create site-data-dsa-2026 $SOCIAL_ENERGY_DATA/dsa-2026/derived/site/site-data.zip \
+    --title "DSA 2026 site data" --notes "Public bundle and aggregates, see docs/decisions/public-site.md"
+#    ... later updates:
+gh release upload site-data-dsa-2026 $SOCIAL_ENERGY_DATA/dsa-2026/derived/site/site-data.zip --clobber
+
+# 4. Rebuild and deploy the page (a new release does not trigger it).
+gh workflow run pages.yml
+```
+
+Takedown: `gh release delete site-data-dsa-2026 --yes --cleanup-tag`, then `gh workflow run pages.yml`;
+the page goes back to the synthetic demo. Copies already made cannot be recalled.

@@ -14,6 +14,7 @@ Inputs and filters are those analyses' own, unchanged:
 
 The bundle is written to ``$SOCIAL_ENERGY_DATA/dsa-2026/derived/explorer/bundle/``. It carries no
 study IDs, but it is pseudonymised individual data about minors: team use only, never shared.
+The team bundle stays internal; the public route is ``site_export.py``.
 
     uv run --extra analysis python studies/dsa-2026/analyses/explorer_export.py
     uv run social-energy explore studies/dsa-2026/study.yaml

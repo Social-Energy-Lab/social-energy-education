@@ -50,6 +50,11 @@ social-energy check-survey studies/<id>/study.yaml
     reverse-keying against item-rest correlations and old form-version codes against their
     current codes. Writes derived/survey/checks/{reverse_keys,versions}.parquet plus
     summary.json. Computes no scale score, so it does not wait for the freeze.
+
+social-energy site-build studies/<id>/study.yaml --out DIR [--data DIR]
+    Assemble the public GitHub Pages site in DIR (outside the repo): the app files plus a
+    validated data/. With --data DIR the public data prepared elsewhere is copied in; without
+    it a synthetic camp is built, which needs no $SOCIAL_ENERGY_DATA.
 """
 
 from __future__ import annotations
@@ -415,7 +420,26 @@ def explore(study: StudyConfig, port: int = 8765, open_browser: bool = True) -> 
     return 0
 
 
+def site_build(study: StudyConfig, out: Path | None, data: Path | None = None) -> int:
+    from .site import SiteDataError
+    from .site.build import build_site
+
+    if out is None:
+        print("site-build needs --out DIR")
+        return 2
+    try:
+        site = build_site(
+            out, data, config=study.explorer_config(), timezone=study.timezone, seed=0
+        )
+    except SiteDataError as err:
+        print(f"Refused: {err}")
+        return 1
+    print(f"Site built in {site}" + (" from a synthetic camp" if data is None else ""))
+    return 0
+
+
 COMMANDS["explore"] = explore
+COMMANDS["site-build"] = site_build
 COMMANDS["purge-device"] = purge_device
 
 
@@ -428,6 +452,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--port", type=int, default=8765, help="explore: port on 127.0.0.1")
     parser.add_argument("--no-browser", action="store_true", help="explore: do not open a browser")
+    parser.add_argument("--out", type=Path, help="site-build: output directory (outside the repo)")
+    parser.add_argument("--data", type=Path, help="site-build: public data directory to publish")
     parser.add_argument(
         "--device", type=int, action="append", default=[], help="purge-device: device ID"
     )
@@ -445,6 +471,8 @@ def main(argv: list[str] | None = None) -> int:
             return purge_device(study, args.device, apply=args.apply)
         if args.command == "explore":
             return explore(study, port=args.port, open_browser=not args.no_browser)
+        if args.command == "site-build":
+            return site_build(study, args.out, args.data)
         return COMMANDS[args.command](study)
     except paths.DataRootError as err:
         print(err)

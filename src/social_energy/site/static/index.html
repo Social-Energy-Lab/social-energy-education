@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Signaturen sozialer Energie · DSA 2026</title>
+<meta name="description" content="">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<script src="vendor/d3.min.js" defer></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<a class="skip" href="#story" data-t="skip_to_story"></a>
+<div id="banner" class="banner" role="note" hidden>
+  <strong data-t="banner_synthetic"></strong>
+  <span data-t="banner_synthetic_sub"></span>
+</div>
+
+<header class="wrap top">
+  <span class="kicker" data-t="site_kicker"></span>
+  <button id="lang" class="lang" type="button" lang="en"></button>
+</header>
+
+<main class="wrap">
+  <section class="hero" id="chapter-hero" aria-labelledby="hero-title">
+    <h1 id="hero-title" data-t="hero_title"></h1>
+    <p class="lede" data-t="hero_lede"></p>
+    <div id="hero-player" class="player-host">
+      <p class="loading" data-t="player_loading"></p>
+    </div>
+    <ul class="legend">
+      <li><span class="sw sw-dots" aria-hidden="true"></span><span data-t="legend_dot"></span></li>
+      <li><span class="sw sw-line" aria-hidden="true"></span><span data-t="legend_line"></span></li>
+      <li><span class="sw sw-cross" aria-hidden="true"></span><span data-t="legend_cross"></span></li>
+      <li><span class="sw sw-glow" aria-hidden="true"></span><span data-t="legend_glow"></span></li>
+      <li><span class="sw sw-faded" aria-hidden="true"></span><span data-t="legend_faded"></span></li>
+      <li class="ring" data-t="legend_ring"></li>
+    </ul>
+  </section>
+
+  <div id="story">
+    <section class="chapter intro" id="chapter-intro" aria-labelledby="intro-title">
+      <h2 id="intro-title" data-t="intro_title"></h2>
+      <p data-t="intro_body"></p>
+      <p data-t="intro_body2"></p>
+    </section>
+
+    <section class="chapter" id="chapter-day" data-chapter="day" aria-labelledby="day-title">
+      <span class="tier exploratory" data-t="tier_exploratory"></span>
+      <h2 id="day-title" data-t="ch_day_title"></h2>
+      <p data-t="ch_day_body"></p>
+      <div class="chart" id="chart-day"></div>
+    </section>
+
+    <section class="chapter" id="chapter-circles" data-chapter="circles" aria-labelledby="circles-title">
+      <span class="tier exploratory" data-t="tier_exploratory"></span>
+      <h2 id="circles-title" data-t="ch_circles_title"></h2>
+      <p data-t="ch_circles_body"></p>
+      <p data-t="ch_circles_body2"></p>
+      <p data-t="ch_circles_body3"></p>
+      <div class="chart" id="chart-circles"></div>
+    </section>
+
+    <section class="chapter" id="chapter-moments" data-chapter="moments" aria-labelledby="moments-title">
+      <span class="tier exploratory" data-t="tier_exploratory"></span>
+      <h2 id="moments-title" data-t="ch_moments_title"></h2>
+      <p data-t="ch_moments_body"></p>
+      <p data-t="ch_moments_body2"></p>
+      <p data-t="ch_moments_body3" data-t-sign="company_gain"></p>
+      <div class="chart" id="chart-moments"></div>
+    </section>
+
+    <section class="chapter" id="chapter-places" data-chapter="places" aria-labelledby="places-title">
+      <span class="tier exploratory" data-t="tier_exploratory"></span>
+      <h2 id="places-title" data-t="ch_places_title"></h2>
+      <p data-t="ch_places_body"></p>
+      <div class="chart" id="chart-places"></div>
+    </section>
+
+    <section class="chapter" id="chapter-null" data-chapter="null" aria-labelledby="null-title">
+      <span class="tier confirmatory" data-t="tier_confirmatory"></span>
+      <h2 id="null-title" data-t="ch_null_title"></h2>
+      <p data-t="ch_null_body"></p>
+      <p data-t="ch_null_body2"></p>
+      <div class="chart" id="chart-null"></div>
+    </section>
+
+    <section class="chapter" id="chapter-how" data-chapter="how" aria-labelledby="how-title">
+      <h2 id="how-title" data-t="ch_how_title"></h2>
+      <p data-t="ch_how_beacons"></p>
+      <p data-t="ch_how_button"></p>
+      <p data-t="ch_how_not_recorded"></p>
+      <h3 data-t="ch_how_privacy_title"></h3>
+      <ul>
+        <li data-t="privacy_names"></li>
+        <li data-t="privacy_courses"></li>
+        <li data-t="privacy_night"></li>
+        <li data-t="privacy_staff"></li>
+        <li data-t="privacy_presses"></li>
+        <li data-t="privacy_groups"></li>
+      </ul>
+      <p data-t="ch_how_tiers"></p>
+      <p><span data-t="ch_how_repo"></span>
+        <a href="https://github.com/Social-Energy-Lab/social-energy-education" rel="noopener" data-t="ch_how_repo_link"></a></p>
+      <p class="cite" data-t="ch_how_cite"></p>
+      <div id="chart-how"></div>
+    </section>
+  </div>
+</main>
+
+<footer class="wrap">
+  <p data-t="footer_project"></p>
+  <p data-t="footer_thanks"></p>
+  <p data-t="footer_privacy"></p>
+</footer>
+</body>
+</html>

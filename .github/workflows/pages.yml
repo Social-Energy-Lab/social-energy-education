@@ -1,0 +1,72 @@
+name: pages
+
+# A new data release does not trigger this workflow: run it by hand with
+# `gh workflow run pages.yml`.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/social_energy/site/**"
+      - "src/social_energy/explorer/static/**"
+      - "studies/dsa-2026/study.yaml"
+      - "uv.lock"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      TAG: site-data-dsa-2026
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - run: uv sync --locked
+
+      - name: Fetch the real data release, if one exists
+        id: data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Expected asset: site-data.zip on release $TAG, with the
+          # files at the zip root (meta.json directly inside, no wrapping folder).
+          # No release means a synthetic demo build. Any failure with a release
+          # present (download, unzip, missing meta.json) fails the job.
+          # Only a 404 means "no release". Any other API failure (auth, rate
+          # limit, 5xx) fails the job so a live real-data site is never
+          # overwritten by a synthetic build.
+          if out=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>&1); then
+            gh release download "$TAG" -p site-data.zip -D "$RUNNER_TEMP"
+            mkdir -p "$RUNNER_TEMP/data"
+            unzip -q "$RUNNER_TEMP/site-data.zip" -d "$RUNNER_TEMP/data"
+            test -f "$RUNNER_TEMP/data/meta.json"
+            echo "args=--data $RUNNER_TEMP/data" >> "$GITHUB_OUTPUT"
+          elif echo "$out" | grep -q "HTTP 404"; then
+            echo "No $TAG release: building the synthetic demo."
+            echo "args=" >> "$GITHUB_OUTPUT"
+          else
+            echo "$out" >&2
+            exit 1
+          fi
+
+      - name: Build the site
+        run: uv run social-energy site-build studies/dsa-2026/study.yaml --out "$RUNNER_TEMP/site" ${{ steps.data.outputs.args }}
+
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: ${{ runner.temp }}/site
+
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
