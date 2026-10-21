@@ -291,9 +291,13 @@ def numbers(
     for r in rows("persistence"):
         if r["origin"] in ("ordinary", "excursion"):
             put(f"persistence_{r['origin']}", r.get("share"))
-    people = {r["people"] for r in rows("confirmatory")}
-    if len(people) == 1:
-        put("n_confirmatory", people.pop())
+    # The tests may rest on slightly different samples (missing outcomes); the copy names one
+    # count, so it is C1's, the first pre-registered test. No surviving C1 row, no count.
+    c1 = [r["people"] for r in rows("confirmatory") if r["test"] == "c1"]
+    if len(c1) == 1:
+        put("n_confirmatory", c1[0])
+    else:
+        log.append("numbers n_confirmatory: no single surviving C1 row; left out")
 
     c = company.filter(
         (pl.col("variant") == f"{cp.CLOSE_RSSI} dBm")

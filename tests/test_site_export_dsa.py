@@ -215,3 +215,22 @@ def test_copy_keys_are_inside_the_site_enumerations(script):
     assert {key for key, _ in script.TESTS.values()} <= set(aggregates.TESTS)
     assert {scale for _, scale in script.TESTS.values()} <= set(aggregates.SCALES)
     assert set(script.SPECIAL_DAYS) <= set(aggregates.DAY_KINDS)
+
+
+def test_confirmatory_count_is_c1_when_the_tests_differ(script):
+    df = pl.DataFrame(
+        {
+            "variant": ["main"] * 4,
+            "test": ["C1", "C2", "C4_trust", "C4_lust"],
+            "n": [30, 28, 26, 26],
+            "std_estimate": [0.1, -0.1, 1.1, 1.0],
+            "std_lo": [-0.2, -0.4, 0.9, 0.8],
+            "std_hi": [0.4, 0.2, 1.3, 1.2],
+        }
+    )
+    _, numbers, _ = run(script, {"confirmatory": script.confirmatory_rows(df, [])})
+    assert numbers["n_confirmatory"] == 30
+    # C1 under the small-cell rule: no count, even though the others survive.
+    df = df.with_columns(pl.Series("n", [4, 28, 26, 26]))
+    _, numbers, _ = run(script, {"confirmatory": script.confirmatory_rows(df, [])})
+    assert "n_confirmatory" not in numbers
