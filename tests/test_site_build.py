@@ -154,3 +154,12 @@ def test_synthetic_numbers_match_the_synthetic_camp(built):
     assert n["n_confirmatory"] <= n["n_participants"]
     people = [r["people"] for s, rows in agg.items() if s != "numbers" for r in rows]
     assert max(people) <= n["n_participants"]
+
+
+def test_page_carries_a_strict_content_security_policy(built):
+    html = (built / "index.html").read_text()
+    assert 'http-equiv="Content-Security-Policy"' in html
+    for directive in ("default-src 'self'", "script-src 'self'", "style-src 'self'",
+                      "base-uri 'none'", "form-action 'none'"):  # fmt: skip
+        assert directive in html, directive
+    assert "unsafe-" not in html
