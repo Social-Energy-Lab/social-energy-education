@@ -65,14 +65,21 @@ export function setLang(next, remember = false) {
   return lang;
 }
 
-/** For copy whose wording depends on a sign: `<base>_pos` or `<base>_neg`, and `<name>_abs`. */
+/**
+ * For copy whose wording depends on a sign: `<base>_pos` or `<base>_neg`, and `<name>_abs`.
+ * Without the number the key is null: no sentence can claim "more" or "fewer" next to a dash.
+ */
 export function signed(base, name, values = numbers) {
   const v = values?.[name];
-  const ok = typeof v === "number" && Number.isFinite(v);
-  return {
-    key: `${base}_${ok && v < 0 ? "neg" : "pos"}`,
-    extra: ok ? { [`${name}_abs`]: Math.abs(v) } : {},
-  };
+  if (typeof v !== "number" || !Number.isFinite(v)) return { key: null, extra: {} };
+  return { key: `${base}_${v < 0 ? "neg" : "pos"}`, extra: { [`${name}_abs`]: Math.abs(v) } };
+}
+
+/** A `[data-t]` node's copy: its key and extra values, and whether to hide it (no number). */
+export function copyOf(dataset, values = numbers) {
+  if (!dataset.tSign) return { key: dataset.t, extra: undefined, hidden: false };
+  const { key, extra } = signed(dataset.t, dataset.tSign, values);
+  return { key, extra, hidden: key === null };
 }
 
 export function setNumbers(values) {

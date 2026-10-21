@@ -139,12 +139,23 @@ test("signed copy: the sentence follows the sign, the number is shown without it
     key: "ch_moments_body3_neg",
     extra: { company_gain_abs: 0.4 },
   });
-  // No number: the neutral-looking positive form, with a dash for the value.
-  assert.equal(i18n.signed("x", "company_gain", {}).key, "x_pos");
+  // No number: no sentence at all, rather than "more" next to a dash.
+  assert.equal(i18n.signed("x", "company_gain", {}).key, null);
+  assert.equal(i18n.signed("x", "company_gain", { company_gain: Number.NaN }).key, null);
   i18n.setLang("de");
   i18n.setNumbers({ company_gain: -2 });
   const { key, extra } = i18n.signed("ch_moments_body3", "company_gain");
   assert.match(i18n.t(key, extra), /2 Menschen weniger/);
+});
+
+test("copyOf: a signed paragraph whose number is missing is hidden", () => {
+  assert.deepEqual(i18n.copyOf({ t: "a" }, {}), { key: "a", extra: undefined, hidden: false });
+  assert.deepEqual(i18n.copyOf({ t: "b", tSign: "company_gain" }, { company_gain: 1 }), {
+    key: "b_pos",
+    extra: { company_gain_abs: 1 },
+    hidden: false,
+  });
+  assert.equal(i18n.copyOf({ t: "b", tSign: "company_gain" }, {}).hidden, true);
 });
 
 // ----------------------------------------------------------------- chapters 4 and 6
