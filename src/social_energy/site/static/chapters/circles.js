@@ -16,6 +16,7 @@ import {
   onResize,
   slug,
   svgIn,
+  textWidth,
 } from "./chart.js";
 
 /** The hour of the special day the "show me on the network" button jumps to (local time). */
@@ -90,23 +91,28 @@ function lineChart(host, series, { meta, lang, t }) {
   };
   const top = 26;
   const bottom = 30;
-  const left = 40;
   const right = 12;
   const height = 250;
   const { svg, width } = svgIn(host, height, summary);
   const narrow = width < 560;
-  const x = d3
-    .scalePoint(
-      series.map((p) => p.day),
-      [left, width - right],
-    )
-    .padding(0.5);
   const max = d3.max(series, (p) => Math.max(p.observed, p.expected ?? 0)) ?? 100;
   const y = d3
     .scaleLinear()
     .domain([0, Math.min(100, Math.max(10, max * 1.1))])
     .nice()
     .range([height - bottom, top]);
+  const ticks = y.ticks(4);
+  const tickText = (d) => `${fmt(d)} %`;
+  // Room for the widest tick ("100 %"), so no tick runs off the left edge.
+  const tickW = textWidth(svg.append("g").attr("class", "axis"), ticks.map(tickText), "yt");
+  svg.select("g.axis").remove();
+  const left = Math.max(40, Math.ceil(tickW) + 10);
+  const x = d3
+    .scalePoint(
+      series.map((p) => p.day),
+      [left, width - right],
+    )
+    .padding(0.5);
   const step = x.step();
 
   // Special days: a soft band and a label above it.
@@ -125,7 +131,6 @@ function lineChart(host, series, { meta, lang, t }) {
     .attr("text-anchor", (s) => (x(s.p.day) > width * 0.75 ? "end" : x(s.p.day) < width * 0.25 ? "start" : "middle"))
     .text((s) => named(t, "label", s.label));
 
-  const ticks = y.ticks(4);
   svg
     .append("g")
     .attr("class", "grid")
@@ -145,7 +150,7 @@ function lineChart(host, series, { meta, lang, t }) {
     .attr("y", (d) => y(d))
     .attr("dy", "0.35em")
     .attr("text-anchor", "end")
-    .text((d) => `${fmt(d)} %`);
+    .text(tickText);
   const every = Math.max(1, Math.ceil(series.length / Math.floor((width - left) / (narrow ? 34 : 64))));
   ax.selectAll(".xt")
     .data(series.filter((_, i) => i % every === 0))
