@@ -26,8 +26,9 @@ STANDARD_GRAVITY = 9.80665
 SATURATED_US = 125.0
 SENTINEL_MAX_US = 0.0003
 
+#: A device in a sync group exports the synchronised clock; one outside it, its own.
+_CLOCKS = {"TimestampSync_Unix_CAL": "sync", "Timestamp_Unix_CAL": "device"}
 _COLUMNS = {
-    "TimestampSync_Unix_CAL": "ts_ms",
     "LIS2DW12_ACC_X_CAL": "ax",
     "LIS2DW12_ACC_Y_CAL": "ay",
     "LIS2DW12_ACC_Z_CAL": "az",
@@ -73,13 +74,17 @@ def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
         infer_schema_length=0,
     )
     names = {}
-    device = None
+    device = clock = None
     for col in df.columns:
         prefix, _, rest = col.partition("_")
         if rest in _COLUMNS:
             names[col] = _COLUMNS[rest]
             device = device or prefix
-    missing = set(_COLUMNS.values()) - set(names.values())
+        elif rest in _CLOCKS and clock != "sync":
+            names = {c: n for c, n in names.items() if n != "ts_ms"}
+            names[col] = "ts_ms"
+            clock = _CLOCKS[rest]
+    missing = ({*_COLUMNS.values(), "ts_ms"}) - set(names.values())
     if missing or device is None:
         raise ValueError(f"{path}: missing calibrated columns {sorted(missing)}")
     df = df.select(pl.col(c).cast(pl.Float64).alias(n) for c, n in names.items())
@@ -132,6 +137,7 @@ def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
         ppg_mv=df["ppg_mv"].to_numpy(),
         hr_bpm=np.where(hr > 0, hr, np.nan),
         qa={
+            "clock": clock,
             "records": n,
             "records_bad": int((~good).sum()),
             "segments": n_segments,

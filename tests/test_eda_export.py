@@ -94,3 +94,17 @@ def test_heart_rate_where_the_export_has_it(tmp_path):
     write_export(path, [T0_MS + i * STEP for i in range(200)], hr=[-1.0] * 100 + [72.0] * 100)
     e = read_export(path)
     assert np.isnan(e.hr_bpm[:100]).all() and np.allclose(e.hr_bpm[100:], 72.0)
+
+
+def test_unsynced_devices_export_a_plain_timestamp(tmp_path):
+    """Devices outside a sync group write Timestamp_Unix_CAL instead; same handling, and the
+    file records which clock it carried."""
+    path = tmp_path / "x_SH04_Calibrated_SD.csv"
+    write_export(path, [T0_MS + i * STEP for i in range(200)], device="SH04")
+    text = path.read_text().replace("SH04_TimestampSync_Unix_CAL", "SH04_Timestamp_Unix_CAL")
+    path.write_text(text)
+    e = read_export(path)
+    assert close(e.t, T0_MS / 1000 + np.arange(200) / 128)
+    assert e.qa["clock"] == "device"
+    write_export(path, [T0_MS + i * STEP for i in range(200)], device="SH04")
+    assert read_export(path).qa["clock"] == "sync"
