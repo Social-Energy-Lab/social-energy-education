@@ -70,8 +70,10 @@ def _local_to_bin(value: str, tz: ZoneInfo, inp: BundleInput) -> int:
     return min(max(k, 0), inp.n_bins)
 
 
-def _write(out_dir: Path, name: str, frame: dict[str, np.ndarray]) -> dict:
-    cols = COLUMNS[name]
+def _write(
+    out_dir: Path, name: str, frame: dict[str, np.ndarray], columns: dict | None = None
+) -> dict:
+    cols = (columns or COLUMNS)[name]
     count = len(frame[cols[0][0]])
     with (out_dir / f"{name}.bin").open("wb") as f:
         for col, dtype in cols:
