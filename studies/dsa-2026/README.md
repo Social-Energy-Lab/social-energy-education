@@ -39,7 +39,7 @@ Sundays follow a different schedule (brunch, afternoon plenum). Spontaneous, unp
 | Module | What | Who | Status in toolkit |
 |---|---|---|---|
 | Beacons | contact logs + room presence + self-report button + eco sessions | nearly all participants and staff; ~57 room/zone tags | ingest ✅ (`social_energy.beacons`); full delivery imported 2026-09-20 (13–29 Aug), checked against the delivered `Output/` tables, every disagreement explained (`docs/context/instruments/beacons.md`) |
-| EDA (Shimmer) | skin conductance (+HR?) during daytime sessions, 15–28 Aug | ~13–15 consenting participants | planned |
+| EDA (Shimmer) | skin conductance, PPG and motion during daytime sessions, 15–28 Aug; heart rate only in the 15–17 Aug exports | 15 devices, rotated daily among consenting participants | ingested (`social-energy ingest-eda`) |
 | Acoustics (AudioMoth ×2) | scheduled recordings in dining hall and main hall | spaces, not persons | features + verified deletion ✅ (`social_energy.acoustics`) |
 | Survey (SurveyJS on zeitgeist-platform) | baseline questionnaire, right after the AI interview | 88 respondents after exclusions | download ✅ (`fetch-zeitgeist`), ingest ✅ (`social_energy.survey`); scoring planned |
 | Interviews | in-person during (DJI Mic 3); AI voice before (zeitgeist-platform, 99 calls after exclusions) | subsets | AI interviews: download ✅ (`fetch-zeitgeist`); content is qualitative, out of scope for code |
@@ -102,5 +102,5 @@ Consent is now recorded per person and module in the team's roster (20 Sep 2026)
 - `[unknown: firmware commit + settings flashed at arrival; exact list of setting changes]`
 - `[unknown: were location tags read out, and do they hold contact data?]`
 - `[unknown: survey post-wave fielded?]`
-- `[unknown: EDA export format]` (the device-distribution plan per day is coming from Mahdi, no date yet)
+- EDA export format: resolved 2026-10-21. The delivery holds byte copies of the SD cards plus the Shimmer Base export of 15–17 Aug, with the per-day device assignment; format and traps in [`docs/context/instruments/eda.md`](../../docs/context/instruments/eda.md).
 - `[unknown: AudioMoth schedules per day; do WAVs still exist?]`

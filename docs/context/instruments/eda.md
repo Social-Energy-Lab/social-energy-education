@@ -1,6 +1,6 @@
 # Instrument: EDA / heart-rate wearables (Shimmer3R GSR+)
 
-Status: **ingest built** (`social_energy.eda`). Reads SD-card logs and Shimmer Base calibrated CSV exports.
+Status: **ingest built** (`social_energy.eda`, `social-energy ingest-eda`). Reads SD-card logs and Shimmer Base calibrated CSV exports.
 
 ## What it measures
 
@@ -64,7 +64,10 @@ PPG mV = ADC · 3000/4095.
 
 - The tick counter wraps every 2²⁴ / 32768 = **512 s**. The Shimmer software mishandles the wrap: **every absolute timestamp it produces (database, CSV export) has spurious whole 512-s periods inserted.** The sensor values are sound.
 - On the SD card the counter itself is reliable between records, and the **file modification time** of each chunk is the device's clock when the file was closed. An SD timeline is the tick counter, unwrapped, placed by a fit to the modification times.
-- In an export, the first sample's timestamp is right; later ones carry the spurious periods. Removing whole 512-s periods from each step restores the time axis, provided no real gap inside one export reaches 512 s.
+- Devices close a chunk and open the next on a fixed wall-clock rotation (an hour). So a chunk closed by rotation also dates its **first** record (modification time minus the rotation), which survives when the chunk lost its tail. Each chunk gives an end anchor (unless truncated) and a start anchor (if rotated).
+- A device can stop and resume at a counter value that looks like the next sample, after a whole number of 512-s wraps. The counter cannot see such a gap; the anchors can (their residuals step by k × 512 s), and the segment is split there.
+- In an export, the first sample's timestamp is right, and every later one is right **modulo 512 s** (checked sample by sample against SD cards). The ticks are rebuilt from the timestamps and handled like an SD card; a segment after a gap is placed at the smallest gap that agrees modulo 512 s. A real pause beyond the step limit could hide whole wraps, so such segments are flagged `gap_ambiguous`.
+- Device clocks are not exactly in step with each other: placing SD data by a device's own modification times, a device can sit some seconds off the synchronised export clock (up to ~15 s on one DSA 2026 device-day). Treat cross-device timing as good to tens of seconds unless corrected against an export.
 - FAT stores modification times to 2 s, so devices align with each other to about ±2 s: fine for EDA, not for beat-level or sub-second synchrony.
 - **Modification times are metadata, not content.** A plain copy resets them. Copy with `cp -p`, `rsync -a`, or keep the archive. An archive (zip) may store them as naive wall-clock time in some other zone than the device's; measure the offset against an export's first sample before trusting it (see the study config).
 
@@ -92,8 +95,13 @@ PPG mV = ADC · 3000/4095.
 
 ## Canonical tables
 
-- `files`: one row per chunk or export file: device, source, path, records, placement, anchor residual, flags.
-- `seconds`: one row per device-second (UTC): source, samples, conductance (mean µS), valid share, range, motion (mean and SD of |a| in g), PPG mean, heart rate where the export carries it, flags (`duplicate`, `unanchored`, `implausible_time`), `ok`.
-- `wear`: device, start, end, worn.
-- `scr`: device, onset, peak, amplitude (µS), rise time.
-- Person-level, after the spine: one row per person-minute with worn seconds, conductance, SCR count and amplitude, motion, heart rate.
+`social-energy ingest-eda` writes them to `derived/eda/`:
+
+- `files`: one row per chunk or export file: device, source, run, path, records (bad, unanchored, placed, implausible), start, end, `truncated`, `duplicate` (a byte-identical copy, not read).
+- `seconds`: one row per device-second and source (UTC): samples, GSR samples, conductance (mean µS of valid readings), range, motion (mean and SD of |a| in g), PPG mean, heart rate where the export carries it; flags `gap_ambiguous`, `duplicate` (another source covers the second; SD wins), `implausible_time`; `ok`; `contact` (conductance ≥ 0.05 µS) and `worn` (inside a wear bout).
+- `wear`: device, start, end (half-open), contact seconds. Contact gaps up to 60 s are bridged; bouts under 5 min dropped.
+- `scr`: device, source, onset, peak, amplitude (µS), rise time, `ok`, `worn`. Trough-to-peak on 4 Hz, 1 s smoothing, ≥ 0.05 µS within 0.5–5 s; onset at the last point within 5% of the rise.
+- `person_minutes`: after the spine, one row per person-minute with worn seconds, mean and median conductance, motion SD, heart rate, SCR count and summed amplitude, `excluded`. People without EDA consent are not in it.
+- Records with no time (bad, unanchored) are counted in `qa.json`, never placed.
+
+The wear and SCR thresholds are conventional defaults `[inferred]`, configurable, for the research team to review.

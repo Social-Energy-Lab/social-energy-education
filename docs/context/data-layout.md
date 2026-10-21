@@ -39,7 +39,8 @@ $SOCIAL_ENERGY_DATA/              the data root, and the private repo
                                   it stays with the project lead (see Rules below)
     raw/                          instrument data exactly as delivered, one folder per instrument
       beacons/                    logger files
-      eda/                        wearable exports
+      eda/sd-cards/<card>/        Shimmer SD cards, copied with their modification times
+      eda/imported/<export>/      Shimmer Base CSV exports (may list names: keep here)
       audiomoth/<device>/         ambient WAVs (temporary: features, then deletion)
       interview-audio/<kit>/<tx>/ in-person interview audio (temporary: transcripts, then deletion)
       ai-interviews/<platform>/<agent>/   AI interview exports (one folder per interview agent / wave)
@@ -55,7 +56,7 @@ $SOCIAL_ENERGY_DATA/              the data root, and the private repo
 | Source | How it reaches `raw/` | Lands in |
 |---|---|---|
 | Beacons | copy the raw logger files as delivered (the unmodified ones, if a delivery has several versions); keep other versions outside `raw/beacons/`, since the ingest reads every `.log` under it | `raw/beacons/` |
-| EDA | wearable export `[unknown: export format]` | `raw/eda/` |
+| EDA | copy each SD card as it is, **keeping modification times** (`cp -p`, `rsync -a`, or the archive): they are the only absolute clock. Measure the offset of the copy against an export's first timestamp and set `eda.mtime_to_utc_s` in `study.yaml`. Calibrated exports go beside them. Then `social-energy ingest-eda studies/<id>/study.yaml` | `raw/eda/sd-cards/<card>/`, `raw/eda/imported/<export>/` |
 | AudioMoth | copy each card as it is, one folder per device | `raw/audiomoth/<device>/` |
 | In-person interviews | copy each transmitter's volume, keeping the original folders (see [`instruments/qualitative.md`](instruments/qualitative.md)) | `raw/interview-audio/<kit>/<tx>/` |
 | AI interviews + survey | `social-energy fetch-zeitgeist studies/<id>/study.yaml` (below) | `raw/ai-interviews/zeitgeist/<agent>/`, `raw/survey/zeitgeist/<agent>/` |
