@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { homes, pairKey, Sim } from "../../src/social_energy/site/static/layout.js";
+import { easeView, fitView, homes, pairKey, Sim } from "../../src/social_energy/site/static/layout.js";
 
 const meanAngle = (h, course, nodeCourse) => {
   let x = 0;
@@ -70,4 +70,33 @@ test("two coincident nodes do not produce NaN", () => {
   s.pos.fill(0);
   s.step(new Map([[pairKey(0, 1), 1]]), Uint8Array.from([1, 1]));
   assert.ok(Array.from(s.pos).every(Number.isFinite));
+});
+
+test("fitView keeps every node inside the box, clear of the top band", () => {
+  // Nodes spread wider than the default scale allows: x in [-2, 2], y in [-1, 3].
+  const pos = Float32Array.from([-2, -1, 2, 3, 0, 0]);
+  const w = 400;
+  const h = 300;
+  const v = fitView(pos, w, h, { top: 60, pad: 10 });
+  for (let i = 0; i < 3; i++) {
+    const x = v.cx + pos[2 * i] * v.s;
+    const y = v.cy - pos[2 * i + 1] * v.s;
+    assert.ok(x >= 10 - 1e-9 && x <= w - 10 + 1e-9, `x ${x}`);
+    assert.ok(y >= 70 - 1e-9 && y <= h - 10 + 1e-9, `y ${y}`);
+  }
+});
+
+test("fitView never zooms in past the default scale", () => {
+  const pos = Float32Array.from([0, 0, 0.01, 0.01]);
+  const v = fitView(pos, 600, 600, { top: 0, pad: 10 });
+  assert.equal(v.s, 600 / 2.9);
+});
+
+test("easeView moves part of the way and reports when it has arrived", () => {
+  const a = { cx: 0, cy: 0, s: 100 };
+  const b = { cx: 100, cy: 0, s: 100 };
+  const m = easeView(a, b, 0.25);
+  assert.equal(m.cx, 25);
+  assert.equal(m.moving, true);
+  assert.equal(easeView(b, b, 0.25).moving, false);
 });

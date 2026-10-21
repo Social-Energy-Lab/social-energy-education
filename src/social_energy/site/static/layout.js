@@ -132,3 +132,51 @@ export class Sim {
     return this.n ? s / this.n : 0;
   }
 }
+
+/** World units across the short side at the default scale: clusters may sit past the ring. */
+export const DEFAULT_SPAN = 2.9;
+
+/**
+ * The view {cx, cy, s} (centre in px, px per world unit) that fits every node of `pos` into a
+ * w × h box below a reserved `top` band, `pad` px from each edge. It shrinks to fit but never
+ * zooms in past the default scale, so a calm camp looks as it always did.
+ */
+export function fitView(pos, w, h, { top = 0, pad = 12 } = {}) {
+  const base = Math.min(w, h) / DEFAULT_SPAN;
+  const n = pos.length / 2;
+  if (!n) return { cx: w / 2, cy: h / 2, s: base };
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = pos[2 * i];
+    const y = pos[2 * i + 1];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    x0 = Math.min(x0, x);
+    x1 = Math.max(x1, x);
+    y0 = Math.min(y0, y);
+    y1 = Math.max(y1, y);
+  }
+  if (x0 > x1) return { cx: w / 2, cy: h / 2, s: base };
+  const aw = Math.max(1, w - 2 * pad);
+  const ah = Math.max(1, h - top - 2 * pad);
+  const s = Math.min(base, aw / Math.max(x1 - x0, 1e-6), ah / Math.max(y1 - y0, 1e-6));
+  const clamp = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
+  // The world origin stays where the default view puts it unless that would cut a node.
+  const cx = clamp(w / 2, pad - x0 * s, w - pad - x1 * s);
+  const cy = clamp(h / 2, top + pad + y1 * s, h - pad + y0 * s);
+  return { cx, cy, s };
+}
+
+/** One step of `from` toward `to` by fraction `k`; `moving` until within half a pixel. */
+export function easeView(from, to, k = 0.15) {
+  const step = (a, b) => a + (b - a) * k;
+  const moving =
+    Math.abs(from.cx - to.cx) > 0.5 ||
+    Math.abs(from.cy - to.cy) > 0.5 ||
+    Math.abs(from.s - to.s) > 0.005 * to.s;
+  return moving
+    ? { cx: step(from.cx, to.cx), cy: step(from.cy, to.cy), s: step(from.s, to.s), moving }
+    : { ...to, moving };
+}

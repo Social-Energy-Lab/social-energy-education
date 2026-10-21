@@ -3,7 +3,7 @@
 // are camp_breathes.py's: a sliding two-hour window, a tie when two people were close in at
 // least three of its 5-minute bins, a glow that fades over 40 minutes after a press.
 import * as model from "./model.js";
-import { homes, pairKey, Sim } from "./layout.js";
+import { DEFAULT_SPAN, easeView, fitView, homes, pairKey, Sim } from "./layout.js";
 
 export const WINDOW_BINS = 24;
 export const MIN_BINS = 3;
@@ -194,6 +194,10 @@ export function mountPlayer(root, site, t, opts = {}) {
   let colors = {};
   let sprite = null;
   let size = { w: 0, h: 0, dpr: 1 };
+  // The camera: eased toward a view that fits every dot below the date block.
+  let cam = null;
+  let camMoving = false;
+  let topBand = 0;
 
   function readColors() {
     // The stage is a night sky in both themes, so the canvas uses the hero's own tokens.
@@ -249,6 +253,7 @@ export function mountPlayer(root, site, t, opts = {}) {
         return t(key) === key ? d.label : t(key);
       });
     whenNote.textContent = notes.join(" · ");
+    measureTop();
     scrub.value = String(index);
     scrub.setAttribute("aria-valuetext", `${whenDay.textContent}, ${whenClock.textContent}`);
     const day = b.bins.day[bin];
@@ -287,24 +292,40 @@ export function mountPlayer(root, site, t, opts = {}) {
   }
 
   // --- drawing
+  /** The band the date block covers, so the drawing stays clear of it. */
+  function measureTop() {
+    topBand = when.offsetHeight ? when.offsetTop + when.offsetHeight + 6 : 0;
+  }
+
   function resize() {
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     size = { w: rect.width, h: rect.height, dpr };
     canvas.width = Math.max(1, Math.round(rect.width * dpr));
     canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    measureTop();
+    cam = null;
     draw();
   }
 
-  function draw() {
+  /** Draw the frame; `ease` moves the camera a step toward the fit, else it jumps there. */
+  function draw(ease = false) {
     const ctx = canvas.getContext("2d");
     const { w, h, dpr } = size;
     if (!w || !h) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const s = Math.min(w, h) / 2.9; // world units [-1.45, 1.45] fit the short side: clusters sit past the ring
-    const cx = w / 2;
-    const cy = h / 2;
+    const base = Math.min(w, h) / DEFAULT_SPAN; // dot and line sizes do not follow the zoom
+    const r = Math.max(2.6, Math.min(6, base * 0.028));
+    const target = fitView(sim.pos, w, h, { top: topBand, pad: 2 * r + 4 });
+    if (!cam || !ease) {
+      cam = target;
+      camMoving = false;
+    } else {
+      cam = easeView(cam, target, 0.08);
+      camMoving = cam.moving;
+    }
+    const { cx, cy, s } = cam;
     const pos = sim.pos;
     const X = (i) => cx + pos[2 * i] * s;
     const Y = (i) => cy - pos[2 * i + 1] * s;
@@ -333,7 +354,7 @@ export function mountPlayer(root, site, t, opts = {}) {
       if (!list) batches.set(key, (list = []));
       list.push(i, j);
     }
-    ctx.lineWidth = Math.max(0.8, s * 0.004);
+    ctx.lineWidth = Math.max(0.8, base * 0.004);
     for (const [key, list] of batches) {
       const [c, level] = key.split("|");
       ctx.strokeStyle = c === "x" ? colors.ink : courseColor(+c);
@@ -347,7 +368,6 @@ export function mountPlayer(root, site, t, opts = {}) {
     }
 
     // Glow of recent presses.
-    const r = Math.max(2.6, Math.min(6, s * 0.028));
     const now = shown.length ? shown[Math.floor(head)] + (head - Math.floor(head)) : 0;
     const glow = glowAt(b.presses, now, n);
     ctx.globalCompositeOperation = "lighter";
@@ -422,8 +442,8 @@ export function mountPlayer(root, site, t, opts = {}) {
       load(Math.floor(head));
     }
     sim.step(weights, vis, Math.max(1, Math.min(8, Math.round(dt * 120))));
-    draw();
-    const moving = playing || sim.energy() > 0.0004 || ts < nightUntil;
+    draw(true);
+    const moving = playing || sim.energy() > 0.0004 || ts < nightUntil || camMoving;
     // setPlaying(false) at the end of the timeline may already have scheduled a frame.
     if (raf) return;
     if (moving && onscreen) raf = requestAnimationFrame(frame);
