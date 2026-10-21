@@ -79,11 +79,11 @@ eda:
   # Chunks rotate by sample count (3600.2 s of device time), not wall time; the chunk header,
   # not the modification time, places the data. mtime_to_utc_s is the fallback only.
   rotation_s: 3600
-  # Clock correction (docs/context/instruments/eda.md, "Clock"). Five units ran slow while
+  # Clock correction (docs/context/instruments/eda.md, "Clock"). Some units ran slow while
   # recording; the sync records on the cards measure each unit against the sync master.
   clock:
     # Units whose clocks agree with one another to < 1 s and drift < 0.1 s/h (forensics,
-    # 2026-10-21): their sync records define the reference. SH03 sits a constant 1.5-3 s off
+    # 2026-10-21): their sync records define the reference. SH03 sits a constant offset from
     # them, so it is corrected, not a reference.
     reference_devices: [SH02, SH06, SH07, SH08, SH11, SH12, SH15]
     # The reference group against UTC. Not measurable from the cards; the plenum AudioMoth

@@ -1,6 +1,6 @@
 # Instrument: EDA / heart-rate wearables (Shimmer3R GSR+)
 
-Status: **ingest built** (`social_energy.eda`, `social-energy ingest-eda`). Reads SD-card logs and Shimmer Base calibrated CSV exports.
+Status: **ingest built** (`social_energy.eda`, `social-energy ingest-eda`). Reads SD-card logs and Shimmer Base calibrated CSV exports, and corrects device clocks from the cards' sync records.
 
 ## What it measures
 
@@ -31,10 +31,25 @@ Each chunk file:
 
 | Bytes | Content |
 |---|---|
-| 0–383 | header. Bytes 0–1: sample-rate divisor, little-endian (32768 / 256 = 128 Hz) |
-| 384… | blocks of 503 bytes: 9 bytes `0xFF` filler, then 38 records of 13 bytes |
+| 0–383 | header (below) |
+| 384… | blocks of 503 bytes: a 9-byte sync slot, then 38 records of 13 bytes |
 
-A full hour is 384 + 12,127 × 503 = 6,100,265 bytes (460,826 samples). Each record, little-endian:
+A full chunk is 384 + 12,127 × 503 = 6,100,265 bytes (460,826 samples). Chunks rotate by **sample count**, not wall time: a full chunk is 3600.2 s of the device's own clock.
+
+Header fields used (all other bytes are configuration that is the same on every unit, or zeros; no GSR or inertial calibration is stored per device):
+
+| Bytes | Field |
+|---|---|
+| 0–1 | sample-rate divisor, little-endian (32768 / 256 = 128 Hz) |
+| 16 | `0x37` sync master, `0x35` slave |
+| 17 | bit 0: sync on |
+| 44–51 | clock origin, ticks, big-endian (the same on every unit) |
+| 52–55 | configuration time, Unix seconds, big-endian (the session folder's number) |
+| 251–255 | **device clock at the chunk's first record**: 40-bit tick count (byte 251 the high byte, 252–255 little-endian). Device time = (count + origin) / 32768 s; its low 24 bits are the record's tick counter |
+
+The sync slot is `0xFF` except, about once an hour on a unit in a sync group, for a **sync record**: a sign byte (0 +, 1 −) and an 8-byte little-endian tick count, the unit's clock minus the sync master's at that block. Corrupt blocks hold lookalikes: a record counts only if its block's first record is good, and the clock model screens the rest.
+
+Each record, little-endian:
 
 | Bytes | Field |
 |---|---|
@@ -62,14 +77,28 @@ PPG mV = ADC · 3000/4095.
 
 ## Clock
 
+### Placement on the device's clock
+
 - The tick counter wraps every 2²⁴ / 32768 = **512 s**. The Shimmer software mishandles the wrap: **every absolute timestamp it produces (database, CSV export) has spurious whole 512-s periods inserted.** The sensor values are sound.
-- On the SD card the counter itself is reliable between records, and the **file modification time** of each chunk is the device's clock when the file was closed. An SD timeline is the tick counter, unwrapped, placed by a fit to the modification times.
-- Devices close a chunk and open the next on a fixed wall-clock rotation (an hour). So a chunk closed by rotation also dates its **first** record (modification time minus the rotation), which survives when the chunk lost its tail. Each chunk gives an end anchor (unless truncated) and a start anchor (if rotated).
+- On the SD card the counter is reliable between records, and the **chunk header** holds the device's full clock at the chunk's first record, to the tick. An SD timeline is the tick counter, unwrapped and placed by the headers. The header dates even a chunk that lost its tail, and places runs whose modification times are useless.
+- The **file modification time** (the device's clock when the file closed, stored to 2 s) is a fallback for a segment without a usable header, flagged, and a plausibility check otherwise (disagreements are counted in QA). Modification times are metadata, not content: a plain copy resets them (copy with `cp -p`, `rsync -a`, or keep the archive), and an archive may store them as naive wall-clock time in another zone (see the study config).
 - A device can stop and resume at a counter value that looks like the next sample, after a whole number of 512-s wraps. The counter cannot see such a gap; the anchors can (their residuals step by k × 512 s), and the segment is split there.
-- In an export, the first sample's timestamp is right, and every later one is right **modulo 512 s** (checked sample by sample against SD cards). The ticks are rebuilt from the timestamps and handled like an SD card; a segment after a gap is placed at the smallest gap that agrees modulo 512 s. A real pause beyond the step limit could hide whole wraps, so such segments are flagged `gap_ambiguous`.
-- Device clocks are not exactly in step with each other: placing SD data by a device's own modification times, a device can sit some seconds off the synchronised export clock (up to ~15 s on one DSA 2026 device-day). Treat cross-device timing as good to tens of seconds unless corrected against an export.
-- FAT stores modification times to 2 s, so devices align with each other to about ±2 s: fine for EDA, not for beat-level or sub-second synchrony.
-- **Modification times are metadata, not content.** A plain copy resets them. Copy with `cp -p`, `rsync -a`, or keep the archive. An archive (zip) may store them as naive wall-clock time in some other zone than the device's; measure the offset against an export's first sample before trusting it (see the study config).
+- In an export, the first sample's timestamp is right, and every later one is right **modulo 512 s**. The ticks are rebuilt from the timestamps and handled like an SD card; a segment after a gap is placed at the smallest gap that agrees modulo 512 s. A real pause beyond the step limit could hide whole wraps, so such segments are flagged `gap_ambiguous`.
+
+### Device clocks drift, and the sync records measure it
+
+- **Some units run slow while they record**, by a rate roughly fixed per unit, up to a few percent (minutes per working day); units that keep time agree to under a second. The error grows within a run; the clocks are usually **re-set when a unit is started** from the base [inferred], so it does not build up over days, but not always (a unit started without the base keeps its error). The model assumes a re-set only where it has no records. A slow clock also samples slowly, so anything measured in seconds on such a unit (SCR rise time, intervals) is scaled by the same fraction.
+- File rotation runs on the same clock, so neither the headers nor the modification times can show the drift. The **sync records** can: in a sync group, each slave writes its offset to the master about hourly. The master can itself be slow, and a day can have more than one master.
+- **The export's "synchronised" clock does not correct drift.** Shimmer Base writes the device's clock minus one sync offset per file (or none). Treat an export's clock as its device's clock plus an unknown constant.
+- `eda.clock` corrects every run (`social-energy ingest-eda`):
+  1. Per local day, the **reference units** (`study.yaml`: units known to keep time) give the master's curve, reference minus master, followed piecewise-linearly through their records. A day with several masters can have several curves.
+  2. A slave's record gives its error against the reference: its offset minus the curve, read at the reference time. Per run, a robust line keeps the records that agree (choosing, per record, the curve it fits), and the error is followed through them, extrapolated with the run's fitted rate.
+  3. The master's error is minus its curve. A master run started after the curve's last record (re-set then) is not described by it.
+  4. A run with no usable record (sync off, a unit that never synced, a day without reference records) gets its **unit's typical rate** from the start of the run, or a rate set in the study config, and is flagged `clock_uncertain`; so are times more than 3 h from the records of a drifting unit's run.
+  5. An export is matched to the SD run of its device (8 Hz conductance, cross-correlated): the lag is the export's constant, removed before the run's model applies. Without a match the export gets its unit's fallback, flagged.
+- Corrected time is the **reference group's** time. Its own error against UTC cannot be seen in the cards; the study config sets it (`reference_to_utc_s`), from the best external events available, with its uncertainty.
+- **Check:** after hand-in the devices lie together and share every bump. `ingest-eda` cross-correlates their motion in the windows the study config lists, per pair over sub-windows, and reports each device-day's residual (`comotion.parquet`, `qa.json`). Devices lying together agree to a few hundredths of a second; the corrected clocks should agree to about a second.
+- An export can have **no clock at all** (`-1` in every timestamp). It is placed from the corrected start of the other exports of its session (the units were started together), or from a start set in the study config, by its sample index (pauses in sampling are invisible then), and flagged `clock_uncertain`.
 
 ## Known traps
 
@@ -78,8 +107,12 @@ PPG mV = ADC · 3000/4095.
 | Session folder names do not date the data | dates from the timeline only |
 | Short runs of all-zero records, and bursts of out-of-sequence tick values | flagged `bad_record`, left off the timeline, counted in QA |
 | Sampling pauses of ~28.7 s (device busy, likely sync), and single dropped samples | real elapsed time: the counter shows it, the timeline follows it |
-| A chunk truncated to a 4 KiB boundary while its modification time still marks the full hour | not used as an anchor; placed by the counter from its neighbours |
-| Modification times outside the study (set when a card was read out later, or 1970 from an unset clock) | not used as anchors; segments with no usable anchor are flagged `unanchored` |
+| A chunk truncated to a 4 KiB boundary while its modification time still marks the full hour | placed by its header; its modification time is not an anchor |
+| Header or modification times outside the study (a card read out later, a clock never set) | not used as anchors; segments with no usable anchor are flagged `unanchored` |
+| Units whose clocks run slow, by up to a few percent | corrected per run from the sync records (`eda.clock`); `clock_uncertain` where only the unit's typical rate applies |
+| Sync-record lookalikes in corrupt blocks | only records in a good block count; a robust fit per run drops the rest |
+| A day with two sync masters (slaves sync to either) | one curve per master; each record is read against the curve it fits |
+| Export timestamps all `-1` | placed from the session's corrected start by sample index, flagged `clock_uncertain` |
 | Gaps the counter cannot bridge (≥ 1 min between consecutive records) | the run splits into segments, each placed by its own anchors |
 | Duplicate run folders from copying (`<DEV>-<run> 2`) | byte-identical chunks dropped; complementary halves kept |
 | Byte-identical export files under two session names | dropped as duplicates |
@@ -97,11 +130,13 @@ PPG mV = ADC · 3000/4095.
 
 `social-energy ingest-eda` writes them to `derived/eda/`:
 
-- `files`: one row per chunk or export file: device, source, run, path, records (bad, unanchored, placed, implausible), start, end, `truncated`, `duplicate` (a byte-identical copy, not read).
-- `seconds`: one row per device-second and source (UTC): samples, GSR samples, conductance (mean µS of valid readings), range, motion (mean and SD of |a| in g), PPG mean, heart rate where the export carries it; flags `gap_ambiguous`, `duplicate` (another source covers the second; SD wins), `implausible_time`; `ok`; `contact` (conductance ≥ 0.05 µS) and `worn` (inside a wear bout).
-- `wear`: device, start, end (half-open), contact seconds. Contact gaps up to 60 s are bridged; bouts under 5 min dropped.
-- `scr`: device, source, onset, peak, amplitude (µS), rise time, `ok`, `worn`. Trough-to-peak on 4 Hz, 1 s smoothing, ≥ 0.05 µS within 0.5–5 s; onset at the last point within 5% of the rise.
-- `person_minutes`: after the spine, one row per person-minute with worn seconds, mean and median conductance, motion SD, heart rate, SCR count and summed amplitude, `excluded`. People without EDA consent are not in it.
+- `files`: one row per chunk or export file: device, source, run, path, records (bad, unanchored, placed, implausible, placed by modification time), start, end, `truncated`, `duplicate` (a byte-identical copy, not read), `clock_model` (`sync`, `master`, `rate`; exports `sd-…` when matched to their card), `clock_uncertain`, `clock_correction_s` (median); exports also `clock` (`sync`, `device`, `recovered`, `none`), `export_offset_s` (the measured constant) and `matched_run`.
+- `seconds`: one row per device-second and source (UTC): samples, GSR samples, conductance (mean µS of valid readings), range, motion (mean and SD of |a| in g), PPG mean, heart rate where the export carries it; `clock_correction_s` (corrected minus device time); flags `gap_ambiguous`, `clock_uncertain`, `duplicate` (another source covers the second; SD wins), `implausible_time`; `ok`; `contact` (conductance ≥ 0.05 µS) and `worn` (inside a wear bout).
+- `wear`: device, start, end (half-open), contact seconds, `clock_uncertain` (any second of the bout). Contact gaps up to 60 s are bridged; bouts under 5 min dropped.
+- `clock`: one row per run: the model kind, records and inliers, error rate (s per device hour), error at start and end, `uncertain`.
+- `comotion`: per device and window where devices lay together, the residual of its corrected clock against the others and the pairs it rests on.
+- `scr`: device, source, onset, peak, amplitude (µS), rise time, `ok`, `worn`, `clock_uncertain`. Trough-to-peak on 4 Hz, 1 s smoothing, ≥ 0.05 µS within 0.5–5 s; onset at the last point within 5% of the rise.
+- `person_minutes`: after the spine, one row per person-minute with worn seconds, mean and median conductance, motion SD, heart rate, SCR count and summed amplitude, `excluded`, `clock_uncertain`. People without EDA consent are not in it.
 - Records with no time (bad, unanchored) are counted in `qa.json`, never placed.
 
 The wear and SCR thresholds are conventional defaults `[inferred]`, configurable, for the research team to review.
