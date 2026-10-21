@@ -61,7 +61,7 @@ export default {
   intro_body:
     "Manche Momente tragen eine Gruppe: ein Abend, an dem alle bleiben, ein Gespräch, das nicht aufhören will. Wir nennen das soziale Energie. Messen lässt sie sich nicht direkt. Aber sie hinterlässt Spuren: wer zusammen ist, wie lange, und wann sich jemand bewegt fühlt. Diese Spuren, wir nennen sie Signaturen, haben wir während der Akademie aufgezeichnet.",
   intro_body2:
-    "{n_participants} Teilnehmende haben Armbänder getragen und insgesamt {n_presses}-mal gedrückt. Was folgt, sind die Spuren, denen wir nachgehen, und eine Prüfung, die wir vorab festgelegt haben.",
+    "{n_participants} Teilnehmende haben Armbänder getragen und außerhalb der Nachtstunden {n_presses}-mal gedrückt. Was folgt, sind die Spuren, denen wir nachgehen, und eine Prüfung, die wir vorab festgelegt haben.",
   tier_confirmatory: "Vorab festgelegt",
   tier_exploratory: "Eine Spur, kein Beweis",
   chart_pending: "Die Grafik zu diesem Kapitel folgt bald.",
@@ -171,7 +171,7 @@ export default {
   ch_how_privacy_title: "Was wir zum Schutz aller tun",
   privacy_names: "Keine Namen und keine Kennungen. Niemand lässt sich hier anklicken oder suchen.",
   privacy_courses: "Die Kurse sind nicht beschriftet, Farben und Plätze auf dem Ring sind gemischt.",
-  privacy_night: "Die Nächte, zwischen Mitternacht und sechs Uhr, zeigen wir nicht.",
+  privacy_night: "Das Netz zeigt die Nächte zwischen Mitternacht und sechs Uhr nicht; im Vergleich der Orte erscheinen sie nur als ein einziger Balken für die ganze Akademie.",
   privacy_staff: "Kursleitungen und Team sind nicht zu sehen, nur Teilnehmende.",
   privacy_presses: "Drücke zeigen wir nur auf fünf Minuten genau, nicht auf die Sekunde.",
   privacy_groups: "Jede Zahl beruht auf mindestens fünf Personen. Kein Ergebnis gilt für einen einzelnen Kurs.",

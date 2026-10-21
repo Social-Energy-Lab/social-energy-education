@@ -60,7 +60,7 @@ export default {
   intro_body:
     "Some moments carry a group: an evening when nobody wants to leave, a conversation that won't end. We call this social energy. It can't be measured directly. But it leaves traces: who is together, for how long, and when someone feels moved. We call these traces signatures, and we recorded them during the academy.",
   intro_body2:
-    "{n_participants} participants wore wristbands and pressed {n_presses} times in all. What follows are the traces we are following up, and one test we fixed in advance.",
+    "{n_participants} participants wore wristbands and pressed {n_presses} times outside the night hours. What follows are the traces we are following up, and one test we fixed in advance.",
   tier_confirmatory: "Fixed in advance",
   tier_exploratory: "A lead, not proof",
   chart_pending: "The chart for this chapter is coming soon.",
@@ -170,7 +170,7 @@ export default {
   ch_how_privacy_title: "What we do to protect everyone",
   privacy_names: "No names and no IDs. Nobody can be clicked on or searched for here.",
   privacy_courses: "Courses are not labelled; colours and places on the ring are shuffled.",
-  privacy_night: "The nights, between midnight and six in the morning, are not shown.",
+  privacy_night: "The network does not show the nights between midnight and six in the morning; the comparison of places shows them only as a single bar for the whole academy.",
   privacy_staff: "Course leaders and staff are not shown, only participants.",
   privacy_presses: "Presses are shown to the nearest five minutes, not to the second.",
   privacy_groups: "Every number rests on at least five people. No result is about a single course.",
