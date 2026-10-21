@@ -20,7 +20,7 @@ import polars as pl
 from . import calibration, sd
 from .export import SATURATED_US, export_device, read_export
 from .features import ScrConfig, WearConfig, artifact_seconds, detect_scr, wear_bouts
-from .timeline import ChunkInfo, TimelineConfig, place_run
+from .timeline import ChunkInfo, RunTimeline, TimelineConfig, place_run
 
 SECONDS_SCHEMA = {
     "device": pl.String,
@@ -178,7 +178,10 @@ def _sha256(path: Path) -> str:
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-def _process_run(device: str, run: sd.SdRun, keep: list[Path], config: EdaConfig):
+def place_sd_run(
+    run: sd.SdRun, keep: list[Path], config: EdaConfig
+) -> tuple[list[sd.SdChunk], list[ChunkInfo], RunTimeline]:
+    """Decode the chunks ``keep`` of ``run`` and place their records in time."""
     chunks = [sd.read_chunk(p) for p in keep]
     present = {int(p.name) for p in run.chunks}
     infos = [
@@ -190,6 +193,32 @@ def _process_run(device: str, run: sd.SdRun, keep: list[Path], config: EdaConfig
         for p, c in zip(keep, chunks, strict=True)
     ]
     tl = place_run([c.ticks for c in chunks], [c.zero for c in chunks], infos, config.timeline())
+    return chunks, infos, tl
+
+
+def unique_sd_runs(
+    runs: list[sd.SdRun], seen: set[str]
+) -> tuple[list[tuple[sd.SdRun, list[Path]]], list[tuple[sd.SdRun, Path]]]:
+    """One device's runs, most complete copy first, each with its chunks not byte-identical
+    to one already taken (``seen`` holds their digests and is updated), and the skipped
+    copies."""
+    kept, copies = [], []
+    for run in sorted(runs, key=lambda r: (-len(r.chunks), r.name)):
+        keep = []
+        for p in run.chunks:
+            digest = _sha256(p)
+            if digest in seen:
+                copies.append((run, p))
+                continue
+            seen.add(digest)
+            keep.append(p)
+        if keep:
+            kept.append((run, keep))
+    return kept, copies
+
+
+def _process_run(device: str, run: sd.SdRun, keep: list[Path], config: EdaConfig):
+    chunks, infos, tl = place_sd_run(run, keep, config)
     rng = np.concatenate([c.gsr_range for c in chunks])
     us = calibration.gsr_microsiemens(rng, np.concatenate([c.gsr_adc for c in chunks]))
     us[us >= SATURATED_US] = np.nan
@@ -266,26 +295,19 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
         seen: set[str] = set()
         dev_seconds, dev_scr = [], []
         # Most complete copy first, so a partial copy's chunks are the ones skipped.
-        for run in sorted(runs_by_device[device], key=lambda r: (-len(r.chunks), r.name)):
-            keep = []
-            for p in run.chunks:
-                digest = _sha256(p)
-                if digest in seen:
-                    files_rows.append(
-                        {
-                            "device": device,
-                            "source": "sd",
-                            "run": run.name,
-                            "path": p.as_posix(),
-                            "duplicate": True,
-                        }
-                    )
-                    qa["chunks_duplicate"] += 1
-                    continue
-                seen.add(digest)
-                keep.append(p)
-            if not keep:
-                continue
+        kept, copies = unique_sd_runs(runs_by_device[device], seen)
+        for run, p in copies:
+            files_rows.append(
+                {
+                    "device": device,
+                    "source": "sd",
+                    "run": run.name,
+                    "path": p.as_posix(),
+                    "duplicate": True,
+                }
+            )
+            qa["chunks_duplicate"] += 1
+        for run, keep in kept:
             seconds, scr, files, tqa = _process_run(device, run, keep, config)
             dev_seconds.append(seconds)
             dev_scr.append(scr)

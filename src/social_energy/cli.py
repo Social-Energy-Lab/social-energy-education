@@ -20,6 +20,13 @@ social-energy ingest-eda studies/<id>/study.yaml
     raw/eda/imported/*/ -> derived/eda/: files, seconds, scr and wear parquet, plus
     person_minutes.parquet (through the spine, EDA consent only) and qa.json. One device and
     one run at a time.
+
+social-energy eda-heart-rate studies/<id>/study.yaml
+    Heart rate from the raw PPG of the same cards and exports -> derived/eda/: hr_beats,
+    hr_windows (10 s, with quality flags), hr_minutes (per device-minute; joins onto
+    person_minutes by device and minute), hr_agreement (against the exports' own heart
+    rate) and hr_usability (per device-day) parquet, plus hr_qa.json. Reads wear.parquet from
+    ingest-eda to flag worn windows; writes nothing else. One device and one run at a time.
 social-energy extract-acoustics studies/<id>/study.yaml [--delete-wavs]
     AudioMoth WAVs under raw/audiomoth/<device>/ -> derived/acoustics/<device>/.
 
@@ -79,6 +86,7 @@ from .beacons import (
     ingest_with_witnesses,
     purge_devices,
 )
+from .eda.heart import agreement, heart_rate, usability
 from .eda.ingest import ingest_eda
 from .eda.person import person_minutes
 from .spine import Spine
@@ -212,19 +220,30 @@ def purge_device(study: StudyConfig, devices: list[int], apply: bool = False) ->
     return 0
 
 
+INGEST_EDA_OUTPUTS = tuple(
+    f"{n}.parquet" for n in ("files", "seconds", "scr", "wear", "person_minutes")
+)
+
+
+def _eda_inputs(raw: Path) -> tuple[list[Path], list[Path]]:
+    cards = sorted(p for p in (raw / "sd-cards").glob("*") if p.is_dir())
+    exports = sorted((raw / "imported").glob("*/*_Calibrated_SD.csv"))
+    return cards, exports
+
+
 def ingest_eda_command(study: StudyConfig) -> int:
     layout = paths.study(study.study_id)
     raw = layout.raw / "eda"
-    cards = sorted(p for p in (raw / "sd-cards").glob("*") if p.is_dir())
-    exports = sorted((raw / "imported").glob("*/*_Calibrated_SD.csv"))
+    cards, exports = _eda_inputs(raw)
     if not cards and not exports:
         print(f"No SD cards or calibrated exports under {raw}")
         return 1
     tables = ingest_eda(cards, exports, study.eda_config())
     out = layout.derived / "eda"
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
+    out.mkdir(parents=True, exist_ok=True)
+    # Only this command's own outputs are replaced (eda-heart-rate writes beside them).
+    for name in (*INGEST_EDA_OUTPUTS, "qa.json"):
+        (out / name).unlink(missing_ok=True)
     for name in ("files", "seconds", "scr", "wear"):
         getattr(tables, name).write_parquet(out / f"{name}.parquet")
     qa = {"ingest": tables.qa}
@@ -235,6 +254,34 @@ def ingest_eda_command(study: StudyConfig) -> int:
     (out / "qa.json").write_text(json.dumps(qa, indent=2), encoding="utf-8")
     print(json.dumps(qa, indent=2))
     print(f"Wrote {out}")
+    return 0
+
+
+def eda_heart_rate_command(study: StudyConfig) -> int:
+    layout = paths.study(study.study_id)
+    raw = layout.raw / "eda"
+    cards, exports = _eda_inputs(raw)
+    if not cards and not exports:
+        print(f"No SD cards or calibrated exports under {raw}")
+        return 1
+    out = layout.derived / "eda"
+    wear_path = out / "wear.parquet"
+    wear = pl.read_parquet(wear_path) if wear_path.exists() else None
+    if wear is None:
+        print(f"No {wear_path} (run ingest-eda first): worn will be null")
+    tables = heart_rate(cards, exports, study.eda_config(), wear=wear)
+    out.mkdir(parents=True, exist_ok=True)
+    tables.beats.write_parquet(out / "hr_beats.parquet")
+    tables.windows.write_parquet(out / "hr_windows.parquet")
+    tables.minutes.write_parquet(out / "hr_minutes.parquet")
+    agree = agreement(tables.windows, study.timezone)
+    agree.write_parquet(out / "hr_agreement.parquet")
+    usability(tables.windows, study.timezone).write_parquet(out / "hr_usability.parquet")
+    overall = agree.filter(pl.col("device") == "all").drop("device", "day").to_dicts()
+    qa = {"heart_rate": tables.qa, "agreement_all_devices": overall}
+    (out / "hr_qa.json").write_text(json.dumps(qa, indent=2, default=str), encoding="utf-8")
+    print(json.dumps(qa, indent=2, default=str))
+    print(f"Wrote the hr_* tables to {out}")
     return 0
 
 
@@ -383,6 +430,7 @@ COMMANDS = {
     "init-spine": init_spine,
     "ingest-beacons": ingest_beacons,
     "ingest-eda": ingest_eda_command,
+    "eda-heart-rate": eda_heart_rate_command,
     "extract-acoustics": extract_acoustics,
     "fetch-zeitgeist": fetch_zeitgeist,
     "ingest-survey": ingest_survey,

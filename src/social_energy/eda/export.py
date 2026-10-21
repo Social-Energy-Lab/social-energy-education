@@ -71,19 +71,15 @@ def export_device(path: Path) -> str:
         return f.readline().split(sep)[0].strip().strip('"').partition("_")[0]
 
 
-def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
-    path = Path(path)
-    config = config or TimelineConfig()
-    df = pl.read_csv(
-        path,
-        separator=_separator(path),
-        skip_rows=1,
-        skip_rows_after_header=1,
-        infer_schema_length=0,
-    )
-    names = {}
+def _header(path: Path) -> tuple[str, dict[str, str], str | None, str | None]:
+    """Separator, {column: canonical name} (with ``ts_ms`` for the clock), device, clock."""
+    sep = _separator(path)
+    with path.open(encoding="utf-8") as f:
+        f.readline()
+        cols = [c.strip().strip('"') for c in f.readline().rstrip("\r\n").split(sep)]
+    names: dict[str, str] = {}
     device = clock = None
-    for col in df.columns:
+    for col in cols:
         prefix, _, rest = col.partition("_")
         if rest in _COLUMNS:
             names[col] = _COLUMNS[rest]
@@ -92,13 +88,37 @@ def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
             names = {c: n for c, n in names.items() if n != "ts_ms"}
             names[col] = "ts_ms"
             clock = _CLOCKS[rest]
+    return sep, names, device, clock
+
+
+def _read(path: Path, wanted: set[str] | None = None) -> tuple[pl.DataFrame, str, str | None]:
+    """The export's columns (all calibrated ones, or ``wanted`` plus the clock) as floats."""
+    sep, names, device, clock = _header(path)
     missing = ({*_COLUMNS.values(), "ts_ms"}) - set(names.values())
     if missing or device is None:
         raise ValueError(f"{path}: missing calibrated columns {sorted(missing)}")
-    df = df.select(pl.col(c).cast(pl.Float64).alias(n) for c, n in names.items())
+    if wanted is not None:
+        names = {c: n for c, n in names.items() if n in wanted | {"ts_ms"}}
+    df = pl.read_csv(
+        path,
+        separator=sep,
+        skip_rows=1,
+        skip_rows_after_header=1,
+        columns=list(names),
+        schema_overrides={c: pl.Float64 for c in names},
+    ).rename(names)
+    return df, device, clock
 
-    ts = df["ts_ms"].to_numpy()
+
+def repair_clock(
+    ts_ms: np.ndarray, config: TimelineConfig
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, int]:
+    """UTC seconds per row from the export's timestamps (NaN for bad rows), the good rows,
+    the rows placed after an ambiguous gap, and the counts of segments and ambiguous ones."""
+    ts = np.asarray(ts_ms, float)
     n = len(ts)
+    if not n:
+        return np.zeros(0), np.zeros(0, bool), np.zeros(0, bool), 0, 0
     ticks = np.rint((ts - ts[0]) * TICK_HZ / 1000).astype(np.int64) % TICK_WRAP
     good = clean_ticks(ticks, np.ones(n, bool), config)
     gi = np.flatnonzero(good)
@@ -128,6 +148,43 @@ def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
                     n_ambiguous += 1
             t[members] = start + tau[seg == s]
             prev_end = t[members[-1]]
+    return t, good, ambiguous, n_segments, n_ambiguous
+
+
+@dataclass(frozen=True)
+class ExportPulse:
+    """The pulse columns of one export, its clock repaired."""
+
+    path: Path
+    device: str
+    t: np.ndarray  # UTC epoch seconds; NaN for bad rows
+    gap_ambiguous: np.ndarray
+    ppg_mv: np.ndarray
+    hr_bpm: np.ndarray  # Shimmer's own heart rate; NaN where it has none
+
+
+def read_export_pulse(path: Path, config: TimelineConfig | None = None) -> ExportPulse:
+    """PPG and Shimmer's heart rate only: a fraction of ``read_export``'s memory."""
+    path = Path(path)
+    df, device, _ = _read(path, {"ppg_mv", "hr"})
+    t, _, ambiguous, _, _ = repair_clock(df["ts_ms"].to_numpy(), config or TimelineConfig())
+    hr = df["hr"].to_numpy()
+    return ExportPulse(
+        path=path,
+        device=device,
+        t=t,
+        gap_ambiguous=ambiguous,
+        ppg_mv=df["ppg_mv"].to_numpy(),
+        hr_bpm=np.where(hr > 0, hr, np.nan),
+    )
+
+
+def read_export(path: Path, config: TimelineConfig | None = None) -> ExportFile:
+    path = Path(path)
+    config = config or TimelineConfig()
+    df, device, clock = _read(path)
+    n = df.height
+    t, good, ambiguous, n_segments, n_ambiguous = repair_clock(df["ts_ms"].to_numpy(), config)
 
     us = df["us"].to_numpy()
     valid = np.isfinite(us) & (us < SATURATED_US) & (us > SENTINEL_MAX_US)

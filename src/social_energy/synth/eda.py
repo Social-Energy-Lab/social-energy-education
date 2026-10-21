@@ -4,6 +4,10 @@ The cards use the real binary format (``social_energy.eda.sd``) and reproduce th
 on real cards: all-zero records, a burst of out-of-sequence ticks, a ~28.7 s sampling pause,
 a chunk that lost its tail, a run copied as ``<run> 2``, and a run recorded after the study
 (its modification time is outside the window). Values are invented.
+
+The optical pulse (PPG) has known beats while a device is worn: a two-wave pulse per beat at
+a heart rate that drifts and jitters, on a wandering baseline. Off skin, and on a device whose
+sensor is dead (``dead_ppg``), it is sensor noise only, as on the real cards.
 """
 
 from __future__ import annotations
@@ -93,6 +97,10 @@ class EdaSpec:
         ("SH02", 26.0, 0.08),
     )
     no_consent: str = "12"  # this person wore a device without consenting to EDA
+    #: device -> mean heart rate (bpm) while worn
+    heart_bpm: tuple[tuple[str, float], ...] = (("SH01", 72.0), ("SH02", 88.0))
+    #: devices whose PPG sensor shows no pulse
+    dead_ppg: tuple[str, ...] = ("SH02",)
     #: the stored modification time is UTC minus this (as an archive in another zone gives)
     mtime_offset_s: float = 7200.0
     seed: int = 3
@@ -105,6 +113,7 @@ class SyntheticEda:
     spine_dir: Path
     truth_wear: pl.DataFrame  # device, start, end (UTC)
     truth_scr: pl.DataFrame  # device, onset (UTC), amplitude_us
+    truth_beats: pl.DataFrame  # device, t (UTC): systolic peaks a working sensor shows
     notes: dict[str, object] = field(default_factory=dict)
 
 
@@ -117,13 +126,41 @@ def _scr_wave(t: np.ndarray, onset: float, amp: float) -> np.ndarray:
     return x
 
 
+def beat_times(start_s: float, end_s: float, bpm: float, rng: np.random.Generator) -> np.ndarray:
+    """Beats from ``start_s`` to ``end_s``: the rate drifts +-6% over a minute and each
+    interval jitters by 2% (heart-rate variability)."""
+    t = [start_s + rng.uniform(0, 60 / bpm)]
+    while t[-1] < end_s:
+        rate = bpm * (1 + 0.06 * np.sin(2 * np.pi * t[-1] / 60.0))
+        t.append(t[-1] + 60.0 / rate * (1 + 0.02 * rng.standard_normal()))
+    return np.asarray(t[:-1])
+
+
+def pulse_wave(t: np.ndarray, beats: np.ndarray, amplitude_mv: float = 150.0) -> np.ndarray:
+    """A PPG pulse per beat: a systolic wave peaking at the beat and a smaller diastolic one
+    after it (two Gaussians, a common synthetic model), in mV."""
+    x = np.zeros_like(t)
+    if not len(beats):
+        return x
+    last = beats[-1] - beats[-2] if len(beats) > 1 else 0.8
+    for b, d in zip(beats, np.diff(beats, append=beats[-1] + last), strict=True):
+        lo, hi = np.searchsorted(t, [b - 0.5 * d, b + 1.2 * d])  # t is sorted
+        u = t[lo:hi] - b
+        x[lo:hi] += amplitude_mv * (
+            np.exp(-0.5 * (u / (0.11 * d)) ** 2)
+            + 0.4 * np.exp(-0.5 * ((u - 0.4 * d) / (0.13 * d)) ** 2)
+        )
+    return x
+
+
 def generate_eda(spec: EdaSpec, out_dir: Path) -> SyntheticEda:
     out_dir = Path(out_dir)
     rng = np.random.default_rng(spec.seed)
     t0 = spec.start.timestamp()
     n = spec.minutes * 60 * RATE
     rel = np.arange(n) / RATE
-    cards, wear_rows, scr_rows = [], [], []
+    cards, wear_rows, scr_rows, beat_rows = [], [], [], []
+    heart = dict(spec.heart_bpm)
     # The device's counter has a 28.7 s sampling pause in the middle of chunk 1: samples after
     # it are 28.703125 s later than their index says. Signals live on wall time ``wall``.
     pause_at = spec.chunk_s * RATE + 200 * RATE
@@ -143,7 +180,15 @@ def generate_eda(spec: EdaSpec, out_dir: Path) -> SyntheticEda:
         acc = np.zeros((n, 3), np.int64)
         acc[:, 2] = 8192
         acc[worn, 0] = rng.integers(-400, 400, worn.sum())
-        ppg = (2000 + 300 * np.sin(2 * np.pi * 1.2 * wall)).astype(np.int64)
+        ppg_mv = 1400 + 1.0 * rng.standard_normal(n)  # sensor noise
+        if device in heart and device not in spec.dead_ppg:
+            beats = beat_times(w_from * 60, w_to * 60, heart[device], rng)
+            ppg_mv += np.where(worn, pulse_wave(wall, beats), 0.0)
+            ppg_mv += np.where(worn, 20 * np.sin(2 * np.pi * 0.07 * wall), 0.0)  # baseline
+            # Beats inside the sampling pause were never sampled.
+            beats = beats[(beats < wall[pause_at - 1]) | (beats > wall[pause_at])]
+            beat_rows += [(device, spec.start + timedelta(seconds=float(b))) for b in beats]
+        ppg = np.rint(ppg_mv * ADC_MAX / 3000).astype(np.int64)
         ticks = (12345 + 256 * np.arange(n) + lag) % TICK_WRAP
         true_t = t0 + wall
         # The record stream is shorter than wall time by the pause; chunks cut on wall time.
@@ -190,6 +235,7 @@ def generate_eda(spec: EdaSpec, out_dir: Path) -> SyntheticEda:
                 if (y - x).total_seconds() >= 300:  # shorter bouts are not wear
                     wear_rows.append((dev, x, y))
         scr_rows = [r for r in scr_rows if r[0] != device or not lo <= r[1] < hi]
+        beat_rows = [r for r in beat_rows if r[0] != device or not lo <= r[1] < hi]
         # A copy of the run, as a card copy leaves it.
         shutil.copytree(run, run.with_name(f"{device}-000 2"))
         # A run recorded after the study: its modification time is outside the window.
@@ -251,5 +297,8 @@ def generate_eda(spec: EdaSpec, out_dir: Path) -> SyntheticEda:
             schema={"device": pl.String, "onset": utc, "amplitude_us": pl.Float64},
             orient="row",
         ),
+        truth_beats=pl.DataFrame(
+            beat_rows, schema={"device": pl.String, "t": utc}, orient="row"
+        ).sort("device", "t"),
         notes={"pause_after_s": pause_at / RATE, "lost_tail": lost},
     )
