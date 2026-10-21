@@ -28,7 +28,7 @@ This is the public half: the instrument questions. The working version, with who
 These are not blocked on a decision but on material Mahdi will hand over.
 
 - The **study-ID list** with roles, and course membership per participant.
-- The **EDA device-distribution plan** (Shimmer device → study ID per day).
+- ~~The **EDA device-distribution plan** (Shimmer device → study ID per day).~~ Delivered 2026-10-20 with the EDA data; in the local spine.
 - The **interview ↔ study-ID mapping table** (not a field log; a purpose-made table). It also decides whether the ID typed before the interview is the beacon-based study ID or the invitation-email one, and places the calls with no platform user row.
 - **Educational success (H2):** a follow-up wave is possible but not planned; revisit no earlier than **November 2026**.
 - **Staff presses:** probably analysed separately from participants', not decided. Keep the role on every press.
@@ -52,7 +52,7 @@ Read off <https://github.com/thofbaur/network-beacon_NRF54L15> rather than asked
 2. Beacons: what is room 0.08 (location tag 115)? Its label is `[unknown]` in `studies/dsa-2026/locations.yaml`.
 3. Beacons: what exactly did the `_cleaned` step remove from the six 13–15 Aug logs, which script did it, and do the uncleaned originals still exist? The upstream repo has no cleaning script, so it was done by hand or by something unpublished. (The field log ties the cleaning to the corrupted-logger incident of 15 Aug, so the *why* is settled; the *what* is not.)
 4. Beacons: at which commit was the delivered `Output/` produced? The current head is 2026-09-17; if it was an older build, the reboot-backlog retry may not have been in it.
-5. EDA: export format and software, channels enabled (GSR, PPG?), sampling rate, absolute timestamps and clock sync.
+5. ~~EDA: export format and software, channels enabled (GSR, PPG?), sampling rate, absolute timestamps and clock sync.~~ Answered by the 2026-10-20 delivery; see [`instruments/eda.md`](../../context/instruments/eda.md).
 6. AudioMoth: sample rate and gain, exact schedules per device per day, and do the WAVs still exist? (They must be deleted after feature extraction.)
 7. Survey: the **confirmed reverse-keying list**. The candidates in `docs/context/instruments/survey.md` are inferred from wording, and scoring needs the confirmed list.
 8. Survey: three form versions (16, 17, 18) were live. What changed between them? Do the old codes map one-to-one onto the new ones (`GRADIENT_variable_C11/C21` → `ZGL_C11_GRAD/ZGL_C21_GRAD`; what were `SWE_05–07_resonance`)? ~~Did B19/B20 run as 1–10 sliders?~~ Answered 2026-10-18: yes, 1–10, from the form definition the platform served (structuredVersion 18).
