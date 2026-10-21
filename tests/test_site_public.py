@@ -130,3 +130,21 @@ def test_special_days_and_shade_in_bins(tmp_path):
 def test_refuses_inside_repo():
     with pytest.raises(DataRootError):
         write_public_bundle(_world(), REPO_ROOT / "x", CONFIG, timezone=TZ)
+
+
+def test_pairs_sorted_by_bin_then_permuted_indices(tmp_path):
+    world = _world()
+    extra = pl.DataFrame(
+        {
+            "a": ["person:4", "person:1", "person:2"],
+            "b": ["person:1", "person:4", "person:4"],
+            "bin": [_bin(6)] * 3,
+            "max_rssi": [-50] * 3,
+        }
+    )
+    world = BundleInput(**{**world.__dict__, "pairs": pl.concat([world.pairs, extra])})
+    for seed in range(5):
+        write_public_bundle(world, tmp_path / f"p{seed}", CONFIG, timezone=TZ, seed=seed)
+        p = read_bundle(tmp_path / f"p{seed}")[1]["pairs"]
+        rows = list(zip(p["bin"], p["a"], p["b"], strict=True))
+        assert rows == sorted(rows)

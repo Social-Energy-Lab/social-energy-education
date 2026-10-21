@@ -114,10 +114,10 @@ def write_public_bundle(
     def node_expr(col: str) -> pl.Expr:
         return pl.col(col).replace_strict(node_of, default=None, return_dtype=pl.Int64)
 
+    shown_bins = [k for k, v in enumerate(shown) if v]
+
     def visible(k: pl.Expr) -> pl.Expr:
-        return _in_range(k, inp.n_bins) & k.map_elements(
-            lambda b: bool(shown_arr[b]) if 0 <= b < inp.n_bins else False, return_dtype=pl.Boolean
-        )
+        return k.is_in(shown_bins)
 
     p = inp.pairs.with_columns(
         _bin_index("bin", inp).alias("k"), node_expr("a").alias("na"), node_expr("b").alias("nb")
@@ -127,9 +127,12 @@ def write_public_bundle(
         & (pl.col("max_rssi") >= close_rssi)
         & _in_range(pl.col("k"), inp.n_bins)
     )
-    p = p.filter(visible(pl.col("k"))).sort("k")
-    na, nb = p["na"].to_numpy(), p["nb"].to_numpy()
-    pairs = {"bin": p["k"].to_numpy(), "a": np.minimum(na, nb), "b": np.maximum(na, nb)}
+    p = p.filter(visible(pl.col("k"))).with_columns(
+        a=pl.min_horizontal("na", "nb"), b=pl.max_horizontal("na", "nb")
+    )
+    # Sorted on permuted indices, so row order cannot echo the original entity order.
+    p = p.sort("k", "a", "b")
+    pairs = {"bin": p["k"].to_numpy(), "a": p["a"].to_numpy(), "b": p["b"].to_numpy()}
 
     s = (
         inp.seen.with_columns(_bin_index("bin", inp).alias("k"), node_expr("entity").alias("n"))
