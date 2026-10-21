@@ -1,0 +1,76 @@
+"""The site builder: synthetic camp or public data dir, validated before it counts as built."""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from social_energy import cli
+from social_energy.paths import REPO_ROOT, DataRootError
+from social_energy.site import SiteDataError
+from social_energy.site.build import build_site, synthetic_site_data
+from social_energy.study import ExplorerConfig, StudyConfig
+
+TZ = "Europe/Berlin"
+STUDY = REPO_ROOT / "studies" / "dsa-2026" / "study.yaml"
+
+
+def _config() -> ExplorerConfig:
+    return StudyConfig.load(STUDY).explorer_config()
+
+
+@pytest.fixture(scope="module")
+def built(tmp_path_factory) -> Path:
+    out = tmp_path_factory.mktemp("site")
+    return build_site(out, None, config=_config(), timezone=TZ)
+
+
+def test_build_synthetic_site(built):
+    for name in ("index.html", "vendor/d3.min.js", "model.js", "data/meta.json"):
+        assert (built / name).is_file(), name
+    meta = json.loads((built / "data" / "meta.json").read_text())
+    assert meta["synthetic"] is True
+    assert len(meta["nodes"]) >= 30
+    assert {n["course"] for n in meta["nodes"]} - {-1}
+    assert meta["special_days"]
+    json.loads((built / "data" / "aggregates.json").read_text())
+
+
+def test_synthetic_needs_config_and_timezone(tmp_path):
+    with pytest.raises(ValueError):
+        build_site(tmp_path / "o", None)
+
+
+def test_synthetic_site_data_returns_data_dir(tmp_path):
+    data = synthetic_site_data(tmp_path / "d", _config(), timezone=TZ, seed=1)
+    assert (data / "meta.json").is_file() and (data / "aggregates.json").is_file()
+
+
+def test_build_with_data_dir_copies_and_validates(tmp_path, built):
+    out = build_site(tmp_path / "again", built / "data")
+    assert (out / "data" / "meta.json").is_file()
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    for f in (built / "data").iterdir():
+        (bad / f.name).write_bytes(f.read_bytes())
+    meta = json.loads((bad / "meta.json").read_text())
+    meta["mode"] = "team"
+    (bad / "meta.json").write_text(json.dumps(meta))
+    with pytest.raises(SiteDataError):
+        build_site(tmp_path / "refused", bad)
+
+
+def test_build_refuses_out_inside_repo():
+    with pytest.raises(DataRootError):
+        build_site(REPO_ROOT / "site-out", None, config=_config(), timezone=TZ)
+
+
+def test_cli_site_build_without_data_root(tmp_path, monkeypatch):
+    monkeypatch.delenv("SOCIAL_ENERGY_DATA", raising=False)
+    out = tmp_path / "site"
+    assert cli.main(["site-build", str(STUDY), "--out", str(out)]) == 0
+    assert (out / "data" / "meta.json").is_file()
+
+
+def test_cli_site_build_requires_out(tmp_path):
+    assert cli.main(["site-build", str(STUDY)]) == 2
