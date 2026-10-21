@@ -169,3 +169,12 @@ def test_motion_on_the_pulse_fails_the_template_rule():
     only_template = others.to_series() & ~w["template_ok"]
     assert only_template.sum() >= 3
     assert not w["quality_ok"].any()
+
+
+def test_repeated_sample_times_count_once():
+    """Every sample written twice (an overlapping copy): the same beats and windows as the
+    signal written once."""
+    t, x, _ = _pulse(120, seed=8)
+    once_beats, once = analyse(t, x, CFG)
+    twice_beats, twice = analyse(np.r_[t, t], np.r_[x, x], CFG)
+    assert twice_beats.equals(once_beats) and twice.equals(once)

@@ -60,6 +60,8 @@ class PpgConfig:
     ibi_neighbours: int = 9
     #: A step between samples longer than this splits the signal into stretches.
     max_step_s: float = 0.25
+    #: Shorter stretches cannot hold a measurable beat and are not filtered (no pulse).
+    min_stretch_s: float = 2.0
     #: Windows and their quality rules (Orphanidou et al. 2015).
     window_s: int = 10
     min_hr_bpm: float = 40.0
@@ -94,7 +96,7 @@ WINDOW_SCHEMA = {
 
 def stretches(t: np.ndarray, config: PpgConfig) -> list[slice]:
     """Contiguous stretches of sorted sample times: split where a step exceeds
-    ``max_step_s`` (pauses, gaps between runs)."""
+    ``max_step_s`` (pauses, gaps between runs) or goes backwards."""
     t = np.asarray(t, float)
     if not len(t):
         return []
@@ -175,16 +177,25 @@ def detect_peaks(y: np.ndarray, config: PpgConfig) -> np.ndarray:
     cand = np.flatnonzero(inside & (y == peak_val[np.maximum(label, 0)]))
     _, first = np.unique(label[cand], return_index=True)
     peaks = cand[first]
-    # Refractory period: two peaks closer than the shortest interval keep the larger.
+    # Refractory period: of peaks closer than the shortest interval, the largest stays (taken
+    # in order of height, each removing its smaller neighbours within reach).
     min_gap = config.min_ibi_s * fs
-    while len(peaks) > 1:
-        close = np.flatnonzero(np.diff(peaks) < min_gap)
-        if not len(close):
-            break
-        i = close[0]
-        drop = i if y[peaks[i]] < y[peaks[i + 1]] else i + 1
-        peaks = np.delete(peaks, drop)
-    return peaks
+    close = np.diff(peaks) < min_gap
+    if not close.any():
+        return peaks
+    keep = np.ones(len(peaks), bool)
+    for i in np.argsort(-y[peaks], kind="stable"):
+        if not keep[i]:
+            continue
+        j = i - 1
+        while j >= 0 and peaks[i] - peaks[j] < min_gap:
+            keep[j] = False
+            j -= 1
+        j = i + 1
+        while j < len(peaks) and peaks[j] - peaks[i] < min_gap:
+            keep[j] = False
+            j += 1
+    return peaks[keep]
 
 
 def plausible_ibis(ibi: np.ndarray, config: PpgConfig) -> np.ndarray:
@@ -226,11 +237,17 @@ def _analyse(t: np.ndarray, x: np.ndarray, config: PpgConfig):
     t, x = t[keep], x[keep]
     order = np.argsort(t, kind="stable")
     t, x = t[order], x[order]
+    # A sample time seen twice (overlapping copies) is one sample: keep the first.
+    first = np.diff(t, prepend=-np.inf) > 0
+    t, x = t[first], x[first]
     if config.invert:
         x = -x
     y = np.empty(len(x))
     peak_idx, ibi = [], []
     for sl in stretches(t, config):
+        if sl.stop - sl.start < config.min_stretch_s * config.fs_hz:
+            y[sl] = 0.0  # too short to hold a beat: no pulse
+            continue
         y[sl] = bandpass(x[sl], config)
         p = detect_peaks(y[sl], config) + sl.start
         peak_idx.append(p)

@@ -21,6 +21,7 @@ Two checks of the method on the data itself:
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -112,9 +113,11 @@ def heart_rate(
     config: EdaConfig,
     ppg: PpgConfig | None = None,
     wear: pl.DataFrame | None = None,
+    log: Callable[[str], None] | None = None,
 ) -> HeartTables:
     """Windows and device-minutes of heart rate from every card and export. ``wear`` (the
-    ingest's wear bouts) sets ``worn``; without it ``worn`` is null."""
+    ingest's wear bouts) sets ``worn``; without it ``worn`` is null. ``log`` receives a line
+    per device as it is done."""
     ppg = ppg or PpgConfig()
     w = ppg.window_s
     runs_by_device: dict[str, list[sd.SdRun]] = defaultdict(list)
@@ -168,6 +171,8 @@ def heart_rate(
                 .drop("w")
             )
             parts.append(_tag(win, device, "export", path.name))
+        if log:
+            log(f"{device}: {qa['sd_beats'] + qa['export_beats']} beats so far")
 
     schema = {
         "device": pl.String,

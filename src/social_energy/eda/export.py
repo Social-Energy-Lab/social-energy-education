@@ -113,14 +113,19 @@ def _read(path: Path, wanted: set[str] | None = None) -> tuple[pl.DataFrame, str
 def repair_clock(
     ts_ms: np.ndarray, config: TimelineConfig
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, int]:
-    """UTC seconds per row from the export's timestamps (NaN for bad rows), the good rows,
-    the rows placed after an ambiguous gap, and the counts of segments and ambiguous ones."""
+    """UTC seconds per row from the export's timestamps (NaN for bad rows, including rows
+    without a timestamp), the good rows, the rows placed after an ambiguous gap, and the
+    counts of segments and ambiguous ones."""
     ts = np.asarray(ts_ms, float)
     n = len(ts)
     if not n:
         return np.zeros(0), np.zeros(0, bool), np.zeros(0, bool), 0, 0
-    ticks = np.rint((ts - ts[0]) * TICK_HZ / 1000).astype(np.int64) % TICK_WRAP
-    good = clean_ticks(ticks, np.ones(n, bool), config)
+    # A timestamp of -1 (or none) is an export written without a clock: not a time.
+    has_time = np.isfinite(ts) & (ts > 0)
+    first = ts[np.argmax(has_time)] if has_time.any() else 0.0
+    ticks = np.rint((np.where(has_time, ts, first) - first) * TICK_HZ / 1000).astype(np.int64)
+    ticks %= TICK_WRAP
+    good = clean_ticks(ticks, has_time, config)
     gi = np.flatnonzero(good)
     t = np.full(n, np.nan)
     ambiguous = np.zeros(n, bool)

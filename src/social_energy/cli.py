@@ -269,7 +269,9 @@ def eda_heart_rate_command(study: StudyConfig) -> int:
     wear = pl.read_parquet(wear_path) if wear_path.exists() else None
     if wear is None:
         print(f"No {wear_path} (run ingest-eda first): worn will be null")
-    tables = heart_rate(cards, exports, study.eda_config(), wear=wear)
+    tables = heart_rate(
+        cards, exports, study.eda_config(), wear=wear, log=lambda m: print(m, flush=True)
+    )
     out.mkdir(parents=True, exist_ok=True)
     tables.beats.write_parquet(out / "hr_beats.parquet")
     tables.windows.write_parquet(out / "hr_windows.parquet")

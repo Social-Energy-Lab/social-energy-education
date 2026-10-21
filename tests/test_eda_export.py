@@ -108,3 +108,16 @@ def test_unsynced_devices_export_a_plain_timestamp(tmp_path):
     assert e.qa["clock"] == "device"
     write_export(path, [T0_MS + i * STEP for i in range(200)], device="SH04")
     assert read_export(path).qa["clock"] == "sync"
+
+
+def test_an_export_without_a_clock_places_nothing(tmp_path):
+    """Shimmer Base can write -1 in every timestamp (no clock): no row gets a time, all are
+    bad; a file with a few -1 rows among real ones keeps the real ones."""
+    path = tmp_path / "x_SH07_Calibrated_SD.csv"
+    write_export(path, [-1.0] * 300)
+    e = read_export(path)
+    assert np.isnan(e.t).all() and e.qa["records_bad"] == 300
+    write_export(path, [-1.0] * 5 + [T0_MS + i * STEP for i in range(295)])
+    e = read_export(path)
+    assert np.isnan(e.t[:5]).all() and np.isfinite(e.t[5:]).all()
+    assert close(e.t[5], T0_MS / 1000)
