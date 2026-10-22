@@ -14,6 +14,10 @@ Tools for three kinds of question, none of which knows a study's dates, people o
   same minute, or with the partner shifted by a lag, for labelled pair-minutes;
   :func:`node_bootstrap_mean` gives a pooled mean with an interval that resamples people (a
   pair-minute weighs the product of its partners' draws).
+
+Nothing here knows which measure it is given: the same tools serve heart rate from the PPG
+(``eda.heart``) beside the EDA measures, and a clock filter (``clock_uncertain``) is the
+caller's choice of rows, made before the minutes are laid out.
 """
 
 from __future__ import annotations
