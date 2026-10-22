@@ -26,7 +26,25 @@ import numpy as np
 import polars as pl
 
 from . import calibration, sd
-from .clock import RECORDS_SCHEMA, RUNS_SCHEMA, ClockConfig, ClockModel, comotion
+from .box import (
+    BoxConfig,
+    BoxStretch,
+    find_stretches,
+    leave_one_out,
+    loo_summary,
+    measure,
+    nodes_summary,
+)
+from .box import jerk as motion_jerk
+from .clock import (
+    RECORDS_SCHEMA,
+    RUNS_SCHEMA,
+    SOURCE_DTYPE,
+    SOURCES,
+    ClockConfig,
+    ClockModel,
+    comotion,
+)
 from .export import SATURATED_US, export_device, export_span, read_export
 from .features import (
     ScrConfig,
@@ -52,8 +70,10 @@ SECONDS_SCHEMA = {
     "hr_bpm": pl.Float32,
     "gap_ambiguous": pl.Boolean,
     "clock_uncertain": pl.Boolean,
+    "clock_source": SOURCE_DTYPE,
     "clock_correction_s": pl.Float32,
 }
+NO_MODEL = SOURCES.index("none")
 SOURCE_PRIORITY = {"sd": 0, "export": 1}
 #: Samples per key, and per confirmation, when matching an export's rows to its SD card.
 MATCH_KEY = 4
@@ -81,6 +101,8 @@ class EdaConfig:
     #: Correct device clocks through their sync records (``eda.clock``); False keeps them.
     correct_clocks: bool = True
     clock: ClockConfig = field(default_factory=ClockConfig)
+    #: Box co-motion as a clock anchor (``eda.box``); ``enabled=False`` skips it.
+    box: BoxConfig = field(default_factory=BoxConfig)
     #: Windows (UTC epoch seconds) in which devices lay together: the co-motion check.
     comotion_windows: tuple[tuple[float, float], ...] = ()
     comotion_window_s: float = 600.0  # sub-window length of the co-motion check
@@ -117,6 +139,9 @@ class EdaTables:
     qa: dict[str, Any]
     clock: pl.DataFrame = field(default_factory=pl.DataFrame)  # one row per run's clock model
     comotion: pl.DataFrame = field(default_factory=pl.DataFrame)  # co-motion residuals
+    box: pl.DataFrame = field(default_factory=pl.DataFrame)  # box anchors and checks
+    box_pairs: pl.DataFrame = field(default_factory=pl.DataFrame)  # the pairs they rest on
+    box_loo: pl.DataFrame = field(default_factory=pl.DataFrame)  # leave-one-out validation
 
 
 def _seconds(
@@ -132,6 +157,7 @@ def _seconds(
     ambiguous: np.ndarray | None = None,
     uncertain: np.ndarray | None = None,
     correction: np.ndarray | None = None,
+    clock_source: np.ndarray | None = None,
 ) -> pl.DataFrame:
     placed = np.isfinite(t)
     if not placed.any():
@@ -169,6 +195,12 @@ def _seconds(
         if correction is not None
         else np.zeros(m)
     )
+    # The worst source among the second's samples.
+    src = np.zeros(m, np.int8)
+    if clock_source is None:
+        src[:] = NO_MODEL
+    else:
+        np.maximum.at(src, inv, np.asarray(clock_source, np.int8)[placed])
     return (
         pl.DataFrame(
             {
@@ -186,11 +218,15 @@ def _seconds(
                 "hr_bpm": hr_mean,
                 "gap_ambiguous": any_of(ambiguous),
                 "clock_uncertain": any_of(uncertain),
+                "clock_source": src,
                 "clock_correction_s": corr,
             }
         )
         .with_columns(
             pl.col("t").cast(pl.Datetime("us", "UTC")),
+            pl.col("clock_source").replace_strict(
+                dict(enumerate(SOURCES)), return_dtype=SOURCE_DTYPE
+            ),
             pl.col("conductance_us", "hr_bpm").fill_nan(None),
         )
         .cast(SECONDS_SCHEMA)
@@ -264,9 +300,19 @@ def unique_sd_runs(
 
 
 def scan_run(device: str, run: sd.SdRun, keep: list[Path], config: EdaConfig):
-    """Pass 1: the run's span on the device clock, its master flag, and its sync records
-    (only those in a block whose first record is good and placed)."""
+    """Pass 1: the run's span on the device clock, its master flag, its sync records (only
+    those in a block whose first record is good and placed), and its off-skin stretches for
+    the box anchor."""
     chunks, _, tl = place_sd_run(run, keep, config)
+    stretches: list[BoxStretch] = []
+    if config.correct_clocks and config.box.enabled:
+        us = calibration.gsr_microsiemens(
+            np.concatenate([c.gsr_range for c in chunks]),
+            np.concatenate([c.gsr_adc for c in chunks]),
+        )
+        acc = np.concatenate([c.acc for c in chunks])
+        stretches = find_stretches(device, run.name, tl.t, us, acc, tl.bad, config.box)
+        del us, acc
     records = []
     offset = 0
     for c in chunks:
@@ -279,12 +325,7 @@ def scan_run(device: str, run: sd.SdRun, keep: list[Path], config: EdaConfig):
     span = (float(fin.min()), float(fin.max())) if len(fin) else None
     # A unit flagged master with sync off leads no group.
     master = any(c.header is not None and c.header.master and c.header.sync_on for c in chunks)
-    return records, span, master
-
-
-def _jerk(acc: np.ndarray) -> np.ndarray:
-    d = np.diff(np.asarray(acc, float), axis=0, prepend=np.asarray(acc[:1], float))
-    return np.sqrt((d**2).sum(axis=1))
+    return records, span, master, stretches
 
 
 @dataclass
@@ -314,7 +355,7 @@ def _process_run(
 ):
     chunks, infos, tl = place_sd_run(run, keep, config)
     t_dev = tl.t
-    t, uncertain, kind = plan.sd_times(device, run.name, tl)
+    t, uncertain, kind, source = plan.sd_times(device, run.name, tl)
     rng = np.concatenate([c.gsr_range for c in chunks])
     us = calibration.gsr_microsiemens(rng, np.concatenate([c.gsr_adc for c in chunks]))
     us[us >= SATURATED_US] = np.nan
@@ -333,6 +374,7 @@ def _process_run(
             ppg,
             uncertain=uncertain,
             correction=t - t_dev,
+            clock_source=source,
         ),
         t,
         us,
@@ -342,10 +384,10 @@ def _process_run(
     scr = _scr_frame(device, "sd", run.name, t[fin], us[fin], config.scr)
     if grids:
         good = fin & ~tl.bad
-        jerk = np.full(len(t), np.nan)
-        jerk[good] = _jerk(acc_raw[good])
+        j = np.full(len(t), np.nan)
+        j[good] = motion_jerk(acc_raw[good])
         for g in grids:
-            g.add(device, t, jerk)
+            g.add(device, t, j)
     series = None
     if keep_series and fin.any():
         series = (t_dev, np.concatenate([c.ppg for c in chunks]).astype(np.int16))
@@ -402,25 +444,47 @@ def _session(path: Path) -> str:
     return path.name.rsplit("_SH", 1)[0]
 
 
+@dataclass
+class ClockBuild:
+    model: ClockModel
+    spans: dict[str, list[tuple[str, float, float]]]
+    box: pl.DataFrame  # anchors and checks (eda.box.solve)
+    box_pairs: pl.DataFrame
+    box_loo: pl.DataFrame
+    qa: dict[str, Any]
+
+
 def build_clock_model(
     kept: dict[str, list[tuple[sd.SdRun, list[Path]]]], config: EdaConfig
-) -> tuple[ClockModel, dict[str, list[tuple[str, float, float]]]]:
-    """Pass 1 over every kept SD run: the clock model, and each device's run spans."""
-    records, runs = [], []
+) -> ClockBuild:
+    """Pass 1 over every kept SD run: the clock model from the sync records, then box
+    anchors measured against it and the model again with them; and each device's run spans."""
+    records, runs, stretches = [], [], []
     spans: dict[str, list[tuple[str, float, float]]] = defaultdict(list)
     for device, items in kept.items():
         for run, keep in items:
-            rec, span, master = scan_run(device, run, keep, config)
+            rec, span, master, st = scan_run(device, run, keep, config)
             records += rec
+            stretches += st
             if span is not None:
                 runs.append((device, run.name, span[0], span[1], master))
                 spans[device].append((run.name, span[0], span[1]))
-    model = ClockModel(
-        pl.DataFrame(records, schema=RECORDS_SCHEMA, orient="row"),
-        pl.DataFrame(runs, schema=RUNS_SCHEMA, orient="row"),
-        config.clock,
-    )
-    return model, spans
+    rec_df = pl.DataFrame(records, schema=RECORDS_SCHEMA, orient="row")
+    runs_df = pl.DataFrame(runs, schema=RUNS_SCHEMA, orient="row")
+    model = ClockModel(rec_df, runs_df, config.clock)
+    pairs, nodes = measure(model, stretches, config.box)
+    del stretches
+    qa: dict[str, Any] = {}
+    loo = pl.DataFrame()
+    if pairs.height:
+        loo = leave_one_out(model.records, runs_df, pairs, config.clock, config.box)
+        model = ClockModel(rec_df, runs_df, config.clock, anchors=nodes)
+        qa = {
+            "pairs": pairs.height,
+            **nodes_summary(nodes),
+            "leave_one_out": loo_summary(loo, config.clock.anchor_tolerance_s),
+        }
+    return ClockBuild(model, spans, nodes, pairs, loo, qa)
 
 
 @dataclass
@@ -432,25 +496,31 @@ class ClockPlan:
     of the exports placed so far, per session (a clockless export starts at their median).
     """
 
-    model: ClockModel | None
+    build: ClockBuild | None  # the clock model with its box anchors and their tables
     run_spans: dict[str, list[tuple[str, float, float]]]
     spans: dict[Path, tuple[float | None, float | None]]
     devices: list[str]
     raw_starts: dict[str, list[float]]
     starts: dict[str, list[float]] = field(default_factory=lambda: defaultdict(list))
 
+    @property
+    def model(self) -> ClockModel | None:
+        return self.build.model if self.build is not None else None
+
     def sd_times(
         self, device: str, run: str, tl: RunTimeline
-    ) -> tuple[np.ndarray, np.ndarray, str]:
+    ) -> tuple[np.ndarray, np.ndarray, str, np.ndarray]:
         """Corrected times of an SD run's records, ``clock_uncertain`` per record (the model's
-        fallback, or placed by modification time), and the run's clock model kind."""
+        fallback, or placed by modification time), the run's clock model kind, and each
+        record's clock source (an index into ``SOURCES``)."""
         if self.model is not None:
-            t, uncertain = self.model.correct(device, run, tl.t)
+            t, uncertain, source = self.model.correct_full(device, run, tl.t)
             rc = self.model.runs.get((device, run))
             kind = rc.kind if rc is not None else "rate"
         else:
             t, uncertain, kind = tl.t, np.zeros(len(tl.t), bool), "none"
-        return t, uncertain | tl.by_mtime, kind
+            source = np.full(len(tl.t), NO_MODEL, np.int8)
+        return t, uncertain | tl.by_mtime, kind, source
 
     def near_export(self, device: str, run: str, exports: list[Path]) -> bool:
         """Whether an SD run overlaps one of ``exports`` (so its samples are kept for the
@@ -478,13 +548,13 @@ class ClockPlan:
         e,
         series: dict[str, tuple[np.ndarray, np.ndarray]],
         config: EdaConfig,
-    ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
         """``_correct_export``, then the export's corrected start is recorded for its session."""
-        t, unc, info = _correct_export(device, path, e, series, self.model, config)
+        t, unc, src, info = _correct_export(device, path, e, series, self.model, config)
         placed = t[np.isfinite(t)]
         if len(placed) and e.qa["clock"] != "recovered":
             self.starts[_session(path)].append(float(placed[0]))
-        return t, unc, info
+        return t, unc, src, info
 
 
 def plan_clocks(
@@ -492,8 +562,10 @@ def plan_clocks(
     exports_by_device: dict[str, list[Path]],
     config: EdaConfig,
 ) -> ClockPlan:
-    """Pass 1 (the clock model, if ``config.correct_clocks``) and the exports' spans."""
-    model, run_spans = build_clock_model(kept, config) if config.correct_clocks else (None, {})
+    """Pass 1 (the clock model with its box anchors, if ``config.correct_clocks``) and the
+    exports' spans."""
+    build = build_clock_model(kept, config) if config.correct_clocks else None
+    run_spans = build.spans if build is not None else {}
     devices = sorted(set(kept) | set(exports_by_device))
     spans = {p: export_span(p) for d in devices for p in exports_by_device.get(d, [])}
     raw_starts: dict[str, list[float]] = defaultdict(list)
@@ -504,7 +576,7 @@ def plan_clocks(
     # their session (the units were started together), so their devices come last.
     clockless = {d for d in devices for p in exports_by_device.get(d, []) if spans[p][0] is None}
     order = [d for d in devices if d not in clockless] + sorted(clockless)
-    return ClockPlan(model, run_spans, spans, order, raw_starts)
+    return ClockPlan(build, run_spans, spans, order, raw_starts)
 
 
 def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> EdaTables:
@@ -541,7 +613,7 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
             qa["chunks_duplicate"] += 1
 
     plan = plan_clocks(kept, exports_by_device, config)
-    model = plan.model
+    model, build = plan.model, plan.build
     grids = [_ComotionGrid(lo, hi) for lo, hi in config.comotion_windows]
 
     seconds_parts, scr_parts = [], []
@@ -590,7 +662,7 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
             seen[device].add(digest)
             start = plan.export_start(path, config)
             e = read_export(path, config.timeline(), start, config.sample_rate_hz)
-            t, unc, info = plan.correct_export(device, path, e, series, config)
+            t, unc, src, info = plan.correct_export(device, path, e, series, config)
             export_seconds = _seconds(
                 device,
                 "export",
@@ -604,6 +676,7 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
                 e.gap_ambiguous,
                 unc,
                 t - e.t,
+                src,
             )
             dev_seconds.append(_with_artifacts(export_seconds, t, e.conductance_us, config.scr))
             fin = np.isfinite(t)
@@ -691,11 +764,15 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
                 "ok",
                 "worn",
                 "clock_uncertain",
+                "clock_source",
             ),
             on=["device", "source", "run", "_sec"],
             how="left",
         )
-        .with_columns(pl.col("ok", "worn", "clock_uncertain").fill_null(False))
+        .with_columns(
+            pl.col("ok", "worn", "clock_uncertain").fill_null(False),
+            pl.col("clock_source").fill_null("none"),
+        )
         .select(
             "device",
             "source",
@@ -709,6 +786,7 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
             "ok",
             "worn",
             "clock_uncertain",
+            "clock_source",
         )
         .sort("device", "onset")
     )
@@ -730,6 +808,14 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
     qa["seconds_worn"] = int(worn_ok.sum())
     qa["seconds_worn_artifact"] = int((worn_ok & seconds["artifact"]).sum())
     qa["seconds_worn_clock_uncertain"] = int((worn_ok & seconds["clock_uncertain"]).sum())
+    qa["seconds_worn_by_clock_source"] = {
+        str(k): int(v)
+        for k, v in seconds.filter(worn_ok)
+        .group_by("clock_source")
+        .len()
+        .sort("clock_source")
+        .iter_rows()
+    }
     qa["scr"] = scr.height
     qa["scr_ok_worn_clean"] = int((scr["ok"] & scr["worn"] & ~scr["artifact"]).sum())
     qa["scr_ok_worn"] = int((scr["ok"] & scr["worn"]).sum())
@@ -737,6 +823,8 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
     clock = model.summary() if model is not None else pl.DataFrame()
     if model is not None:
         qa["clock"] = model.qa
+    if build is not None and build.qa:
+        qa["box"] = build.qa
     comotion_table = _comotion_uncertain(_comotion_table(grids, config), seconds)
     qa["comotion"] = comotion_summary(comotion_table)
     return EdaTables(
@@ -747,6 +835,9 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
         qa=qa,
         clock=clock,
         comotion=comotion_table,
+        box=build.box if build is not None else pl.DataFrame(),
+        box_pairs=build.box_pairs if build is not None else pl.DataFrame(),
+        box_loo=build.box_loo if build is not None else pl.DataFrame(),
     )
 
 
@@ -864,8 +955,8 @@ def _correct_export(
     series: dict[str, tuple[np.ndarray, np.ndarray]],
     model: ClockModel | None,
     config: EdaConfig,
-) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
-    """Corrected times, ``clock_uncertain`` and file info for one export.
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+    """Corrected times, ``clock_uncertain``, clock source and file info for one export.
 
     An export's rows are its SD card's records where both exist, and its repaired clock is
     the device's plus a constant that can change by whole 512-s wraps (after a long gap, or
@@ -883,9 +974,11 @@ def _correct_export(
     n = len(e.t)
     if model is None:
         info["clock_model"] = "none"
-        return e.t, np.zeros(n, bool), info
+        return e.t, np.zeros(n, bool), np.full(n, NO_MODEL, np.int8), info
+    rate = SOURCES.index("rate")
     t = np.full(n, np.nan)
     unc = np.ones(n, bool)
+    src = np.full(n, rate, np.int8)
     lag = np.full(n, np.nan)
     row_run = np.full(n, None, dtype=object)
     disagree = np.zeros(n, bool)
@@ -899,7 +992,7 @@ def _correct_export(
         runs = [r for r in row_run[matched]]
         for run in sorted(set(runs)):
             rows = matched & (row_run == run)
-            t[rows], u = model.correct(device, run, e.t[rows] - lag[rows])
+            t[rows], u, src[rows] = model.correct_full(device, run, e.t[rows] - lag[rows])
             unc[rows] = u | disagree[rows]
         main = max(set(runs), key=runs.count)
         rc = model.runs.get((device, main))
@@ -916,25 +1009,42 @@ def _correct_export(
     if rest.any():
         t[rest], _ = model.correct(device, path.name, e.t[rest])
         unc[rest] = True
+        src[rest] = rate
     if e.qa["clock"] == "recovered":
         unc = np.ones(n, bool)
-    return t, unc, info
+        src[:] = rate
+    return t, unc, src, info
 
 
 def _wear_uncertain(wear: pl.DataFrame, seconds: pl.DataFrame) -> pl.DataFrame:
-    """``clock_uncertain`` on a bout: any of its worn seconds has an uncertain clock."""
-    unc = seconds.filter(pl.col("ok") & pl.col("clock_uncertain"))
-    by_device = {d: np.sort(g["t"].dt.epoch("s").to_numpy()) for (d,), g in unc.group_by("device")}
-    flags = []
-    for device, a, b in zip(
-        wear["device"].to_list(),
-        wear["start"].dt.epoch("s").to_numpy(),
-        wear["end"].dt.epoch("s").to_numpy(),
-        strict=True,
-    ):
-        x = by_device.get(device)
-        flags.append(x is not None and np.searchsorted(x, b) > np.searchsorted(x, a))
-    return wear.with_columns(pl.Series("clock_uncertain", flags, dtype=pl.Boolean))
+    """``clock_uncertain`` on a bout: any of its worn seconds has an uncertain clock; and
+    ``clock_source``: the worst source among them."""
+    ok = seconds.filter("ok")
+
+    def times(rows: pl.DataFrame) -> dict[str, np.ndarray]:
+        return {d: np.sort(g["t"].dt.epoch("s").to_numpy()) for (d,), g in rows.group_by("device")}
+
+    def any_in(by_device: dict[str, np.ndarray]) -> list[bool]:
+        out = []
+        for device, a, b in zip(
+            wear["device"].to_list(),
+            wear["start"].dt.epoch("s").to_numpy(),
+            wear["end"].dt.epoch("s").to_numpy(),
+            strict=True,
+        ):
+            x = by_device.get(device)
+            out.append(x is not None and np.searchsorted(x, b) > np.searchsorted(x, a))
+        return out
+
+    flags = any_in(times(ok.filter("clock_uncertain")))
+    worst = np.zeros(wear.height, np.int8)
+    code = pl.col("clock_source").to_physical()
+    for level in range(1, len(SOURCES)):
+        worst[np.array(any_in(times(ok.filter(code >= level))), bool)] = level
+    return wear.with_columns(
+        pl.Series("clock_uncertain", flags, dtype=pl.Boolean),
+        pl.Series("clock_source", [SOURCES[k] for k in worst], dtype=SOURCE_DTYPE),
+    )
 
 
 def _comotion_table(grids: list[_ComotionGrid], config: EdaConfig) -> pl.DataFrame:
@@ -978,8 +1088,9 @@ def _comotion_table(grids: list[_ComotionGrid], config: EdaConfig) -> pl.DataFra
 
 
 def _comotion_uncertain(table: pl.DataFrame, seconds: pl.DataFrame) -> pl.DataFrame:
-    """``clock_uncertain`` per co-motion row: any of the device's seconds in the window is."""
-    flags = []
+    """``clock_uncertain`` per co-motion row: any of the device's seconds in the window is;
+    ``clock_source``: the worst source among them."""
+    flags, worst = [], []
     for d, a, b in zip(
         table["device"].to_list(),
         table["window_start"].to_list(),
@@ -990,20 +1101,31 @@ def _comotion_uncertain(table: pl.DataFrame, seconds: pl.DataFrame) -> pl.DataFr
             (pl.col("device") == d) & (pl.col("t") >= a) & (pl.col("t") < b) & ~pl.col("duplicate")
         )
         flags.append(bool(part["clock_uncertain"].any()))
-    return table.with_columns(pl.Series("clock_uncertain", flags, dtype=pl.Boolean))
+        worst.append(part["clock_source"].max() if part.height else "none")
+    return table.with_columns(
+        pl.Series("clock_uncertain", flags, dtype=pl.Boolean),
+        pl.Series("clock_source", worst, dtype=SOURCE_DTYPE),
+    )
 
 
 def comotion_summary(table: pl.DataFrame, min_pairs: int = 2) -> dict[str, Any]:
     """Absolute co-motion residuals per device-day (the median over its windows), for
     device-days resting on at least ``min_pairs`` pairs (one pair cannot say which device is
-    off): overall, for clocks the sync records measured, and for fallback clocks."""
+    off): overall, for clocks the sync records measured, for clocks the box anchored (the box
+    measured them, so this is not an independent check: see ``eda.box.leave_one_out``), and for
+    fallback (uncertain) clocks."""
     if not table.height:
         return {"device_days": 0}
     per = (
         table.filter(pl.col("pairs") >= min_pairs)
         .group_by("device", "day")
-        .agg(pl.col("residual_s").median(), pl.col("clock_uncertain").any())
+        .agg(
+            pl.col("residual_s").median(),
+            pl.col("clock_uncertain").any(),
+            pl.col("clock_source").max(),
+        )
     )
+    certain = ~pl.col("clock_uncertain")
 
     def stats(x: pl.DataFrame) -> dict[str, Any]:
         if not x.height:
@@ -1018,7 +1140,8 @@ def comotion_summary(table: pl.DataFrame, min_pairs: int = 2) -> dict[str, Any]:
 
     return {
         **stats(per),
-        "measured": stats(per.filter(~pl.col("clock_uncertain"))),
+        "measured": stats(per.filter(certain & (pl.col("clock_source") == "sync"))),
+        "box": stats(per.filter(certain & (pl.col("clock_source") == "box"))),
         "fallback": stats(per.filter("clock_uncertain")),
         "device_days_one_pair": table.filter(pl.col("pairs") < min_pairs)
         .select("device", "day")

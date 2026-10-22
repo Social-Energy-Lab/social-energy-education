@@ -215,11 +215,13 @@ def test_heart_rate_times_follow_the_clock_correction(with_exports):
 
 def _flags_agree(tables, heart) -> pl.DataFrame:
     sec = tables.seconds.group_by("device", "source", "run", pl.col("t").dt.truncate("10s")).agg(
-        pl.col("clock_uncertain").any().alias("sec_uncertain")
+        pl.col("clock_uncertain").any().alias("sec_uncertain"),
+        pl.col("clock_source").max().alias("sec_source"),
     )
     w = heart.windows.join(sec, on=["device", "source", "run", "t"], how="inner")
     assert w.height >= 0.95 * heart.windows.height
     assert (w["clock_uncertain"] == w["sec_uncertain"]).all()
+    assert (w["clock_source"] == w["sec_source"]).all()
     return w
 
 
@@ -235,4 +237,4 @@ def test_windows_carry_the_ingests_clock_flags(with_exports, synth, config):
     tables = ingest_eda(synth.cards, [], blind)
     w = _flags_agree(tables, heart_rate(synth.cards, [], blind))
     assert w.filter(source="sd")["clock_uncertain"].all()
-    assert set(w["clock_model"]) == {"rate"}
+    assert set(w["clock_model"]) == {"rate"} and set(w["clock_source"]) == {"rate"}

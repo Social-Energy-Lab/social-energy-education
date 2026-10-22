@@ -16,6 +16,7 @@ import yaml
 
 from . import paths
 from .beacons import BeaconConfig
+from .eda.box import BoxConfig
 from .eda.clock import ClockConfig
 from .eda.ingest import EdaConfig
 from .survey import SurveyConfig
@@ -190,6 +191,7 @@ class StudyConfig:
                     str(k): float(v) for k, v in (clock.get("fallback_rates_s_per_h") or {}).items()
                 },
             ),
+            box=BoxConfig(**(clock.get("box") or {})),
             comotion_windows=tuple(windows),
             export_starts=starts,
         )

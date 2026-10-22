@@ -8,9 +8,10 @@ clock model (``ClockPlan``), SD runs are corrected through it, and exports are m
 for row to their card and corrected through that run's model. Windows are flagged, never
 dropped (AGENTS.md invariant 3): one source per device-window (SD first, as in ``seconds``),
 ``implausible_time`` outside the study window, ``worn`` from the wear bouts,
-``clock_uncertain`` where any sample's clock fell back (``eda.clock``), with the run's
-``clock_model``. Nothing is resolved to people here; ``with_heart_rate`` joins the
-device-minutes onto the spine-resolved person-minutes.
+``clock_uncertain`` where any sample's clock fell back (``eda.clock``), ``clock_source`` (the
+worst of its samples: ``sync``, ``box``, ``rate``), with the run's ``clock_model``. Nothing
+is resolved to people here; ``with_heart_rate`` joins the device-minutes onto the
+spine-resolved person-minutes.
 
 Two checks of the method on the data itself:
 
@@ -34,6 +35,7 @@ import numpy as np
 import polars as pl
 
 from . import calibration, sd
+from .clock import SOURCE_DTYPE, SOURCES
 from .export import export_device, read_export_pulse
 from .ingest import (
     SOURCE_PRIORITY,
@@ -96,6 +98,24 @@ def _flagged(t: np.ndarray, flag: np.ndarray, window_s: int, name: str) -> pl.Da
     fin = np.isfinite(t) & flag
     w = np.unique(np.floor(t[fin] / window_s).astype(np.int64))
     return pl.DataFrame({"w": w, name: np.ones(len(w), bool)})
+
+
+def _with_source(win: pl.DataFrame, t: np.ndarray, src: np.ndarray, window_s: int) -> pl.DataFrame:
+    """``clock_source``: the worst source (``eda.clock.SOURCES``) of the window's samples."""
+    fin = np.isfinite(t)
+    per = (
+        pl.DataFrame({"w": np.floor(t[fin] / window_s).astype(np.int64), "s": src[fin]})
+        .group_by("w")
+        .agg(pl.col("s").max())
+    )
+    names = pl.Series([SOURCES[k] for k in per["s"].to_list()], dtype=SOURCE_DTYPE)
+    per = per.with_columns(names.alias("clock_source")).drop("s")
+    return (
+        win.with_columns((pl.col("t").dt.epoch("s") // window_s).alias("w"))
+        .join(per, on="w", how="left")
+        .with_columns(pl.col("clock_source").fill_null("none"))
+        .drop("w")
+    )
 
 
 def _with_flags(
@@ -171,7 +191,7 @@ def heart_rate(
             chunks, _, tl = place_sd_run(run, keep, config)
             raw = np.concatenate([c.ppg for c in chunks])
             del chunks
-            t, uncertain, kind = plan.sd_times(device, run.name, tl)
+            t, uncertain, kind, src = plan.sd_times(device, run.name, tl)
             near = plan.near_export(device, run.name, exports_by_device[device])
             if near and np.isfinite(t).any():  # kept for the exports' row-for-row match
                 series[run.name] = (tl.t, raw.astype(np.int16))
@@ -183,7 +203,10 @@ def heart_rate(
             beat_parts.append(_beats(beats, device, "sd", run.name))
             parts.append(
                 _tag(
-                    _with_flags(win, t, {"clock_uncertain": uncertain}, w), device, "sd", run.name
+                    _with_source(_with_flags(win, t, {"clock_uncertain": uncertain}, w), t, src, w),
+                    device,
+                    "sd",
+                    run.name,
                 ).with_columns(
                     pl.lit(None, pl.Float32).alias("hr_export_bpm"),
                     pl.lit(None, pl.Int32).alias("hr_export_samples"),
@@ -199,7 +222,7 @@ def heart_rate(
             seen[device].add(digest)
             start = plan.export_start(path, config)
             e = read_export_pulse(path, config.timeline(), start, config.sample_rate_hz)
-            t, uncertain, info = plan.correct_export(device, path, e, series, config)
+            t, uncertain, src, info = plan.correct_export(device, path, e, series, config)
             beats, win = analyse(t, e.ppg_mv, ppg)
             qa["export_files"] += 1
             qa["export_samples_placed"] += int(np.isfinite(t).sum())
@@ -208,7 +231,7 @@ def heart_rate(
             beat_parts.append(_beats(beats, device, "export", path.name))
             flags = {"gap_ambiguous": e.gap_ambiguous, "clock_uncertain": uncertain}
             win = (
-                _with_flags(win, t, flags, w)
+                _with_source(_with_flags(win, t, flags, w), t, src, w)
                 .with_columns((pl.col("t").dt.epoch("s") // w).alias("w"))
                 .join(_export_hr(t, e.hr_bpm, w), on="w", how="left")
                 .drop("w")
@@ -229,6 +252,7 @@ def heart_rate(
         "hr_export_samples": pl.Int32,
         "gap_ambiguous": pl.Boolean,
         "clock_uncertain": pl.Boolean,
+        "clock_source": SOURCE_DTYPE,
         "clock_model": pl.String,
     }
     windows = (
@@ -273,13 +297,22 @@ def heart_rate(
         beats.with_columns(pl.col("t").dt.truncate(f"{w}s").alias("_w"))
         .join(
             windows.select(
-                "device", "source", "run", pl.col("t").alias("_w"), "ok", "clock_uncertain"
+                "device",
+                "source",
+                "run",
+                pl.col("t").alias("_w"),
+                "ok",
+                "clock_uncertain",
+                "clock_source",
             ),
             on=["device", "source", "run", "_w"],
             how="left",
         )
         .drop("_w")
-        .with_columns(pl.col("ok", "clock_uncertain").fill_null(False))
+        .with_columns(
+            pl.col("ok", "clock_uncertain").fill_null(False),
+            pl.col("clock_source").fill_null("none"),
+        )
     )
     qa["beats"] = beats.height
     qa["beats_ok"] = int(beats["ok"].sum())
@@ -290,7 +323,8 @@ def heart_rate(
 def device_minutes(windows: pl.DataFrame, ppg: PpgConfig | None = None) -> pl.DataFrame:
     """Per device-minute over ``ok`` windows: ``hr_bpm`` is the median heart rate of the
     good-quality windows (null if none), ``hr_quality`` the share of the minute they cover,
-    ``clock_uncertain`` whether any of its windows' clocks fell back."""
+    ``clock_uncertain`` whether any of its windows' clocks fell back, ``clock_source`` the worst
+    source of its windows."""
     ppg = ppg or PpgConfig()
     per_minute = 60 // ppg.window_s
     good = pl.col("quality_ok")
@@ -304,6 +338,7 @@ def device_minutes(windows: pl.DataFrame, ppg: PpgConfig | None = None) -> pl.Da
             pl.col("hr_bpm").filter(good).median().cast(pl.Float32).alias("hr_bpm"),
             pl.col("worn").any().alias("worn"),
             pl.col("clock_uncertain").any().alias("clock_uncertain"),
+            pl.col("clock_source").max().alias("clock_source"),
         )
         .with_columns((pl.col("hr_windows_good") / per_minute).cast(pl.Float32).alias("hr_quality"))
         .sort("device", "minute")
@@ -311,7 +346,8 @@ def device_minutes(windows: pl.DataFrame, ppg: PpgConfig | None = None) -> pl.Da
 
 
 def with_heart_rate(person_minutes: pl.DataFrame, minutes: pl.DataFrame) -> pl.DataFrame:
-    """The person-minute table with ``hr_ppg_bpm``, ``hr_quality`` and ``hr_clock_uncertain``
+    """The person-minute table with ``hr_ppg_bpm``, ``hr_quality``, ``hr_clock_uncertain`` and
+    ``hr_clock_source``
     joined on device and minute. Its own columns, ``hr_bpm`` (the export's) and
     ``clock_uncertain`` included, are left as they are."""
     return person_minutes.join(
@@ -321,6 +357,7 @@ def with_heart_rate(person_minutes: pl.DataFrame, minutes: pl.DataFrame) -> pl.D
             pl.col("hr_bpm").alias("hr_ppg_bpm"),
             "hr_quality",
             pl.col("clock_uncertain").alias("hr_clock_uncertain"),
+            pl.col("clock_source").alias("hr_clock_source"),
         ),
         on=["device", "minute"],
         how="left",

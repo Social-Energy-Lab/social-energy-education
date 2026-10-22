@@ -93,8 +93,10 @@ eda:
     # For a unit with no run the sync records could fit: SH04 never wrote a record; box and
     # plenum co-motion put it at about -5 to -8 s/h.
     fallback_rates_s_per_h: {SH04: -6.0}
-    # Evening hand-in: devices lay together in the box. The co-motion check (qa.json) looks
-    # for pairs moving together in these windows (local time).
+    # Evening hand-in: devices lay together in the box. The box anchor (eda.box) finds those
+    # stretches itself, per run, and measures the runs without sync records against the
+    # units with them. The co-motion check (qa.json) looks for pairs moving together in these
+    # windows (local time).
     comotion_windows:
       - "2026-08-16 18:45-19:30"
       - "2026-08-19 18:50-21:00"
