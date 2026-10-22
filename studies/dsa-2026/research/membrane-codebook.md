@@ -90,6 +90,11 @@ and the analyses report all three side by side:
    stable; undefined for `fluctuated` and `na`, since the amount carries no sign). Coded with
    `confidence` and `evidence`.
 
+**Primary measure (2026-10-22, Álvaro):** `D_academy_lenient`, chosen because `M_now_lenient` has
+the highest agreement between the two coders of the three. The results under all three measures
+had already been seen when it was chosen, so the choice is not blind; the other two stay reported
+beside it as sensitivities, and the next phase fixes the measure before any data exist.
+
 ### Selective permeability
 
 `selective`: true if the participant rejects the thick/thin axis for a *what gets through, and

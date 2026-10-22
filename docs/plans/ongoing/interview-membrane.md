@@ -2,7 +2,7 @@
 
 **Priority:** high — target: a first exploratory result for the research-group talk on 2026-11-03
 **Gate:** none
-**Next:** human check of the flagged and low-confidence codes; then pick one change measure for the preregistration from the three compared
+**Next:** the interview slide for 2026-11-03; the human check stays open (review sheet ready locally), so results are reported as model-coded
 
 **Goal:** turn the membrane block of the in-person interviews into per-person codes (the state in
 everyday life, on arrival and at the interview, change, openers and closers, placed episodes) and
@@ -26,6 +26,9 @@ set them beside the sensor and survey measures as a first-person ground truth.
 - **Done (2026-10-22):** instead of choosing, all three change measures are coded and compared
   (codebook, "Variants under comparison"; Álvaro: "we try everything"). The two new codes reach
   higher coder agreement than the strict one. Results per measure in the private note.
+- **Decided (2026-10-22, Álvaro):** primary change measure `D_academy_lenient`, on coder agreement
+  (codebook). The human check has not been done; a local review sheet (flagged codes, every
+  low-confidence code, a random fifth) is ready under the private `derived/interview-membrane/review/`.
 
 ## Why
 
