@@ -141,6 +141,76 @@ def cluster_bootstrap(
 
 
 @dataclass(frozen=True)
+class Coefficient:
+    name: str
+    estimate: float
+    se: float
+    lo: float
+    hi: float
+    n: int
+    clusters: int
+
+
+def within_ols(
+    y: Sequence[float],
+    x: np.ndarray,
+    names: Sequence[str],
+    *,
+    absorb: Sequence[Hashable],
+    cluster: Sequence[Hashable],
+    level: float = 0.95,
+) -> list[Coefficient]:
+    """OLS of ``y`` on the columns of ``x`` with one fixed effect per ``absorb`` group (absorbed
+    by demeaning within the group), and cluster-robust (CR1) standard errors by ``cluster``.
+
+    Rows with a non-finite value are dropped. The small-sample factor is
+    ``G/(G-1) * (N-1)/(N-K)`` with ``K`` the columns of ``x`` (the absorbed effects are not
+    counted, as is usual when the groups nest within clusters). Intervals are normal. A column
+    without variation within any group gets NaN.
+    """
+    yv = np.asarray(y, dtype=float)
+    xv = np.asarray(x, dtype=float).reshape(len(yv), -1)
+    ok = np.isfinite(yv) & np.isfinite(xv).all(axis=1)
+    yv, xv = yv[ok], xv[ok]
+    _, g = np.unique(np.asarray(absorb, dtype=object)[ok].astype(str), return_inverse=True)
+    _, c = np.unique(np.asarray(cluster, dtype=object)[ok].astype(str), return_inverse=True)
+    counts = np.bincount(g)
+
+    def demean(v: np.ndarray) -> np.ndarray:
+        return v - (np.bincount(g, weights=v) / counts)[g]
+
+    yd = demean(yv)
+    xd = np.column_stack([demean(xv[:, j]) for j in range(xv.shape[1])])
+    n, k = xd.shape
+    keep = np.abs(xd).sum(axis=0) > 1e-12
+    out = []
+    est = np.full(k, NAN)
+    se = np.full(k, NAN)
+    if keep.any() and n > keep.sum():
+        xk = xd[:, keep]
+        bread = np.linalg.pinv(xk.T @ xk)
+        beta = bread @ xk.T @ yd
+        u = yd - xk @ beta
+        n_c = int(c.max()) + 1
+        scores = np.zeros((n_c, xk.shape[1]))
+        np.add.at(scores, c, xk * u[:, None])
+        meat = scores.T @ scores
+        kk = xk.shape[1]
+        factor = (n_c / (n_c - 1)) * ((n - 1) / (n - kk)) if n_c > 1 else NAN
+        cov = factor * bread @ meat @ bread
+        est[keep] = beta
+        se[keep] = np.sqrt(np.diag(cov))
+    zq = NormalDist().inv_cdf(0.5 + level / 2)
+    n_clusters = len(set(c.tolist()))
+    for j, name in enumerate(names):
+        out.append(
+            Coefficient(name, float(est[j]), float(se[j]), float(est[j] - zq * se[j]),
+                        float(est[j] + zq * se[j]), n, n_clusters)
+        )  # fmt: skip
+    return out
+
+
+@dataclass(frozen=True)
 class Agreement:
     kappa: float
     exact: float
