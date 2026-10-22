@@ -122,6 +122,14 @@ def test_an_export_without_a_clock_is_unplaced_unless_given_a_start(tmp_path):
     assert e.qa["clock"] == "recovered" and e.qa["records_bad"] == 0
 
 
+def test_a_few_rows_without_a_timestamp_are_bad_and_the_rest_placed(tmp_path):
+    path = tmp_path / "x_SH07_Calibrated_SD.csv"
+    write_export(path, [-1.0] * 5 + [T0_MS + i * STEP for i in range(295)])
+    e = read_export(path)
+    assert np.isnan(e.t[:5]).all() and np.isfinite(e.t[5:]).all()
+    assert close(e.t[5], T0_MS / 1000) and e.qa["clock"] == "sync"
+
+
 def test_export_span_reads_only_the_first_and_last_rows(tmp_path):
     path = tmp_path / "x_SH07_Calibrated_SD.csv"
     write_export(path, [T0_MS + i * STEP for i in range(1000)])

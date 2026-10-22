@@ -1,11 +1,11 @@
 # Instrument: EDA / heart-rate wearables (Shimmer3R GSR+)
 
-Status: **ingest built** (`social_energy.eda`, `social-energy ingest-eda`). Reads SD-card logs and Shimmer Base calibrated CSV exports, and corrects device clocks from the cards' sync records.
+Status: **ingest built** (`social_energy.eda`, `social-energy ingest-eda`). Reads SD-card logs and Shimmer Base calibrated CSV exports, and corrects device clocks from the cards' sync records. **Heart rate from the raw PPG built** (`social_energy.eda.ppg`, `social-energy eda-heart-rate`), on the same corrected clocks.
 
 ## What it measures
 
 - Electrodermal activity (skin conductance) from two finger electrodes. *Tonic* level (slow) and *phasic* responses (SCRs, seconds): sympathetic arousal.
-- PPG (optical pulse), from which heart rate and inter-beat intervals can be derived. Signal quality varies by device and wear; check it before relying on heart rate.
+- PPG (optical pulse, finger or ear clip), from which heart rate and inter-beat intervals can be derived. Signal quality varies by device and wear, and some sensors show no pulse at all; every heart-rate window carries a quality index (below).
 - A 3-axis accelerometer in the wrist unit, used for motion and, with skin contact, for wear detection.
 - **Arousal is not resonance.** Excitement, stress, heat and movement all raise EDA. Interpretation needs context from self-reports, the programme and interviews.
 
@@ -116,10 +116,29 @@ PPG mV = ADC · 3000/4095.
 | Gaps the counter cannot bridge (≥ 1 min between consecutive records) | the run splits into segments, each placed by its own anchors |
 | Duplicate run folders from copying (`<DEV>-<run> 2`) | byte-identical chunks dropped; complementary halves kept |
 | Byte-identical export files under two session names | dropped as duplicates |
+| An export with `-1` in every timestamp (written without a clock) | rows are `bad`, not placed; the SD card covers the same samples |
 | A device's `sdlog.cfg` reset to factory values (51.2 Hz, GSR off) while its data is standard 128 Hz | sample rate read from each chunk header, not from `sdlog.cfg` |
 | OS files inside `data/` (Spotlight index, `.fseventsd`, copy temporaries) | ignored: only `<DEV>-<run>/<3 digits>` is read |
 | The same samples on the SD card and in an export | one source per device-second, SD first |
 | Heat raises EDA baselines | context, not a flag |
+
+## Heart rate from PPG
+
+The PPG is sampled with every record (128 Hz, 12-bit, mV = ADC · 3000/4095), on the SD card and in the export alike. Shimmer Base computes a heart rate (`PPGtoHR_CAL`) only into its export; on the SD card there is only the raw pulse. `social_energy.eda.ppg` derives heart rate from the raw pulse wherever it exists:
+
+1. **Cleaning:** a zero-phase band-pass, 0.5–8 Hz (the magnitude of a second-order Butterworth applied forward and backward), per contiguous stretch; stretches split at any step between samples over 0.25 s (the ~28.7 s pauses, run boundaries).
+2. **Beats:** systolic peaks by Elgendi et al. (2013): clipped and squared signal, a 111 ms moving average (one systolic peak) above a 667 ms one (one beat) plus 0.02 × the mean energy over 10 s; one peak per block at least 111 ms long; peaks under 0.3 s apart keep the larger.
+3. **Inter-beat intervals:** an interval is *plausible* within 40–200 bpm (0.3–1.5 s) and within 30 % of the median of its 9 neighbours.
+4. **Windows of 10 s** (aligned to the epoch): heart rate = 60 / median plausible interval. Quality after Orphanidou et al. (2015): rate 40–200 bpm, no gap between beats over 3 s, longest / shortest interval < 2.2, mean correlation of the beats with their average template ≥ 0.86; plus ≥ 8 s of signal, ≥ 3 plausible intervals, and a filtered pulse SD ≥ 5 mV. Each rule is a flag, `quality_ok` their conjunction. Nothing is dropped.
+
+The interval-change limit and the 5 mV amplitude floor are ours `[inferred]`; the rest are the published defaults.
+
+Instrument facts this rests on:
+
+- **Polarity:** the stored PPG rises with each pulse. Beats agree with their template better upright than inverted, and both polarities give the same rate.
+- **Dead or unusable PPG:** a sensor that sees no pulse records only noise of ~0.1–3 mV SD (on skin or off), against a pulse of tens to hundreds of mV SD on a working one. On DSA 2026 this was a property of a device-*day*, not of a device: the same unit gave no pulse all day and a normal pulse the next, as if the clip was not on `[inferred]`. The amplitude floor and the template rule flag it; `hr_usability` shows it per device-day.
+- **Shimmer's own heart rate is not a reference on a dead sensor:** on noise it reports intermittent, implausibly high values (often near 180–213 bpm). Compare against it only where the PPG itself is good.
+- Heart rate is placed exactly as the ingest places its seconds: the same first pass builds the same per-run clock model, SD runs are corrected through it, and exports are matched row for row to their card and corrected through that run's model (Clocks, above). So it is only as well placed as the clock correction is: windows touched by a fallback clock carry `clock_uncertain`. Before the correction, SD windows and export windows of "the same" time on a drifting unit were different moments, and comparing them measured the clock, not the method. The algorithm itself is validated on the export's own samples, where both rates come from the same samples on the same clock.
 
 ## Privacy
 
@@ -138,5 +157,13 @@ PPG mV = ADC · 3000/4095.
 - `scr`: device, source, onset, peak, amplitude (µS), rise time, `ok`, `worn`, `clock_uncertain`. Trough-to-peak on 4 Hz, 1 s smoothing, ≥ 0.05 µS within 0.5–5 s; onset at the last point within 5% of the rise.
 - `person_minutes`: after the spine, one row per person-minute with worn seconds, mean and median conductance, motion SD, heart rate, SCR count and summed amplitude, `excluded`, `clock_uncertain`. People without EDA consent are not in it.
 - Records with no time (bad, unanchored) are counted in `qa.json`, never placed.
+
+`social-energy eda-heart-rate` (after `ingest-eda`, whose `wear.parquet` it reads) adds, beside them and touching nothing else:
+
+- `hr_beats`: one row per detected beat: device, source, run, `t`, `ibi_ms` (from the previous beat of the same stretch), `plausible`, `ok` and `clock_uncertain` (its window's).
+- `hr_windows`: one row per device, source, run and 10-s window: covered seconds, beats, plausible intervals, `hr_bpm`, `ibi_ms`, filtered pulse SD, template correlation, one flag per quality rule and `quality_ok`; for exports also Shimmer's mean `hr_export_bpm`; `gap_ambiguous`, `clock_uncertain` (any sample's clock is the fallback), `clock_model` (the run's, as in `files`), `duplicate` (one source per device-window, SD first), `implausible_time`, `ok`, `worn` (the window's midpoint is inside a wear bout).
+- `hr_minutes`: per device-minute over `ok` windows: `hr_bpm` (median of the good windows), `hr_quality` (good windows / 6), window counts, `worn`, `clock_uncertain`. It joins onto `person_minutes` by device and minute (`eda.heart.with_heart_rate` adds `hr_ppg_bpm`, `hr_quality` and `hr_clock_uncertain`); `person_minutes` itself is unchanged.
+- `hr_agreement`: per device and local day, our rate minus Shimmer's in windows where ours is good and the export has one: n, bias, SD, Bland–Altman limits, MAE, share within 5 bpm; once on the export's own samples (the algorithms compared) and once on the SD card's samples of the same windows.
+- `hr_usability`: per device and local day over worn windows: their number, the share with good heart rate, the share with a pulse above the floor, medians of template correlation, pulse SD and heart rate.
 
 The wear and SCR thresholds are conventional defaults `[inferred]`, configurable, for the research team to review.
