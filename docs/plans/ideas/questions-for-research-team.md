@@ -59,4 +59,11 @@ Read off <https://github.com/thofbaur/network-beacon_NRF54L15> rather than asked
 9. ~~Survey and AI interviews: was a post-academy wave fielded?~~ No (Álvaro, 2026-10-18).
 10. Interviews: coding tool and export format (only if coded segments will be analysed alongside sensors).
 11. Future field phases: which tool will the on-site researcher use for a structured field log (laptop spreadsheet, phone form)?
+12. EDA: were any Shimmer units individually calibrated? The default GSR resistors reproduce the calibrated export exactly on every unit with an overlap; the others hold only defaults in their headers. See [`instruments/eda.md`](../../context/instruments/eda.md).
+13. EDA: was the laptop that activated the units each morning on network time? It fixes the reference group's error against UTC; until then EDA × beacon joins below a few seconds are not justified.
+14. EDA: which unit was the sync master on 16 Aug? No header flags it, so that day's master gets the fallback clock.
+15. EDA: can the two exports without a clock (every timestamp −1) be re-exported from the Shimmer database? They are placed from their session's start for now, flagged.
+16. EDA: on device-days with no pulse, was the PPG clip attached, or were clips swapped between devices?
+17. EDA: are the PPG quality thresholds (template correlation 0.86, amplitude 5 mV, interval change 30 %) acceptable?
+18. AudioMoth: when and how was each recorder's clock set? The plenum recorder reads seconds ahead of the Shimmer reference and gains about a second a day.
 
