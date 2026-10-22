@@ -208,3 +208,33 @@ def within_ols(
                         float(est[j] + zq * se[j]), n, n_clusters)
         )  # fmt: skip
     return out
+
+
+@dataclass(frozen=True)
+class Agreement:
+    kappa: float
+    exact: float
+    within_one: float
+    n: int
+
+
+def weighted_kappa(a: Sequence, b: Sequence, *, levels: Sequence[int]) -> Agreement:
+    """Cohen's kappa with quadratic weights between two coders on an ordinal scale.
+
+    ``levels`` is the whole scale, so a near miss is weighted against its full range. Pairs where
+    either side is not one of the levels (missing, ``"na"``) are dropped. Also returns the share of
+    exact agreement and of agreement within one level. Kappa is NaN when chance agreement is
+    complete (both coders used one level only).
+    """
+    idx = {v: i for i, v in enumerate(levels)}
+    pairs = [(idx[x], idx[y]) for x, y in zip(a, b, strict=True) if x in idx and y in idx]
+    n, k = len(pairs), len(levels)
+    if n == 0:
+        return Agreement(NAN, NAN, NAN, 0)
+    i, j = (np.array(v) for v in zip(*pairs, strict=True))
+    w = 1 - (np.subtract.outer(np.arange(k), np.arange(k)) / max(k - 1, 1)) ** 2
+    observed = w[i, j].mean()
+    pa, pb = np.bincount(i, minlength=k) / n, np.bincount(j, minlength=k) / n
+    expected = float(pa @ w @ pb)
+    kappa = NAN if expected >= 1 else (observed - expected) / (1 - expected)
+    return Agreement(float(kappa), float((i == j).mean()), float((abs(i - j) <= 1).mean()), n)

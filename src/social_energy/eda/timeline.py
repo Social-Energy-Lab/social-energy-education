@@ -1,7 +1,10 @@
-"""Place one SD run's records in time: clean the tick counter, segment it, anchor it.
+"""Place one SD run's records on the device's clock: clean the tick counter, segment it,
+anchor it.
 
-The device's 24-bit tick counter (32768 Hz) is reliable between records; the absolute clock
-is each chunk file's modification time, written when the file was closed. So:
+The device's 24-bit tick counter (32768 Hz) is reliable between records. The device's full
+clock (40 bits) is in each chunk's header, at the chunk's first record; its low 24 bits are
+the counter. The chunk file's modification time is a coarse fallback (2-s resolution, and a
+copy can reset it). So:
 
 1. Drop all-zero records, then records whose tick is out of sequence with both neighbours (or
    whose removal makes the sequence consistent again). Flagged ``bad``, never placed.
@@ -11,13 +14,20 @@ is each chunk file's modification time, written when the file was closed. So:
    some of which chain up by chance) and becomes bad.
 3. Elapsed time inside a segment is the sum of tick steps, so pauses and dropped samples keep
    their real length.
-4. Each chunk offers up to two anchors. *End*: its last good record sits at its modification
+4. *Header*: each chunk's header dates its first good record to the tick. Where a segment
+   has eligible header anchors, the inliers among them (within ``header_tolerance_s``) place
+   it, with no rate (the header and the counter are the same clock). Only a segment with
+   none falls back to the modification times, flagged ``by_mtime``.
+5. Each chunk offers up to two modification-time anchors. *End*: its last good record sits
+   at its modification
    time, unless the chunk is truncated (it lost its tail). *Start*: a chunk closed by the
    device's file rotation (its successor exists) began ``rotation_s`` before its modification
    time, truncated or not. Times outside the anchor window are not eligible. Per segment, the
    anchors within ``anchor_tolerance_s`` of the median are used; with enough of them spread
    over ``drift_min_span_s``, a clock rate is fitted too. A segment without anchors is
    ``unanchored`` and gets no time.
+
+The result is the device's own clock, which can run slow: ``eda.clock`` corrects it.
 """
 
 from __future__ import annotations
@@ -45,6 +55,8 @@ class TimelineConfig:
     rotation_s: float | None = None
     drift_min_span_s: float = 7200.0
     drift_min_anchors: int = 3
+    #: Header anchors of one segment agree to the tick; this much slack absorbs rounding.
+    header_tolerance_s: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -52,6 +64,8 @@ class ChunkInfo:
     mtime_s: float  # stored modification time, epoch seconds
     truncated: bool = False  # lost its tail: the last record is not at the modification time
     rotated: bool = False  # the device closed it to open the next chunk number
+    #: Device clock at the chunk's first record, ticks since the Unix epoch (header).
+    header_ticks: int | None = None
 
 
 @dataclass(frozen=True)
@@ -60,6 +74,7 @@ class RunTimeline:
     bad: np.ndarray  # bool: all-zero or out-of-sequence record
     segment: np.ndarray  # int: segment index, -1 for bad records
     unanchored: np.ndarray  # bool: good record in a segment with no usable anchor
+    by_mtime: np.ndarray  # bool: placed by modification times (no usable header anchor)
     anchors: pl.DataFrame  # one row per chunk
     qa: dict[str, Any]
 
@@ -117,8 +132,10 @@ def _anchor_table(
     seg: np.ndarray,
     tau: np.ndarray,
     config: TimelineConfig,
+    ticks: np.ndarray | None = None,
 ) -> pl.DataFrame:
-    """End and start anchors per chunk, over the good records (``chunk_of`` per good record)."""
+    """Header, end and start anchors per chunk, over the good records (``chunk_of`` and
+    ``ticks`` per good record)."""
 
     def eligible(utc: float) -> bool:
         return (config.anchor_from_s is None or utc >= config.anchor_from_s) and (
@@ -132,6 +149,12 @@ def _anchor_table(
             continue
         close = info.mtime_s + config.mtime_to_utc_s
         first, last = mine[0], mine[-1]
+        if info.header_ticks is not None and ticks is not None:
+            # The first good record lies within half a wrap of the chunk's first record.
+            half = TICK_WRAP // 2
+            delta = (int(ticks[first]) - info.header_ticks + half) % TICK_WRAP - half
+            at = (info.header_ticks + delta) / TICK_HZ
+            rows.append((c, "header", int(seg[first]), float(tau[first]), at, eligible(at)))
         rows.append(
             (
                 c,
@@ -159,6 +182,14 @@ def _anchor_table(
     ).with_columns((pl.col("utc_s") - pl.col("tau_s")).alias("residual_s"))
 
 
+def _segment_anchors(anchors: pl.DataFrame, s: int) -> pl.DataFrame:
+    """A segment's eligible anchors of the best kind it has: the header's, else the
+    modification times'."""
+    a = anchors.filter(pl.col("eligible") & (pl.col("segment") == s))
+    header = a.filter(kind="header")
+    return header if header.height else a.filter(pl.col("kind") != "header")
+
+
 def _hidden_gap(
     anchors: pl.DataFrame,
     seg: np.ndarray,
@@ -176,7 +207,7 @@ def _hidden_gap(
     wrap_s = TICK_WRAP / TICK_HZ
     tol = config.anchor_tolerance_s
     for s in anchors.filter("eligible")["segment"].unique().sort().to_list():
-        a = anchors.filter(pl.col("eligible") & (pl.col("segment") == s)).sort("tau_s", "kind")
+        a = _segment_anchors(anchors, s).sort("tau_s", "kind")
         r, at = a["residual_s"].to_numpy(), a["tau_s"].to_numpy()
         for i in range(1, len(r)):
             jump = r[i] - r[i - 1]
@@ -208,6 +239,7 @@ def place_run(
     t = np.full(n, np.nan)
     segment = np.full(n, -1)
     unanchored = np.zeros(n, bool)
+    by_mtime = np.zeros(n, bool)
 
     idx = np.flatnonzero(good)
     max_step = int(config.max_step_s * TICK_HZ)
@@ -222,7 +254,7 @@ def place_run(
         if len(idx):
             tau_ticks = tau_ticks - tau_ticks[np.flatnonzero(brk)][seg]
         tau = tau_ticks / TICK_HZ
-        anchors = _anchor_table(chunks, chunk_of[idx], seg, tau, config)
+        anchors = _anchor_table(chunks, chunk_of[idx], seg, tau, config, T[idx])
         split = _hidden_gap(anchors, seg, tau, d, config)
         if split is None or split in hidden:
             break
@@ -232,29 +264,40 @@ def place_run(
     used = np.zeros(anchors.height, bool)
     rates: list[float] = []
     n_segments = int(seg.max()) + 1 if len(idx) else 0
-    unanchored_segments = 0
+    unanchored_segments = mtime_segments = 0
+    indexed = anchors.with_row_index("_i")
     for s in range(n_segments):
         members = idx[seg == s]
-        a = anchors.with_row_index("_i").filter(pl.col("eligible") & (pl.col("segment") == s))
+        a = _segment_anchors(indexed, s)
         if a.height == 0:
             unanchored[members] = True
             unanchored_segments += 1
             continue
+        header = a["kind"][0] == "header"
         r = a["residual_s"].to_numpy()
-        inlier = pick_inliers(r, config.anchor_tolerance_s)
+        tol = config.header_tolerance_s if header else config.anchor_tolerance_s
+        inlier = pick_inliers(r, tol)
         a_tau, a_r = a["tau_s"].to_numpy()[inlier], r[inlier]
         used[a["_i"].to_numpy()[inlier]] = True
         span = a_tau.max() - a_tau.min()
-        if len(a_tau) >= config.drift_min_anchors and span >= config.drift_min_span_s:
+        if header:
+            rate, offset = 0.0, float(np.median(a_r))
+        elif len(a_tau) >= config.drift_min_anchors and span >= config.drift_min_span_s:
             rate, offset = np.polyfit(a_tau, a_r, 1)
         else:
             rate, offset = 0.0, float(np.mean(a_r))
+        if not header:
+            by_mtime[members] = True
+            mtime_segments += 1
         rates.append(float(rate) * 1e6)
         seg_tau = tau[seg == s]
         t[members] = seg_tau + offset + rate * seg_tau
 
     anchors = anchors.with_columns(pl.Series("used", used))
     qa = {
+        "records_by_mtime": int(by_mtime.sum()),
+        "segments_by_mtime": mtime_segments,
+        "mtime_disagreements": _mtime_disagreements(anchors, t, idx, chunk_of[idx], config),
         "records": int(n),
         "records_zero": int(Z.sum()),
         "records_bad": int((~good).sum()),
@@ -267,5 +310,29 @@ def place_run(
         "segment_rates_ppm": rates,
     }
     return RunTimeline(
-        t=t, bad=~good, segment=segment, unanchored=unanchored, anchors=anchors, qa=qa
+        t=t,
+        bad=~good,
+        segment=segment,
+        unanchored=unanchored,
+        by_mtime=by_mtime,
+        anchors=anchors,
+        qa=qa,
     )
+
+
+def _mtime_disagreements(
+    anchors: pl.DataFrame,
+    t: np.ndarray,
+    idx: np.ndarray,
+    chunk_of: np.ndarray,
+    config: TimelineConfig,
+) -> int:
+    """Plausibility check of the placement: eligible end anchors (modification times) further
+    than ``anchor_tolerance_s`` from the placed time of their chunk's last good record."""
+    ends = anchors.filter(pl.col("eligible") & (pl.col("kind") == "end"))
+    n = 0
+    for c, utc in zip(ends["chunk"].to_list(), ends["utc_s"].to_list(), strict=True):
+        mine = idx[chunk_of == c]
+        if len(mine) and np.isfinite(t[mine[-1]]):
+            n += abs(utc - t[mine[-1]]) > config.anchor_tolerance_s
+    return int(n)

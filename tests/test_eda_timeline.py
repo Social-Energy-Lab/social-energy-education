@@ -193,3 +193,46 @@ def test_one_stray_anchor_does_not_split_a_segment():
     )
     assert tl.qa["segments"] == 1 and tl.qa["hidden_gaps"] == 0
     assert close(tl.t, 1000 + np.arange(3840) / 128)
+
+
+def test_headers_place_chunks_and_outvote_a_wrong_modification_time():
+    """Two chunks of 1280 samples, contiguous. The headers say the device clock read
+    5000 s (5000 * 32768 ticks) at chunk 0's first record and 5010 s at chunk 1's: both give
+    offset 5000. Chunk 0's modification time is 31 s late; it is not used (headers win), and
+    the disagreement is counted. Chunk 1's first record is all-zero: the first good record
+    (1/128 s later) is dated from the same header."""
+    c0 = ticks(5000 * 32768, 1280)
+    c1 = ticks(c0[-1] + 256, 1280)
+    z1 = [i == 0 for i in range(1280)]
+    tl = run(
+        [(c0, [False] * 1280), (c1, z1)],
+        [
+            ChunkInfo(mtime_s=5000 + 1279 / 128 + 31, header_ticks=5000 * 32768),
+            ChunkInfo(mtime_s=5000 + 2559 / 128, header_ticks=5010 * 32768),
+        ],
+    )
+    good = ~tl.bad
+    assert close(tl.t[good], 5000 + np.arange(2560)[good] / 128)
+    assert not tl.by_mtime.any()
+    assert tl.qa["mtime_disagreements"] == 1 and tl.qa["records_by_mtime"] == 0
+    assert tl.anchors.filter(kind="header")["used"].to_list() == [True, True]
+
+
+def test_a_header_dates_a_record_just_before_the_counter_wraps():
+    """The header's low 24 bits sit 100 ticks after the first record's tick (it was read
+    a few ms late), across a 2^24 wrap: the record is placed 100 ticks before the header,
+    not 512 s after it."""
+    hdr = 7 * WRAP + 50  # low bits 50; the first tick is WRAP - 50
+    c = ticks(WRAP - 50, 300)
+    tl = run([(c, [False] * 300)], [ChunkInfo(mtime_s=0.0, header_ticks=hdr)])
+    assert close(tl.t[0], (hdr - 100) / 32768)
+
+
+def test_without_a_usable_header_a_segment_falls_back_to_modification_times():
+    """A header outside the anchor window (an unset clock) is not eligible: the chunk is
+    placed by its modification time as before, and flagged by_mtime."""
+    c = ticks(0, 1280)
+    cfg = TimelineConfig(anchor_from_s=1000.0, anchor_to_s=1e7)
+    tl = run([(c, [False] * 1280)], [ChunkInfo(mtime_s=2000.0, header_ticks=0)], cfg)
+    assert close(tl.t, 2000 - 1279 / 128 + np.arange(1280) / 128)
+    assert tl.by_mtime.all() and tl.qa["segments_by_mtime"] == 1

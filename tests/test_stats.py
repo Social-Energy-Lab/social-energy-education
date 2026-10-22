@@ -7,7 +7,7 @@ import math
 
 import pytest
 
-from social_energy.stats import _cluster_draws, cluster_bootstrap, correlation
+from social_energy.stats import _cluster_draws, cluster_bootstrap, correlation, weighted_kappa
 
 X = [1.0, 2.0, 3.0, 4.0, 5.0]
 Y = [2.0, 1.0, 4.0, 3.0, 5.0]
@@ -70,3 +70,27 @@ def test_cluster_bootstrap_point_estimate_interval_and_seed():
     assert (a.lo, a.hi) == (b.lo, b.hi)
     assert a.r == pytest.approx(correlation(x, noisy).r)
     assert a.lo <= a.r <= a.hi
+
+
+def test_weighted_kappa_two_levels_is_cohens_kappa():
+    # Observed agreement 3/4. Marginals: first coder 1: 1/2, 2: 1/2; second 1: 1/4, 2: 3/4.
+    # Chance agreement 1/2 * 1/4 + 1/2 * 3/4 = 1/2, so kappa = (3/4 - 1/2) / (1 - 1/2) = 0.5.
+    k = weighted_kappa([1, 1, 2, 2], [1, 2, 2, 2], levels=[1, 2])
+    assert k.kappa == pytest.approx(0.5)
+    assert k.n == 4
+    assert k.exact == pytest.approx(0.75)
+
+
+def test_quadratic_weights_credit_near_misses():
+    # Levels 1..3, w = 1 - ((i - j) / 2)^2: w(2, 3) = 0.75, w(1, 3) = 0. Observed weighted
+    # agreement (1 + 0.75 + 1) / 3 = 0.9167. Chance: first coder 1/3 each level, second 1: 1/3,
+    # 3: 2/3 -> (1/3) * (1/3 + 0.75 + 2/3) = 0.5833. kappa = 0.3333 / 0.4167 = 0.8.
+    k = weighted_kappa([1, 2, 3], [1, 3, 3], levels=[1, 2, 3])
+    assert k.kappa == pytest.approx(0.8)
+    assert k.within_one == pytest.approx(1.0)
+
+
+def test_weighted_kappa_drops_incomplete_pairs():
+    k = weighted_kappa([1, None, 2, "na"], [1, 2, 2, 3], levels=[1, 2, 3])
+    assert k.n == 2
+    assert k.kappa == pytest.approx(1.0)
