@@ -171,4 +171,4 @@ Instrument facts this rests on:
 - `hr_agreement`: per device and local day, our rate minus Shimmer's in windows where ours is good and the export has one: n, bias, SD, Bland–Altman limits, MAE, share within 5 bpm; once on the export's own samples (the algorithms compared) and once on the SD card's samples of the same windows.
 - `hr_usability`: per device and local day over worn windows: their number, the share with good heart rate, the share with a pulse above the floor, medians of template correlation, pulse SD and heart rate.
 
-The wear and SCR thresholds are conventional defaults `[inferred]`, configurable, for the research team to review.
+The wear and SCR thresholds are conventional defaults, configurable; we chose them, with a stricter SCR sensitivity rule (amplitude ≥ 0.2 µS), in [`decisions/eda-ingest.md`](../../decisions/eda-ingest.md).
