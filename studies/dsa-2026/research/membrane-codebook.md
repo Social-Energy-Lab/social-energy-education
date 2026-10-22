@@ -73,6 +73,28 @@ Rules:
   `stable`, `fluctuated` or `na`. It is coded from the narrative, so it can disagree with
   `D_academy`. A disagreement is kept and flagged, not resolved.
 
+### Variants under comparison (added 2026-10-22)
+
+The edge rule above leaves almost everyone at 4 for `M_now`, so the change over the academy rests
+mostly on the arrival code. Until the research team picks one, the change is measured three ways,
+and the analyses report all three side by side:
+
+1. `D_academy`, as above (strict edge rule).
+2. `M_now_lenient`: the state at the interview without the edge rule. 5 is "open: thin or very
+   permeable" as the participant describes it, with no need to say the barrier is gone; 4 is a
+   clear but modest openness. Same 1–5 scale, same `led`/`confidence`/`evidence`.
+   `D_academy_lenient = M_now_lenient − M_arrival`.
+3. `change_amount`: how much the participant says the membrane changed over the academy, in their
+   own account, whatever the levels: 0 none, 1 slight, 2 clear, 3 strong, or `na`. With
+   `direction` it gives `change_signed` (positive when opened, negative when closed, 0 when
+   stable; undefined for `fluctuated` and `na`, since the amount carries no sign). Coded with
+   `confidence` and `evidence`.
+
+**Primary measure (2026-10-22, Álvaro):** `D_academy_lenient`, chosen because `M_now_lenient` has
+the highest agreement between the two coders of the three. The results under all three measures
+had already been seen when it was chosen, so the choice is not blind; the other two stay reported
+beside it as sensitivities, and the next phase fixes the measure before any data exist.
+
 ### Selective permeability
 
 `selective`: true if the participant rejects the thick/thin axis for a *what gets through, and
@@ -127,6 +149,5 @@ placed episode can be compared with the same person's presses and company that d
 
 **First coder.** The transcripts are not yet cleaned of identifiers, and transcription was kept
 local. On 2026-10-21 Álvaro chose a cloud model (Claude) coding the raw transcripts, blind to the
-study ID, with an independent second model coding a random fifth for agreement. The project lead
-has not confirmed it `[unknown: does the project lead agree that a cloud language model codes the
-raw interview transcripts, or must they be cleaned of identifiers first?]`.
+study ID, with an independent second model coding a random fifth for agreement. Confirmed on
+2026-10-22: a cloud model may code the raw transcripts.

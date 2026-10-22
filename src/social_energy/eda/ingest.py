@@ -349,20 +349,13 @@ def _process_run(
     run: sd.SdRun,
     keep: list[Path],
     config: EdaConfig,
-    model: ClockModel | None,
+    plan: ClockPlan,
     grids: list[_ComotionGrid],
     keep_series: bool,
 ):
     chunks, infos, tl = place_sd_run(run, keep, config)
     t_dev = tl.t
-    if model is not None:
-        t, uncertain, source = model.correct_full(device, run.name, t_dev)
-        rc = model.runs.get((device, run.name))
-        kind = rc.kind if rc is not None else "rate"
-    else:
-        t, uncertain, kind = t_dev, np.zeros(len(t_dev), bool), "none"
-        source = np.full(len(t_dev), NO_MODEL, np.int8)
-    uncertain = uncertain | tl.by_mtime
+    t, uncertain, kind, source = plan.sd_times(device, run.name, tl)
     rng = np.concatenate([c.gsr_range for c in chunks])
     us = calibration.gsr_microsiemens(rng, np.concatenate([c.gsr_adc for c in chunks]))
     us[us >= SATURATED_US] = np.nan
@@ -494,6 +487,98 @@ def build_clock_model(
     return ClockBuild(model, spans, nodes, pairs, loo, qa)
 
 
+@dataclass
+class ClockPlan:
+    """What places every sample at its corrected time, shared by ``ingest_eda`` and
+    ``eda.heart`` so both give a sample the same time: the per-run clock model, each SD run's
+    span on its device's clock, every export's first and last timestamp, the order devices
+    are processed in (devices with a clockless export last), and the corrected first times
+    of the exports placed so far, per session (a clockless export starts at their median).
+    """
+
+    build: ClockBuild | None  # the clock model with its box anchors and their tables
+    run_spans: dict[str, list[tuple[str, float, float]]]
+    spans: dict[Path, tuple[float | None, float | None]]
+    devices: list[str]
+    raw_starts: dict[str, list[float]]
+    starts: dict[str, list[float]] = field(default_factory=lambda: defaultdict(list))
+
+    @property
+    def model(self) -> ClockModel | None:
+        return self.build.model if self.build is not None else None
+
+    def sd_times(
+        self, device: str, run: str, tl: RunTimeline
+    ) -> tuple[np.ndarray, np.ndarray, str, np.ndarray]:
+        """Corrected times of an SD run's records, ``clock_uncertain`` per record (the model's
+        fallback, or placed by modification time), the run's clock model kind, and each
+        record's clock source (an index into ``SOURCES``)."""
+        if self.model is not None:
+            t, uncertain, source = self.model.correct_full(device, run, tl.t)
+            rc = self.model.runs.get((device, run))
+            kind = rc.kind if rc is not None else "rate"
+        else:
+            t, uncertain, kind = tl.t, np.zeros(len(tl.t), bool), "none"
+            source = np.full(len(tl.t), NO_MODEL, np.int8)
+        return t, uncertain | tl.by_mtime, kind, source
+
+    def near_export(self, device: str, run: str, exports: list[Path]) -> bool:
+        """Whether an SD run overlaps one of ``exports`` (so its samples are kept for the
+        row-for-row match)."""
+        span = next((s for s in self.run_spans.get(device, []) if s[0] == run), None)
+        if span is None:
+            return False
+        # Wide: an export's clock can be off by whole 512-s wraps.
+        wide = [(a - 12 * 3600, b + 12 * 3600) for p in exports for a, b in [self.spans[p]] if a]
+        return any(a < span[2] and b > span[1] for a, b in wide)
+
+    def export_start(self, path: Path, config: EdaConfig) -> float | None:
+        """The start to place a clockless export from (configured, else its session's)."""
+        start = config.export_starts.get(path.name)
+        if start is None and self.spans[path][0] is None:
+            peers = self.starts.get(_session(path)) or self.raw_starts.get(_session(path))
+            if peers:
+                start = float(np.median(peers))
+        return start
+
+    def correct_export(
+        self,
+        device: str,
+        path: Path,
+        e,
+        series: dict[str, tuple[np.ndarray, np.ndarray]],
+        config: EdaConfig,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+        """``_correct_export``, then the export's corrected start is recorded for its session."""
+        t, unc, src, info = _correct_export(device, path, e, series, self.model, config)
+        placed = t[np.isfinite(t)]
+        if len(placed) and e.qa["clock"] != "recovered":
+            self.starts[_session(path)].append(float(placed[0]))
+        return t, unc, src, info
+
+
+def plan_clocks(
+    kept: dict[str, list[tuple[sd.SdRun, list[Path]]]],
+    exports_by_device: dict[str, list[Path]],
+    config: EdaConfig,
+) -> ClockPlan:
+    """Pass 1 (the clock model with its box anchors, if ``config.correct_clocks``) and the
+    exports' spans."""
+    build = build_clock_model(kept, config) if config.correct_clocks else None
+    run_spans = build.spans if build is not None else {}
+    devices = sorted(set(kept) | set(exports_by_device))
+    spans = {p: export_span(p) for d in devices for p in exports_by_device.get(d, [])}
+    raw_starts: dict[str, list[float]] = defaultdict(list)
+    for p, (first, _) in spans.items():
+        if first is not None:
+            raw_starts[_session(p)].append(first)
+    # Exports without a clock are placed from the corrected start of the other exports of
+    # their session (the units were started together), so their devices come last.
+    clockless = {d for d in devices for p in exports_by_device.get(d, []) if spans[p][0] is None}
+    order = [d for d in devices if d not in clockless] + sorted(clockless)
+    return ClockPlan(build, run_spans, spans, order, raw_starts)
+
+
 def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> EdaTables:
     """Every SD card in ``cards`` and every calibrated export in ``exports``, one device at a
     time. Byte-identical chunks and export files are read once (copies flagged ``duplicate``
@@ -527,38 +612,19 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
             )
             qa["chunks_duplicate"] += 1
 
-    build = build_clock_model(kept, config) if config.correct_clocks else None
-    model = build.model if build is not None else None
-    run_spans = build.spans if build is not None else {}
-    spans = {p: export_span(p) for d in devices for p in exports_by_device[d]}
-    # Exports without a clock are placed from the corrected start of the other exports of
-    # their session (the units were started together), so their devices come last.
-    raw_starts: dict[str, list[float]] = defaultdict(list)
-    for p, (first, _) in spans.items():
-        if first is not None:
-            raw_starts[_session(p)].append(first)
-    starts: dict[str, list[float]] = defaultdict(list)
-    clockless = {d for d in devices for p in exports_by_device[d] if spans[p][0] is None}
-    devices = [d for d in devices if d not in clockless] + sorted(clockless)
+    plan = plan_clocks(kept, exports_by_device, config)
+    model, build = plan.model, plan.build
     grids = [_ComotionGrid(lo, hi) for lo, hi in config.comotion_windows]
 
     seconds_parts, scr_parts = [], []
     lo, hi = config.window_s
-    for device in devices:
+    for device in plan.devices:
         dev_seconds, dev_scr = [], []
-        exp_spans = [
-            # Wide: an export's clock can be off by whole 512-s wraps.
-            (a - 12 * 3600, b + 12 * 3600)
-            for p in exports_by_device[device]
-            for a, b in [spans[p]]
-            if a
-        ]
         series: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         for run, keep in kept[device]:
-            span = next((s for s in run_spans.get(device, []) if s[0] == run.name), None)
-            near = span is not None and any(a < span[2] and b > span[1] for a, b in exp_spans)
+            near = plan.near_export(device, run.name, exports_by_device[device])
             seconds, scr, files, tqa, ser = _process_run(
-                device, run, keep, config, model, grids, near
+                device, run, keep, config, plan, grids, near
             )
             if ser is not None:
                 series[run.name] = ser
@@ -594,13 +660,9 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
                 qa["export_files_duplicate"] += 1
                 continue
             seen[device].add(digest)
-            start = config.export_starts.get(path.name)
-            if start is None and spans[path][0] is None:
-                peers = starts.get(_session(path)) or raw_starts.get(_session(path))
-                if peers:
-                    start = float(np.median(peers))
+            start = plan.export_start(path, config)
             e = read_export(path, config.timeline(), start, config.sample_rate_hz)
-            t, unc, src, info = _correct_export(device, path, e, series, model, config)
+            t, unc, src, info = plan.correct_export(device, path, e, series, config)
             export_seconds = _seconds(
                 device,
                 "export",
@@ -622,8 +684,6 @@ def ingest_eda(cards: list[Path], exports: list[Path], config: EdaConfig) -> Eda
                 _scr_frame(device, "export", path.name, t[fin], e.conductance_us[fin], config.scr)
             )
             placed = t[fin]
-            if len(placed) and e.qa["clock"] != "recovered":
-                starts[_session(path)].append(float(placed[0]))
             files_rows.append(
                 {
                     "device": device,
