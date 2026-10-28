@@ -71,7 +71,9 @@ TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,31}")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 #: How the view finds EDA moments (third-person "special moments"): exploratory, not validated.
 DEFAULT_MOMENT_RULE = {
-    "z": 2.0,  # SCR rate at least this many SDs above the person-day's mean
+    # SCR rate at least this many SDs above the person-day's mean. 2.0 fired ~8 times per
+    # person-day on DSA 2026, several times the button-press rate; 2.5 gives ~3, about the same.
+    "z": 2.5,
     "min_usable_minutes": 30,  # a person-day needs this many usable minutes to have moments
     "merge_minutes": 2,  # moment minutes this close join one moment, timed at its first
 }
