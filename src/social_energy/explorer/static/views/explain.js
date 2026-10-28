@@ -45,3 +45,53 @@ export function explanations(ctx) {
     pair readings at or above ${meta.rssi_floor} dBm; dropped at export: ${n("pairs_no_node")} pair
     readings without a participant at one end, ${n("rooms_dropped")} room readings.</p>`);
 }
+
+// The person view's definitions and caveats.
+export function personExplanations(ctx) {
+  const { meta, person: P } = ctx;
+  const set = (id, html) => { document.getElementById(id).innerHTML = html; };
+  const r = P.moment_rule;
+  set("explain-picker", `
+    <p>Every participant with a beacon dot, by the same shuffled number as in the camp view. The
+    number carries no study ID and changes with every export. Filter by course and by
+    <b>membrane type</b>: high or low trust in life and lust for life, split at the camp's median
+    composite (at the median counts as high). People without a survey have no type.</p>
+    <p>Each part of a person's view shows only data they consented to: survey, interview, EDA
+    and self-report separately, outside exclusion windows. Staff are not in the bundle.</p>`);
+  set("explain-profile", `
+    <p>The square places everyone with both composites; the large dot is this person, the lines
+    are the camp medians. Composites are the confirmatory ones (mean of the core scales'
+    z-scores); z here is against the people in this bundle with a survey.</p>
+    <p>Below, every trust-in-life (block B) and lust-for-life (block C) scale and gradient: the dot
+    is the person's z against the camp, the number the scale mean and its z. ● marks the scales in
+    the composite. Click a scale for its items: recoded answers (reverse-keyed items turned) and
+    the camp's mean per item. Item codes only, no wording.</p>`);
+  set("explain-membrane", `
+    <p>The membrane block of the in-person interview, coded with the draft membrane codebook:
+    the state in everyday life, on arrival and at the interview (1 closed – 5 open, within the
+    person's own range, so not comparable across people), the change over the academy
+    (<b>D_academy_lenient</b> is the primary measure; strict and signed-amount variants beside it),
+    the person's own account, openers, closers and episodes placed on a day. Codes only: the
+    bundle holds no transcript text, evidence or notes.</p>`);
+  set("explain-timeline", `
+    <p>One row per source, across the academy or one day. <b>Programme</b>: the spine's programme
+    items that apply to this person, all-camp items or items in the room they were placed in
+    (a dashed outline: the end was not logged and is filled with the kind's median length).
+    <b>Place</b>: the zone of the room tag heard most in each 5 minutes (grey: heard but not
+    placed; blank: tag not heard). <b>Close others</b>: participants at or above the close-range
+    slider in each 5 minutes. <b>Moments</b>: blue ticks are presses (first-person special
+    moments), yellow dots EDA moments (third-person, exploratory), the diamond the interview.
+    <b>SCR</b> rate and <b>heart rate</b>: per minute in a day view, the mean per 5 minutes over
+    the academy. Pale: EDA not worn; yellow tint: the device clock is uncertain, so times there
+    may be off by minutes.</p>
+    <p><b>EDA moment</b> (exploratory): a usable minute whose SCR rate is at least ${r.z} SD
+    above the person-day's mean, in days with at least ${r.min_usable_minutes} usable minutes;
+    minutes up to ${r.merge_minutes} min apart join one moment. Not adjusted for movement, and
+    not validated: the camp-wide analysis found no arousal peak at presses.</p>
+    <p>Click a tick, a dot or any time to look at that moment below.</p>`);
+  set("explain-dist", `
+    <p>The person's presses and EDA moments per camp day and per phase of the day (bars), against
+    the camp's mean per person (lines): participants with a self-report dot for presses,
+    participants with worn EDA for EDA moments. The bars follow the SCR rule chosen above.</p>`);
+  void meta;
+}

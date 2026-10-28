@@ -11,6 +11,10 @@
     <div class="title">
       <h1>Social Energy Explorer</h1>
       <span id="badge" class="badge"></span>
+      <div id="tabs" class="tabs" role="tablist" hidden>
+        <button type="button" role="tab" data-tab="camp" aria-selected="true">Camp</button>
+        <button type="button" role="tab" data-tab="person" aria-selected="false">Person</button>
+      </div>
     </div>
     <div class="when">
       <div id="when-day" class="when-day">…</div>
@@ -20,7 +24,7 @@
   </header>
 
   <nav class="controls" aria-label="Controls">
-    <div class="group">
+    <div class="group camp-only">
       <button id="play" type="button" aria-label="Play">▶</button>
       <label>speed
         <select id="speed">
@@ -38,24 +42,24 @@
         close range ≥ <output id="rssi-out"></output> dBm
         <input id="rssi" type="range" min="-80" max="-50" step="1">
       </label>
-      <label title="Minutes at close range within the window for a line between two people">
+      <label class="camp-only" title="Minutes at close range within the window for a line between two people">
         together ≥ <output id="min-out"></output> min
         <input id="min" type="range" min="5" max="60" step="5">
       </label>
-      <label title="How far back a line looks">
+      <label class="camp-only" title="How far back a line looks">
         window <output id="win-out"></output>
         <input id="win" type="range" min="30" max="360" step="30">
       </label>
     </div>
     <div class="group">
-      <label>course <select id="course"><option value="">all</option></select></label>
+      <label class="camp-only">course <select id="course"><option value="">all</option></select></label>
       <button id="reset" type="button">Reset to analysis defaults</button>
       <button id="theme" type="button" aria-label="Toggle light and dark">◐</button>
     </div>
-    <input id="scrub" class="scrub" type="range" min="0" step="1" aria-label="Time">
+    <input id="scrub" class="scrub camp-only" type="range" min="0" step="1" aria-label="Time">
   </nav>
 
-  <main class="grid">
+  <main id="camp-view" class="grid">
     <section class="panel network-panel">
       <h2>Who is close to whom</h2>
       <div id="network" class="network"></div>
@@ -81,6 +85,44 @@
       <h2>Across the whole study</h2>
       <div id="strips"></div>
       <details><summary>What am I looking at?</summary><div id="explain-strips"></div></details>
+    </section>
+  </main>
+
+  <main id="person-view" class="person-grid" hidden>
+    <section class="panel picker-panel">
+      <h2>People</h2>
+      <div id="person-picker"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-picker"></div></details>
+    </section>
+    <section class="panel person-main">
+      <div id="person-crumbs" class="crumbs"></div>
+      <div id="person-head" class="person-head"></div>
+      <div class="person-cols">
+        <div>
+          <h2>Membrane: survey</h2>
+          <div id="person-profile"></div>
+          <details><summary>What am I looking at?</summary><div id="explain-profile"></div></details>
+        </div>
+        <div>
+          <h2>Membrane: interview codes</h2>
+          <div id="person-membrane"></div>
+          <details><summary>What am I looking at?</summary><div id="explain-membrane"></div></details>
+        </div>
+      </div>
+    </section>
+    <section class="panel person-wide">
+      <h2>Across the academy</h2>
+      <div id="person-timeline"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-timeline"></div></details>
+    </section>
+    <section class="panel person-wide">
+      <h2>The moment</h2>
+      <div id="person-moment"></div>
+    </section>
+    <section class="panel person-wide">
+      <h2>Special moments over time</h2>
+      <div id="person-dist"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-dist"></div></details>
     </section>
   </main>
   <div id="tooltip" class="tooltip" role="status" hidden></div>
