@@ -1,0 +1,318 @@
+/* The team-meeting deck, on top of the site's style.css: light by default (projectors wash out
+   dark slides), dark with D. One slide fills the screen; under 760px the slides scroll. */
+
+:root:not([data-theme="dark"]) {
+  color-scheme: light;
+  --surface-0: #f6f4ef;
+  --surface-1: #fcfcfb;
+  --surface-2: #ecebe5;
+  --ink-1: #141414;
+  --ink-2: #52514e;
+  --ink-3: #6e6d68;
+  --rule: #dedcd5;
+  --accent: #8a5a00;
+  --focus: #2a78d6;
+  --glow: #e0a400;
+  --banner-bg: #fbefc4;
+  --banner-ink: #4a3500;
+  --course-1: #2a78d6;
+  --course-2: #eb6834;
+  --course-3: #1baf7a;
+  --course-4: #eda100;
+  --course-5: #e87ba4;
+  --course-6: #4a3aa7;
+  --band: rgba(20, 20, 20, 0.09);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #111014;
+  --surface-1: #19181d;
+  --surface-2: #232129;
+  --ink-1: #f4f1ea;
+  --ink-2: #c3c2b7;
+  --ink-3: #8f8e88;
+  --rule: #2e2d33;
+  --accent: #f0c75e;
+  --focus: #f0c75e;
+  --banner-bg: #3a2e0c;
+  --banner-ink: #fff3b0;
+  --course-1: #3987e5;
+  --course-2: #d95926;
+  --course-3: #199e70;
+  --course-4: #c98500;
+  --course-5: #d55181;
+  --course-6: #9085e9;
+  --band: rgba(255, 255, 255, 0.1);
+}
+
+body.deck {
+  background: var(--surface-0);
+  color: var(--ink-1);
+  font-size: clamp(15px, 0.9vw + 0.75vh, 26px);
+  line-height: 1.45;
+  overflow: hidden;
+}
+body.deck.scroll { overflow: auto; font-size: 16px; }
+
+.slide {
+  display: none;
+  box-sizing: border-box;
+  height: 100vh;
+  height: 100dvh;
+  padding: 4.5vh 5vw 9vh;
+  flex-direction: column;
+  gap: 1.2vh;
+  overflow: hidden;
+}
+.slide.active { display: flex; }
+body.scroll .slide {
+  display: flex;
+  height: auto;
+  min-height: 0;
+  padding: 40px var(--gutter) 32px;
+  border-bottom: 1px solid var(--rule);
+  overflow: visible;
+}
+
+.slide .kicker {
+  font-size: 0.72em;
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
+  margin: 0;
+  display: flex;
+  gap: 0.7em;
+  align-items: center;
+}
+.slide h1, .slide h2 {
+  font-family: var(--serif);
+  font-weight: 600;
+  line-height: 1.12;
+  margin: 0 0 0.4em;
+  max-width: 30em;
+}
+.slide h1 { font-size: 2.6em; }
+.slide h2 { font-size: 1.85em; }
+.slide h3 { font-size: 1em; margin: 0 0 0.3em; }
+.slide p { margin: 0 0 0.7em; }
+.slide ul, .slide ol { margin: 0; padding-left: 1.2em; }
+.slide li { margin: 0 0 0.6em; }
+.slide li::marker { color: var(--accent); }
+.slide .small, .slide .hint { font-size: 0.78em; color: var(--ink-3); }
+.slide .tier { font-size: 1em; margin: 0; }
+.slide .takeaway {
+  border-left: 4px solid var(--accent);
+  padding: 0.3em 0 0.3em 0.8em;
+  font-weight: 600;
+  margin-top: 0.8em;
+}
+
+.title-slide { justify-content: center; }
+.title-slide .lede { font-size: 1.15em; max-width: 34em; color: var(--ink-2); }
+.title-slide .facts { color: var(--ink-2); max-width: 36em; }
+.title-slide .hint { margin-top: 2vh; }
+
+.cols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 3.5vw;
+  align-items: start;
+}
+.cols.wide-viz { grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.4fr); }
+.cols .text { font-size: 0.95em; }
+.viz-host { min-width: 0; max-height: 100%; overflow: auto; }
+.viz-host.chart { margin: 0; }
+body.scroll .cols, body.scroll .cols.wide-viz { grid-template-columns: 1fr; gap: 20px; }
+body.scroll .viz-host { overflow: visible; }
+
+/* Charts read from the back of the room. */
+.slide .viz figcaption { font-size: 0.8em; }
+.slide .viz svg { font-size: max(13px, 0.68em); }
+.slide .viz .axis text, .slide .viz .axis .axis-title, .slide .viz .reference-label { font-size: max(12px, 0.62em); }
+.slide .viz .row-label { font-size: max(13px, 0.68em); }
+.slide .chart-note, .slide .pending { font-size: 0.68em; color: var(--ink-3); }
+.slide .headline strong { font-size: 2.2em; }
+.slide .chart-action { display: none; }
+/* The site scopes its inline legends to .chapter; the deck reuses the chapters' charts. */
+.slide .legend-inline { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.7em; color: var(--ink-2); margin: 0 0 6px; padding: 0; list-style: none; }
+.slide .legend-inline li { display: flex; align-items: center; gap: 8px; margin: 0; }
+
+/* The network: a stage that fits the slide. */
+.slide [data-viz="network"] .stage { max-height: 62vh; }
+body.scroll [data-viz="network"] .stage { max-height: none; }
+.slide [data-viz="network"] .days { display: none; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.6vw;
+}
+body.scroll .cards { grid-template-columns: 1fr; gap: 12px; }
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 0.8em 1em;
+  font-size: 0.86em;
+}
+.card p { margin: 0; color: var(--ink-2); }
+.big-list { font-size: 1.02em; max-width: 44em; }
+
+/* Data state */
+.state { display: grid; gap: 0.9em; }
+.state-row {
+  display: grid;
+  grid-template-columns: minmax(7em, 11em) minmax(0, 1fr);
+  grid-template-areas: "name track" ". text";
+  column-gap: 0.8em;
+  row-gap: 0.15em;
+  align-items: center;
+}
+.state-name { grid-area: name; font-weight: 600; font-size: 0.85em; }
+.state-track { grid-area: track; height: 1.1em; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.state-bar {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 900ms cubic-bezier(.2,.7,.2,1);
+}
+.state-text { grid-area: text; font-size: 0.72em; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* Stacked bar and legends */
+.stack { display: flex; gap: 2px; height: 1.4em; border-radius: 4px; overflow: hidden; margin: 0.3em 0; }
+.seg-sync { background: var(--course-1); }
+.seg-rate { background: var(--course-4); }
+.seg-box { background: var(--course-6); }
+.stack-legend {
+  list-style: none;
+  padding: 0;
+  margin: 0.4em 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1.2em;
+  font-size: 0.7em;
+  color: var(--ink-2);
+}
+.slide .stack-legend li { margin: 0; display: flex; gap: 0.45em; align-items: center; }
+.stack-legend .sw { width: 1.1em; height: 0.8em; border-radius: 2px; display: inline-block; flex: none; }
+.sw-line-accent { background: linear-gradient(var(--accent), var(--accent)) center / 100% 2px no-repeat; }
+.sw-band { background: var(--band); }
+.sw-bar { background: var(--accent); }
+.sw-chance { background: linear-gradient(var(--ink-1), var(--ink-1)) center / 2px 100% no-repeat; }
+.sw-dot { border-radius: 50% !important; width: 0.8em !important; }
+
+/* Drawings */
+.viz .band { fill: var(--band); }
+.viz .null-band { stroke: var(--band); stroke-width: 9; stroke-linecap: round; }
+.viz .chance { stroke: var(--ink-1); stroke-width: 2.5; }
+.sample-0 { fill: var(--course-1); background: var(--course-1); }
+.sample-1 { fill: var(--course-2); background: var(--course-2); }
+.sample-2 { fill: var(--course-3); background: var(--course-3); }
+circle.sample { stroke: var(--surface-0); stroke-width: 2; }
+.viz .lane-rule { stroke: var(--rule); stroke-width: 1; }
+.viz .mark { fill: var(--accent); }
+.lane-programme .mark { fill: var(--ink-2); }
+.viz .moment { stroke: var(--focus); stroke-width: 2; }
+.dash .moment { stroke: var(--focus); stroke-width: 2; }
+
+svg.logic, svg.dash { display: block; max-height: 64vh; font-family: var(--sans); }
+.logic .core { fill: var(--surface-2); }
+.scale-trust { fill: var(--course-1); }
+.scale-lust { fill: var(--course-3); }
+.logic-label { fill: var(--ink-2); font-size: 15px; }
+.logic-label.strong { fill: var(--ink-1); font-weight: 600; }
+.logic-key { font-size: 14px; font-weight: 600; }
+.logic-key.trust { fill: var(--course-1); }
+.logic-key.lust { fill: var(--course-3); }
+.logic-note { fill: var(--ink-3); font-size: 13px; }
+.gradient-path { fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-dasharray: 5 6; }
+.flow {
+  fill: var(--accent);
+  offset-distance: 0%;
+  animation: flow 2.4s linear infinite;
+}
+@keyframes flow { to { offset-distance: 100%; } }
+@media (prefers-reduced-motion: reduce) { .flow { animation: none; offset-distance: 50%; } }
+
+.dash-frame { fill: var(--surface-1); stroke: var(--rule); }
+.dash-title { fill: var(--ink-1); font-size: 16px; font-weight: 600; }
+.dash-sub { fill: var(--ink-3); font-size: 12px; }
+.dash-tiny { fill: var(--ink-2); font-size: 12px; }
+.dash-tiny.strong { fill: var(--ink-1); font-weight: 600; }
+.prog-a { fill: var(--surface-2); }
+.prog-b { fill: var(--rule); }
+.dash-eda { fill: none; stroke: var(--course-1); stroke-width: 2; }
+.dash-hr { fill: none; stroke: var(--course-2); stroke-width: 2; }
+.dash-press { fill: var(--accent); stroke: var(--surface-1); stroke-width: 2; }
+.dash-card { fill: var(--surface-0); stroke: var(--focus); }
+
+/* Chrome */
+.badge {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 5;
+  margin: 0;
+  padding: 0.3em 0.8em;
+  border-radius: 999px;
+  background: var(--banner-bg);
+  color: var(--banner-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+body.scroll .badge { position: sticky; top: 0; display: block; border-radius: 0; text-align: center; right: auto; }
+.badge[hidden] { display: none; }
+.deck-nav {
+  position: fixed;
+  right: 14px;
+  bottom: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  z-index: 4;
+}
+.deck-nav button {
+  font: inherit;
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--rule);
+  background: var(--surface-1);
+  color: var(--ink-1);
+  cursor: pointer;
+}
+.deck-nav button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+body.scroll .deck-nav { display: none; }
+.progress { position: fixed; left: 0; right: 0; bottom: 0; height: 3px; background: transparent; }
+.progress div { height: 100%; width: 0; background: var(--accent); transition: width 300ms; }
+body.scroll .progress { display: none; }
+
+.notes { display: none; }
+body.show-notes .slide.active .notes {
+  display: block;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 30vh;
+  overflow: auto;
+  padding: 0.8em 5vw 2.6em;
+  background: var(--surface-2);
+  border-top: 1px solid var(--rule);
+  font-size: 0.75em;
+  color: var(--ink-2);
+  z-index: 3;
+}
+body.scroll .notes { display: none !important; }
+
+@media print {
+  body.deck { overflow: visible; }
+  .slide { display: flex !important; page-break-after: always; height: 100vh; }
+  .deck-nav, .progress, .notes { display: none !important; }
+}
