@@ -2,7 +2,7 @@
 
 **Priority:** high — target: live for the research-group talk on 2026-11-03
 **Gate:** none
-**Next:** live with real data since 2026-10-21 (release `site-data-dsa-2026`); remaining: group-size chart (people per size in `exploratory_cascades.py`, then re-export and `gh release upload --clobber`), Mahdi reads the German copy, fill the `[unknown: …]` in `docs/decisions/public-site.md`, then retire this plan
+**Next:** live with real data since 2026-10-21 (release `site-data-dsa-2026`); team-meeting deck on branch `feat/meeting-deck-2026-11-04` waits on Álvaro's preview review, then re-upload the asset; remaining: group-size chart (people per size in `exploratory_cascades.py`, then re-export and `gh release upload --clobber`), Mahdi reads the German copy, fill the `[unknown: …]` in `docs/decisions/public-site.md`, then retire this plan
 
 **Goal:** a public web page, served by GitHub Pages from this repo, where anyone curious about the
 DSA 2026 results — the lab, colleagues, and the participants themselves — can watch the camp as an
@@ -15,6 +15,20 @@ Replaced `explorer-public-mode.md` (deleted; its follow-ups are at the end of th
 - **Branch:** `feat/public-site` — Tasks 1–9 built and reviewed (per-task reviews plus a final whole-branch review, all clean).
 - **Real data:** `studies/dsa-2026/analyses/site_export.py` has run; data, zip, preview and screenshots are under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/site/`; numbers and checks in the private note `dsa-2026/notes/site-export-2026-10-21.md`.
 - **Open:** the group-size chart is empty until `exploratory_cascades.py` writes a people count per group size; the copy awaits Álvaro's review and Mahdi's read of the German; the `[unknown: …]` on Mahdi's approval in `docs/decisions/public-site.md`.
+
+## Team-meeting deck (2026-10-28)
+
+- **What:** a web slide deck for the team meeting of 4 Nov at `/deck/` of the same site
+  (`src/social_energy/site/static/deck/`): 15 slides, arrow keys, full screen, scrolls on a
+  phone. It reuses the hero network and the null, moments and circles charts, and adds data
+  state, time sync, EDA around presses, interview reasons and the gradient test.
+- **Data:** like the site, numbers only by placeholder; new aggregate sections (`data_state`,
+  `gradient_pairs`, `gradient_presses`, `eda_press_profile`, `membrane_reasons`) and deck numbers
+  come from `studies/dsa-2026/analyses/deck_export.py`, called by `site_export.py`. The scope
+  widening is recorded in `docs/decisions/public-site.md`.
+- **Editing:** the slides are plain HTML in `deck/index.html`; its header comment says how.
+- **Gate:** Álvaro reviews the real-data preview (`derived/site/preview/deck/`) before any
+  `gh release upload --clobber` and workflow run. Until then the live deck is synthetic.
 
 ## Why
 
