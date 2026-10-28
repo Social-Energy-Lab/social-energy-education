@@ -44,10 +44,11 @@ social-energy fetch-zeitgeist studies/<id>/study.yaml
     $SOCIAL_ENERGY_DATA/<id>/raw/{ai-interviews,survey}/zeitgeist/<agent_name>/.
     Needs ZEITGEIST_DATABASE_URL (read-only login) and `uv sync --extra zeitgeist`.
 
-social-energy explore studies/<id>/study.yaml [--port N] [--no-browser]
+social-energy explore studies/<id>/study.yaml [--port N] [--no-browser] [--demo]
     Serve the explorer on http://127.0.0.1:<port> for the bundle in
     $SOCIAL_ENERGY_DATA/<id>/derived/explorer/bundle/ (made by the study's
     analyses/explorer_export.py). Local only; the bundle is pseudonymised data.
+    With --demo, serve a synthetic camp instead (person view included): no data root needed.
 
 social-energy ingest-survey studies/<id>/study.yaml
     Parse raw/survey/zeitgeist/*/responses.jsonl into
@@ -447,10 +448,22 @@ COMMANDS = {
 }
 
 
-def explore(study: StudyConfig, port: int = 8765, open_browser: bool = True) -> int:
+def explore(
+    study: StudyConfig, port: int = 8765, open_browser: bool = True, demo: bool = False
+) -> int:
     from .explorer import make_server
 
-    bundle = paths.study(study.study_id).derived / "explorer" / "bundle"
+    if demo:
+        import tempfile
+
+        from .explorer.synthetic import demo_bundle
+
+        tmp = tempfile.TemporaryDirectory(prefix="see-demo-")
+        bundle = demo_bundle(
+            Path(tmp.name) / "bundle", study.explorer_config(), timezone=study.timezone
+        )
+    else:
+        bundle = paths.study(study.study_id).derived / "explorer" / "bundle"
     if not (bundle / "meta.json").is_file():
         print(
             f"No explorer bundle at {bundle}. Make one first with\n"
@@ -461,7 +474,8 @@ def explore(study: StudyConfig, port: int = 8765, open_browser: bool = True) -> 
     server = make_server(bundle, port=port)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(
-        f"Explorer on {url} (Ctrl+C to stop). Pseudonymised data: do not share the screen widely."
+        f"Explorer on {url} (Ctrl+C to stop). "
+        + ("Synthetic data." if demo else "Pseudonymised data: do not share the screen widely.")
     )
     if open_browser:
         import webbrowser
@@ -508,6 +522,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--port", type=int, default=8765, help="explore: port on 127.0.0.1")
     parser.add_argument("--no-browser", action="store_true", help="explore: do not open a browser")
+    parser.add_argument("--demo", action="store_true", help="explore: serve a synthetic camp")
     parser.add_argument("--out", type=Path, help="site-build: output directory (outside the repo)")
     parser.add_argument("--data", type=Path, help="site-build: public data directory to publish")
     parser.add_argument(
@@ -526,7 +541,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "purge-device":
             return purge_device(study, args.device, apply=args.apply)
         if args.command == "explore":
-            return explore(study, port=args.port, open_browser=not args.no_browser)
+            return explore(study, port=args.port, open_browser=not args.no_browser, demo=args.demo)
         if args.command == "site-build":
             return site_build(study, args.out, args.data)
         return COMMANDS[args.command](study)
