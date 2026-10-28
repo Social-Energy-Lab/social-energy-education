@@ -23,6 +23,8 @@ Inputs and filters:
   ``confirmatory`` (``confirmatory/results.csv``, standardised effects and rate ratios). Shares
   become percentages; categories become the copy's keys, and a row without a key is dropped and
   printed. ``check_aggregates`` then drops every row under ``min_group`` people.
+- The team-meeting deck's rows and numbers (data state, gradients, EDA around presses, interview
+  reasons): ``deck_export.py``, under the same small-cell rule.
 
 Output, outside the repository: ``$SOCIAL_ENERGY_DATA/dsa-2026/derived/site/data/`` and
 ``site-data.zip`` beside it, files at the zip's root. ``validate_site_data`` must accept it. It
@@ -48,6 +50,7 @@ import polars as pl
 
 sys.path.insert(0, str(Path(__file__).parent))
 import copresence_by_phase as cp
+import deck_export
 import self_report_context as sr
 
 from social_energy import paths
@@ -434,6 +437,9 @@ def main() -> None:
     log: list[str] = []
     analyses = layout.derived / "analyses"
     sections = read_sections(analyses, days, arrival, log)
+    # The team-meeting deck's rows (deck_export.py); its numbers come after the small-cell rule.
+    deck_sections, deck_src = deck_export.read_deck(layout.derived, len(meta["nodes"]), log)
+    sections.update(deck_sections)
     checked, nums = finish(
         sections,
         pl.read_csv(analyses / "exploratory" / "company_within_person.csv"),
@@ -441,6 +447,7 @@ def main() -> None:
         min_group=ex.min_group,
         log=log,
     )
+    nums.update(deck_export.deck_numbers(deck_src, min_group=ex.min_group, log=log))
     # What the hero can show: nodes, and presses left after the night is removed.
     nums["n_participants"] = len(meta["nodes"])
     nums["n_presses"] = meta["files"]["presses"]["count"]
