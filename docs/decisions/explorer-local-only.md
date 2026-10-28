@@ -32,6 +32,13 @@ anonymised data in publications.
 
 - Each collaborator who uses team mode needs the data root on their own machine.
 - Screens and screenshots of team mode are pseudonymised data and are handled as such.
+- Since the person view (2026-10-28), a team bundle also holds one person's whole record under the
+  shuffled index: survey scales and items, interview codes, EDA and heart rate per minute, age and
+  gender, and the programme's labels. That makes a person easier to recognise than the network
+  alone, so the rules above matter more, not less. Each module is filtered by its own consent at
+  export and again in `write_bundle`; interview codes pass only as codes (free text is refused);
+  person data is written only in team mode, and the public writer and the site's checks never
+  carry it.
 
 The amendment changes nothing here: team mode stays local. The public route is the site, built
 from the public bundle and a release asset ([public-site.md](public-site.md)).

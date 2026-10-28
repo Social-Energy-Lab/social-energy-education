@@ -14,6 +14,9 @@ concatenated, little-endian, each ``count`` long; ``meta["files"]`` lists the co
     rooms.bin    bin u16 · node u16 · loc u16             (sorted by bin)
     presses.bin  sec u32 · node u16                       (seconds since t0; sorted)
     bins.bin     phase u8 · day u8                        (one row per bin)
+
+With ``PersonData`` (team mode only) the bundle also carries the person view's ``eda.bin`` and
+``person.json``, described in ``person.py``, and ``meta["person"]`` names them.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ import polars as pl
 
 from .. import paths
 from ..study import ExplorerConfig
+from .person import EDA_COLUMNS, EDA_SCHEMA, PersonData, eda_frame, person_json, write_person_json
 
 VERSION = 1
 DTYPES = {"u8": np.uint8, "i8": np.int8, "u16": np.uint16, "u32": np.uint32}
@@ -53,6 +57,7 @@ class BundleInput:
     rooms: pl.DataFrame  # entity, bin, location
     presses: pl.DataFrame  # entity, t (UTC)
     rssi_floor: int  # weakest RSSI kept in pairs
+    persons: PersonData | None = None  # the person view's data; team mode only
 
 
 def _bin_index(col: str, inp: BundleInput) -> pl.Expr:
@@ -94,6 +99,8 @@ def write_bundle(
 ) -> dict:
     """Write the bundle for ``inp`` to ``out_dir`` (outside the repo). Returns its meta."""
     out_dir = paths.refuse_inside_repo(out_dir)
+    if inp.persons is not None and mode not in ("team", "synthetic"):
+        raise ValueError(f"person data is for the local team bundle only, not mode {mode!r}")
     if inp.n_bins > 65535 or len(inp.nodes) > 65535 or len(inp.locations) > 65535:
         raise ValueError("bundle indices are 16-bit: too many bins, nodes or locations")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -165,6 +172,10 @@ def write_bundle(
     )
     qa["presses_without_node"] = pr.filter(pl.col("n").is_null()).height
     pr = pr.filter(pl.col("n").is_not_null())
+    if inp.persons is not None:
+        consented = list(inp.persons.consent.get("self_report", ()))
+        qa["presses_without_consent"] = pr.filter(~pl.col("entity").is_in(consented)).height
+        pr = pr.filter(pl.col("entity").is_in(consented))
     span = inp.n_bins * inp.bin_seconds
     in_span = (pl.col("sec") >= 0) & (pl.col("sec") < span)
     qa["presses_out_of_range"] = pr.filter(~in_span).height
@@ -233,6 +244,23 @@ def write_bundle(
         "qa": qa,
         "files": files,
     }
+    stale = out_dir / "person.json"
+    if inp.persons is not None:
+        doc, pqa = person_json(
+            inp.persons, node_of, loc_of, t0=inp.t0, bin_seconds=inp.bin_seconds,
+            n_bins=inp.n_bins,
+        )  # fmt: skip
+        n_min = inp.n_bins * inp.bin_seconds // 60
+        eda = inp.persons.eda if inp.persons.eda is not None else pl.DataFrame(schema=EDA_SCHEMA)
+        cols, eqa = eda_frame(eda, node_of, set(inp.persons.consent.get("eda", ())), inp.t0, n_min)
+        files["eda"] = _write(out_dir, "eda", cols, {"eda": EDA_COLUMNS})
+        write_person_json(out_dir, doc)
+        qa |= pqa | eqa
+        meta["person"] = {"file": "person.json"}
+    else:
+        # A rewrite without person data must not leave an earlier export's person files behind.
+        stale.unlink(missing_ok=True)
+        (out_dir / "eda.bin").unlink(missing_ok=True)
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     return meta
 

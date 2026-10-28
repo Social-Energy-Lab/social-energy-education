@@ -238,7 +238,8 @@ export function create(el, ctx, legendEl) {
       ctx.tip.show(
         `<b>${ctx.courseName(nodeCourse[i])}</b><br>` +
         `${vis[i] ? `${degree[i]} close ties in the window` : "<span class='muted'>tag not heard in the window</span>"}<br>` +
-        `place now: ${zone}<br>button presses today: ${today}`,
+        `place now: ${zone}<br>button presses today: ${today}` +
+        (ctx.openPerson ? "<br><span class='muted'>click to open this person</span>" : ""),
         ev.clientX, ev.clientY,
       );
       return;
@@ -261,6 +262,21 @@ export function create(el, ctx, legendEl) {
     ctx.tip.hide();
   });
   canvas.addEventListener("mouseleave", () => ctx.tip.hide());
+  // Click a dot: open that person in the person view at the playhead (team bundles with it).
+  canvas.addEventListener("click", (ev) => {
+    if (!ctx.openPerson || !st) return;
+    const rect = canvas.getBoundingClientRect();
+    const { s, ox, oy } = transform();
+    const mx = ev.clientX - rect.left;
+    const my = ev.clientY - rect.top;
+    let best = null;
+    let bestD = 10;
+    for (const n of nodes) {
+      const d = Math.hypot(ox + n.x * s - mx, oy + n.y * s - my);
+      if (d < bestD) { best = n; bestD = d; }
+    }
+    if (best) ctx.openPerson(best.i, Math.floor(st.bin));
+  });
 
   return { update };
 }

@@ -5,7 +5,8 @@ import * as matrix from "./views/matrix.js";
 import * as zones from "./views/zones.js";
 import * as presses from "./views/presses.js";
 import * as strips from "./views/strips.js";
-import { explanations } from "./views/explain.js";
+import * as person from "./views/person.js";
+import { explanations, personExplanations } from "./views/explain.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,7 +18,9 @@ async function load() {
       names.map(async (n) => [n, await (await fetch(`bundle/${n}.bin`)).arrayBuffer()]),
     ),
   );
-  return { meta, b: model.decode(meta, buffers) };
+  // The person view's data, in a team bundle that carries it.
+  const personDoc = meta.person ? await (await fetch(`bundle/${meta.person.file}`)).json() : null;
+  return { meta, b: model.decode(meta, buffers), person: personDoc };
 }
 
 function themeColors(meta) {
@@ -34,7 +37,7 @@ function themeColors(meta) {
   };
 }
 
-function makeContext(meta, b) {
+function makeContext(meta, b, personDoc) {
   const nNodes = meta.nodes.length;
   const nBins = meta.n_bins;
   const t0 = Date.parse(meta.t0);
@@ -55,7 +58,7 @@ function makeContext(meta, b) {
     return [start, next];
   };
   return {
-    meta, b, nNodes, nBins, nodeCourse, courseSize, hasUnknown, dayOfBin, dayRange,
+    meta, b, person: personDoc, nNodes, nBins, nodeCourse, courseSize, hasUnknown, dayOfBin, dayRange,
     binsPerHour: 3600 / meta.bin_seconds,
     locZone: meta.locations.map((l) => l.zone),
     courseName: (c) => (c < 0 ? "course not known" : meta.courses[c].name),
@@ -80,6 +83,7 @@ function initialState(meta) {
     course: null, // highlighted course index
     zone: null, // highlighted zone index
     cell: null, // [ci, cj] highlighted matrix cell
+    tab: "camp", // "camp" or "person"
   };
 }
 
@@ -100,6 +104,12 @@ function setupControls(ctx, state, set) {
       ? "Team view · pseudonymised data · keep it to the research team"
       : meta.mode === "synthetic" ? "Synthetic data · no real people" : "Public view";
   $("badge").classList.toggle("team", meta.mode === "team");
+  if (ctx.person) {
+    $("tabs").hidden = false;
+    for (const btn of $("tabs").querySelectorAll("button")) {
+      btn.addEventListener("click", () => set({ tab: btn.dataset.tab, playing: false }));
+    }
+  }
 
   const scrub = $("scrub");
   scrub.max = String(ctx.nBins - 1);
@@ -152,6 +162,13 @@ function setupControls(ctx, state, set) {
 
 function syncControls(ctx, state) {
   const bin = Math.floor(state.bin);
+  const personTab = state.tab === "person";
+  $("camp-view").hidden = personTab;
+  $("person-view").hidden = !personTab;
+  document.body.classList.toggle("person-mode", personTab);
+  for (const btn of $("tabs").querySelectorAll("button")) {
+    btn.setAttribute("aria-selected", String(btn.dataset.tab === state.tab));
+  }
   $("play").textContent = state.playing ? "❚❚" : "▶";
   $("play").setAttribute("aria-label", state.playing ? "Pause" : "Play");
   $("scrub").value = String(bin);
@@ -184,7 +201,7 @@ async function main() {
     $("error").textContent = `Could not load the bundle: ${err.message}. Run the export first.`;
     return;
   }
-  const ctx = makeContext(loaded.meta, loaded.b);
+  const ctx = makeContext(loaded.meta, loaded.b, loaded.person);
   const state = initialState(ctx.meta);
   const tooltip = $("tooltip");
   ctx.tip = {
@@ -217,6 +234,10 @@ async function main() {
     presses.create($("presses"), ctx),
     strips.create($("strips"), ctx),
   ];
+  if (ctx.person) {
+    views.push(person.create($("person-view"), ctx));
+    personExplanations(ctx);
+  }
   setupControls(ctx, state, set);
   explanations(ctx);
 
@@ -240,6 +261,13 @@ async function main() {
     }
     requestAnimationFrame(frame);
   };
+  // A link straight to a person (and a 5-minute bin): #person=12 or #person=12&bin=300.
+  const hash = new URLSearchParams(location.hash.slice(1));
+  if (ctx.openPerson && hash.has("person")) {
+    const node = Number(hash.get("person"));
+    const bin = hash.has("bin") ? Number(hash.get("bin")) : undefined;
+    if (node >= 0 && node < ctx.nNodes) ctx.openPerson(node, bin);
+  }
   changed.add("init");
   requestAnimationFrame(frame);
   window.addEventListener("resize", () => set({}));
