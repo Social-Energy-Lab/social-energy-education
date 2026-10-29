@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** none
-**Next:** build analyses A, C, D, E (one script and PR each), then G on their outputs; results in the private note
+**Next:** merge the five analysis PRs (#32 A, #33 E, #34 C, #35 D, #36 G); then carry the leads that replicated into `../ideas/next-phase-preregistration.md` and retire this plan
 
 **Goal:** look at the EDA and heart-rate data in ways the first exploratory pass (`studies/dsa-2026/analyses/exploratory_eda.py`: presses, settings, minute-level synchrony) did not, and keep only what holds on days it was not found on. Everything here is **exploratory** under the frozen analysis plan (`studies/dsa-2026/research/analysis-plan.md`); leads that hold become candidates for the next-phase preregistration (`../ideas/next-phase-preregistration.md`).
 
@@ -10,6 +10,7 @@
 
 - **Branches:** `feat/eda2-social-dose` (A), `feat/eda2-pair-sync` (C), `feat/eda2-onset-sync` (D), `feat/eda2-hrv` (E), `feat/eda2-person-profiles` (G). One script each under `studies/dsa-2026/analyses/`, named `eda2_<slug>.py`; outputs under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/exploratory/eda2/<slug>/`.
 - **Results:** only in the private half, one note per analysis `dsa-2026/notes/eda2-<slug>-2026-10-29.md`, gathered in `dsa-2026/notes/eda2-summary-2026-10-29.md`.
+- **Done 2026-10-29:** all five analyses ran under the split-half rule; PRs #32–#36 open with CI green. Results and verdicts only in the private notes.
 - **Decided 2026-10-29 (Álvaro):** analyses A, C, D, E, G; split-half rule below; B (room-entry events), F (acoustic events) and H (unsupervised states) not now.
 
 ## Rules shared by every analysis
