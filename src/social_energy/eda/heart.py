@@ -320,6 +320,63 @@ def heart_rate(
     return HeartTables(beats=beats, windows=windows, minutes=minutes, qa=qa)
 
 
+#: Heart-rate variability: a successive difference counts when the two intervals are within
+#: this share of the earlier one (a missed or extra beat breaks it), and a minute's RMSSD needs
+#: at least ``RMSSD_MIN_DIFFS`` of them. Common defaults for short PPG records `[inferred]`.
+RMSSD_MAX_CHANGE = 0.2
+RMSSD_MIN_DIFFS = 30
+BEAT_KEYS = ("device", "source", "run")
+
+
+def successive_differences(
+    beats: pl.DataFrame,
+    *,
+    by: tuple[str, ...] = BEAT_KEYS,
+    valid: str = "valid",
+    max_change: float = RMSSD_MAX_CHANGE,
+    tolerance_ms: float = 1.0,
+) -> pl.DataFrame:
+    """``beats`` sorted by ``by`` and ``t``, with ``sd_ms``: this beat's interval minus the
+    previous beat's, where both beats are ``valid``, the previous row is the beat this interval
+    starts at (same ``by`` group and ``t`` apart by the interval, within ``tolerance_ms``: a
+    beat missing from the table breaks the chain) and the change is at most ``max_change`` of
+    the earlier interval; null otherwise. ``ibi_ms`` is the interval from the previous beat of
+    the same stretch (``hr_beats``)."""
+    ibi = pl.col("ibi_ms").cast(pl.Float64)
+    prev = ibi.shift(1).over(by)
+    gap_ms = (pl.col("t") - pl.col("t").shift(1).over(by)).dt.total_microseconds() / 1000.0
+    ok = (
+        pl.col(valid)
+        & pl.col(valid).shift(1).over(by)
+        & ((gap_ms - ibi).abs() <= tolerance_ms)
+        & ((ibi - prev).abs() <= max_change * prev)
+    ).fill_null(False)
+    return beats.sort(*by, "t").with_columns(pl.when(ok).then(ibi - prev).alias("sd_ms"))
+
+
+def rmssd_minutes(
+    beats: pl.DataFrame,
+    *,
+    by: tuple[str, ...] = BEAT_KEYS,
+    valid: str = "valid",
+    max_change: float = RMSSD_MAX_CHANGE,
+    min_diffs: int = RMSSD_MIN_DIFFS,
+) -> pl.DataFrame:
+    """Per ``by`` group and minute (of the later beat of each difference): ``n_diffs``
+    successive differences (``successive_differences``) and ``rmssd_ms``, the root mean square
+    of them, null when there are fewer than ``min_diffs``. Minutes without a counted difference
+    are absent."""
+    d = successive_differences(beats, by=by, valid=valid, max_change=max_change)
+    return (
+        d.filter(pl.col("sd_ms").is_not_null())
+        .group_by(*by, pl.col("t").dt.truncate("1m").alias("minute"))
+        .agg(pl.len().alias("n_diffs"), (pl.col("sd_ms") ** 2).mean().sqrt().alias("_r"))
+        .with_columns(pl.when(pl.col("n_diffs") >= min_diffs).then(pl.col("_r")).alias("rmssd_ms"))
+        .drop("_r")
+        .sort(*by, "minute")
+    )
+
+
 def device_minutes(windows: pl.DataFrame, ppg: PpgConfig | None = None) -> pl.DataFrame:
     """Per device-minute over ``ok`` windows: ``hr_bpm`` is the median heart rate of the
     good-quality windows (null if none), ``hr_quality`` the share of the minute they cover,
