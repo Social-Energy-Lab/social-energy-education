@@ -49,6 +49,9 @@ export function create(root, ctx) {
   let rendered = false;
 
   const name = ctx.personName;
+  // The picker lists people by study ID, numbers in numeric order.
+  const byName = Array.from({ length: nNodes }, (_, i) => i)
+    .sort((a, b) => name(a).localeCompare(name(b), undefined, { numeric: true }));
   const typeOf = (i) => pm.typeLabel(people[i].type) ?? "no survey type";
   const when = (sec) => {
     const bin = Math.min(nBins - 1, Math.floor(sec / binS));
@@ -84,7 +87,7 @@ export function create(root, ctx) {
   function pickerList() {
     const list = $(".picker-list");
     const rows = [];
-    for (let i = 0; i < nNodes; i++) {
+    for (const i of byName) {
       if (st.course !== "" && ctx.nodeCourse[i] !== Number(st.course)) continue;
       if (st.type !== "" && pm.typeKey(people[i].type) !== st.type) continue;
       if (st.q && !name(i).toLowerCase().includes(st.q)) continue;
