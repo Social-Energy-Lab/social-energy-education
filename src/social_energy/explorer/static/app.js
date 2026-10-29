@@ -62,6 +62,8 @@ function makeContext(meta, b, personDoc) {
     binsPerHour: 3600 / meta.bin_seconds,
     locZone: meta.locations.map((l) => l.zone),
     courseName: (c) => (c < 0 ? "course not known" : meta.courses[c].name),
+    // The study ID where the team bundle carries one, else the shuffled index.
+    personName: (i) => personDoc?.people[i]?.study_id ?? `Person ${i}`,
     dayLabel: (bin) => fmtDay.format(binTime(bin)),
     clockLabel: (bin) => fmtClock.format(binTime(bin)),
     phaseName: (bin) => meta.phases[b.bins.phase[Math.min(bin, nBins - 1)]] ?? "",
@@ -261,10 +263,13 @@ async function main() {
     }
     requestAnimationFrame(frame);
   };
-  // A link straight to a person (and a 5-minute bin): #person=12 or #person=12&bin=300.
+  // A link straight to a person (and a 5-minute bin): #person=12 or #person=12&bin=300, where the
+  // person is a study ID or, failing that, the shuffled index.
   const hash = new URLSearchParams(location.hash.slice(1));
   if (ctx.openPerson && hash.has("person")) {
-    const node = Number(hash.get("person"));
+    const want = hash.get("person");
+    const byId = ctx.person?.people.findIndex((p) => p.study_id === want) ?? -1;
+    const node = byId >= 0 ? byId : Number(want);
     const bin = hash.has("bin") ? Number(hash.get("bin")) : undefined;
     if (node >= 0 && node < ctx.nNodes) ctx.openPerson(node, bin);
   }

@@ -236,6 +236,7 @@ export function create(el, ctx, legendEl) {
       }
       const zone = zoneOf[i] >= 0 ? meta.zones[zoneOf[i]] : "not placed";
       ctx.tip.show(
+        (ctx.openPerson ? `<b>${ctx.personName(i)}</b> · ` : "") +
         `<b>${ctx.courseName(nodeCourse[i])}</b><br>` +
         `${vis[i] ? `${degree[i]} close ties in the window` : "<span class='muted'>tag not heard in the window</span>"}<br>` +
         `place now: ${zone}<br>button presses today: ${today}` +

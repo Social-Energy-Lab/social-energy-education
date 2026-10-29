@@ -12,8 +12,9 @@ the research team's wish list for a data-exploration dashboard (private source d
 
 ## Design
 
-- **Local only, ID-free, one shuffle.** The view is a second tab of `social-energy explore`; it
-  reads the same bundle, keyed by the same shuffled node index as the network view
+- **Local only, one shuffle, study IDs on screen.** The view is a second tab of
+  `social-energy explore`; it reads the same bundle, keyed by the same shuffled node index as the
+  network view, and names each person by study ID from `person.json` (added 2026-10-29)
   ([`explorer-local-only.md`](../../decisions/explorer-local-only.md)). Its data is `eda.bin` and
   `person.json` (`social_energy.explorer.person`), written only in team (or synthetic) mode.
 - **Who is in it.** The bundle's nodes: participants with beacon consent. Each part of a person
@@ -36,6 +37,8 @@ the research team's wish list for a data-exploration dashboard (private source d
 - [x] Bundle additions, consent filtering, synthetic person data, `explore --demo` (2026-10-28).
 - [x] The view: picker, profile, interview codes, timeline, moment drill-down with breadcrumb,
       special moments per day and phase against the camp (2026-10-28).
+- [x] Study IDs in the picker, header, breadcrumb and network tooltip; find by study ID;
+      `#person=<study ID>` links (2026-10-29).
 - [ ] Review with the research team.
 
 ## Follow-ups

@@ -166,7 +166,7 @@ body.person-mode .when { visibility: hidden; }
 .picker-panel { grid-row: span 4; max-height: calc(100vh - 140px); overflow: auto; position: sticky; top: 64px; align-self: start; }
 .person-wide { grid-column: 2; }
 .picker-filters { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 8px; font-size: 13px; color: var(--ink-2); }
-.picker-filters select, .tl-controls select, .person-head button, .crumb, .jump, .to-camp {
+.picker-filters select, .picker-filters input, .tl-controls select, .person-head button, .crumb, .jump, .to-camp {
   font: inherit; font-size: 13px; color: var(--ink-1); background: var(--surface-0);
   border: 1px solid var(--rule); border-radius: 6px; padding: 3px 8px; cursor: pointer;
 }

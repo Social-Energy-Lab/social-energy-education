@@ -2,7 +2,9 @@
 
 Team mode only. ``write_bundle`` calls ``write_person`` when its input carries ``PersonData``;
 the public bundle (``site.public``) never reads it. Everything here is keyed by the same shuffled
-node index as the rest of the bundle, so the views can jump between each other.
+node index as the rest of the bundle, so the views can jump between each other. Each person entry
+also carries the study ID, so the team can find a participant and check them against the spine;
+the other bundle files stay ID-free.
 
 What the caller passes, already filtered by the analyses' own rules (participants only,
 exclusion windows applied):
@@ -69,6 +71,7 @@ MODULES = ("survey", "interview_in_person", "eda", "self_report")
 #: Membrane codes: keys and string values must look like this, so free text cannot pass.
 TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,31}")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+STUDY_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
 #: How the view finds EDA moments (third-person "special moments"): exploratory, not validated.
 DEFAULT_MOMENT_RULE = {
     # SCR rate at least this many SDs above the person-day's mean. 2.0 fired ~8 times per
@@ -294,6 +297,7 @@ def person_json(
         attrs = data.attributes.get(e, {})
         t = interviews.get(e)
         people[i] = {
+            "study_id": e.removeprefix("person:"),
             "age": attrs.get("age"),
             "gender": attrs.get("gender"),
             "survey": survey.get(e),
@@ -304,6 +308,8 @@ def person_json(
             "self_report": e in allowed["self_report"],
         }
     for p in people:
+        if not STUDY_ID.fullmatch(p["study_id"]):
+            raise PersonDataError(f"study ID {p['study_id'][:12]!r}... is not an ID")
         check_codes(p["gender"], "gender")
         if p["age"] is not None and not isinstance(p["age"], int):
             raise PersonDataError("age must be whole years")
