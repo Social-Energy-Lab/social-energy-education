@@ -66,6 +66,14 @@ social-energy check-survey studies/<id>/study.yaml
     current codes. Writes derived/survey/checks/{reverse_keys,versions}.parquet plus
     summary.json. Computes no scale score, so it does not wait for the freeze.
 
+social-energy package studies/<id>/study.yaml [--out DIR]
+    One AES-256 zip of the study's data as we keep it, for handing to the team: the folders
+    listed in studies/<id>/package.yaml, same paths, plus a README (one row per folder) and
+    SHA256SUMS. Written to $SOCIAL_ENERGY_DATA/<id>/exports/ unless --out is given; checked
+    after writing. Uses SOCIAL_ENERGY_PACKAGE_PASSWORD if set, else makes a password and writes
+    it to exports/passwords/<archive>.txt (owner-only), apart from the zip. Send the password by a
+    different channel than the archive. Needs `uv sync --extra package`.
+
 social-energy site-build studies/<id>/study.yaml --out DIR [--data DIR]
     Assemble the public GitHub Pages site in DIR (outside the repo): the app files plus a
     validated data/. With --data DIR the public data prepared elsewhere is copied in; without
@@ -508,9 +516,39 @@ def site_build(study: StudyConfig, out: Path | None, data: Path | None = None) -
     return 0
 
 
+def package_command(study: StudyConfig, out: Path | None = None) -> int:
+    from .package import PackageError, PackageSpec, build, new_password
+
+    spec_path = study.path.parent / "package.yaml"
+    if not spec_path.is_file():
+        print(f"No {spec_path}: list what goes in the archive there first.")
+        return 1
+    spec = PackageSpec.load(spec_path)
+    exports = out if out is not None else paths.study(study.study_id).root / "exports"
+    password = os.environ.get("SOCIAL_ENERGY_PACKAGE_PASSWORD")
+    made = password is None
+    password = password or new_password()
+    old_umask = os.umask(0o077)  # the archive and its password readable by the owner only
+    try:
+        archive = build(paths.data_root(), spec, exports, password)
+        if made:
+            keep = archive.parent / "passwords" / f"{spec.archive}.txt"
+            keep.parent.mkdir(exist_ok=True)
+            keep.write_text(password + "\n", encoding="utf-8")
+            print(f"Password in {keep}. Send it apart from the archive.")
+    except PackageError as err:
+        print(f"Refused: {err}")
+        return 1
+    finally:
+        os.umask(old_umask)
+    print(f"Wrote {archive} ({archive.stat().st_size / 1e9:.2f} GB), checked.")
+    return 0
+
+
 COMMANDS["explore"] = explore
 COMMANDS["site-build"] = site_build
 COMMANDS["purge-device"] = purge_device
+COMMANDS["package"] = package_command
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -523,7 +561,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=8765, help="explore: port on 127.0.0.1")
     parser.add_argument("--no-browser", action="store_true", help="explore: do not open a browser")
     parser.add_argument("--demo", action="store_true", help="explore: serve a synthetic camp")
-    parser.add_argument("--out", type=Path, help="site-build: output directory (outside the repo)")
+    parser.add_argument(
+        "--out", type=Path, help="site-build, package: output directory (outside the repo)"
+    )
     parser.add_argument("--data", type=Path, help="site-build: public data directory to publish")
     parser.add_argument(
         "--device", type=int, action="append", default=[], help="purge-device: device ID"
@@ -544,6 +584,8 @@ def main(argv: list[str] | None = None) -> int:
             return explore(study, port=args.port, open_browser=not args.no_browser, demo=args.demo)
         if args.command == "site-build":
             return site_build(study, args.out, args.data)
+        if args.command == "package":
+            return package_command(study, args.out)
         return COMMANDS[args.command](study)
     except paths.DataRootError as err:
         print(err)
