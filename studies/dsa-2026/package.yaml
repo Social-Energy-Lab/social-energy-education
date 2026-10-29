@@ -1,0 +1,86 @@
+# What `social-energy package studies/dsa-2026/study.yaml` puts in the team archive.
+#
+# Paths are relative to $SOCIAL_ENERGY_DATA and keep their place in the archive. The archive is
+# the cleaned study as we work with it, not every byte: raw beacon logs, raw EDA cards and the
+# AudioMoth WAVs are rebuilt into the tables below and already sit with the team as delivered;
+# interview audio is not copied anywhere (the ethics approval has it deleted after
+# transcription). Left out on purpose: superseded runs (Drive copy, pre-drift, pre-fix), the
+# sensitivity rebuilds, run logs, spine backups, the explorer bundle and the public site data
+# (both rebuilt from these tables), and context/ (the team already holds those documents).
+
+archive: dsa-2026-data
+title: DSA 2026 — study data as organised by the analysis team
+intro: >
+  Pseudonymised research data: people appear by study ID only, except the interview transcripts,
+  which are automatic and NOT de-identified. Keep this archive on encrypted storage and do not
+  pass it on. Times are local wall-clock (Europe/Berlin) unless a column says UTC; the interview
+  transcripts' "UTC" headings are local time (see their README). How each table was made is in
+  the public repo (github.com/Social-Energy-Lab/social-energy-education) and in notes/.
+
+exclude: ["*.log", "*.bak-*", "*.pkl", "*__pycache__*"]
+
+entries:
+  - path: dsa-2026/spine
+    about: >
+      The spine: people (role, consent per module, course, age, gender), which device each person
+      wore when, exclusion windows with reasons, and the programme as events. Everything else
+      joins through it. The .py files are the scripts that filled it from the field documents.
+
+  - path: dsa-2026/raw/survey
+    about: SurveyJS questionnaire responses as exported from the zeitgeist platform, with checksums.
+
+  - path: dsa-2026/derived/survey
+    about: >
+      Survey items and respondents in long form, the pre-scoring checks (reverse keys, form
+      versions), and the scores: scales, composites, reliability and which submission was kept.
+
+  - path: dsa-2026/raw/ai-interviews
+    about: >
+      AI voice/chat interviews as exported from the zeitgeist platform: interviews, question-answer
+      pairs, summaries, participants, the agent's configuration and prompt, with checksums.
+
+  - path: dsa-2026/derived/interview-audio
+    exclude: ["transcribe.py"]
+    about: >
+      Transcripts of the in-person interviews (faster-whisper large-v3, run locally): readable
+      turns (.md) and words with times, speaker and confidence (.json), one pair per recording;
+      sessions_linked.csv joins each recording to a study ID. Not de-identified.
+
+  - path: dsa-2026/derived/interview-membrane
+    about: >
+      Membrane coding of the in-person interviews: coder instructions, the items, first and second
+      coder codes, and the review sheet. Codes are model-coded, not hand-checked.
+
+  - path: dsa-2026/derived/beacons
+    about: >
+      Beacon data after ID repair and drift correction: readouts, self-report presses, eco-mode
+      sessions, the ID-repair witnesses, and contacts per local day (parquet), plus the ingest QA.
+
+  - path: dsa-2026/derived/eda
+    about: >
+      Shimmer EDA after the clock fix: per-file inventory, per-second signal, SCRs, wear, the clock
+      model and its anchors, heart rate from PPG (beats, 10 s windows, minutes, agreement,
+      usability), and person_minutes joined to study IDs through the spine.
+
+  - path: dsa-2026/derived/acoustics
+    about: AudioMoth frequency and level features (Mensa, Plenum); no audio.
+
+  - path: dsa-2026/derived/rotation/work/rotation_attendance.tsv
+    about: >
+      The 22 Aug rotation sign-up sheets, transcribed and mapped to study IDs: one row per entry
+      (slot, room, person, home course, crossed out, overflow, double booked).
+
+  - path: dsa-2026/derived/analyses
+    exclude: ["*-pre-*", "outcomes-same-spine-check-*"]
+    about: >
+      Outputs of every analysis run on the final tables: outcomes, confirmatory models,
+      exploratory tiers (presses, survey, rhythm, acoustics, cascades, EDA, membrane, gradients),
+      co-presence by phase, beacon diagnostics and the ID-repair benchmark.
+
+  - path: dsa-2026/notes
+    about: >
+      The analysis team's notes, one per step: what was done, the checks, the numbers and the
+      decisions, in date order. Start here to see how the tables above came to be.
+
+  - path: _team/questions.md
+    about: The open and answered questions for the research team.
