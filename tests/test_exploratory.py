@@ -16,6 +16,7 @@ from social_energy.exploratory import (
     co_event_pairs,
     co_events,
     first_mover_logit,
+    group_members,
     group_sizes,
     null_compare,
     person_rates,
@@ -175,6 +176,12 @@ def test_group_sizes_are_distinct_people_per_connected_component():
     sizes = group_sizes(entity, np.array([0, 1, 3, 3, 4]), np.array([1, 2, 4, 5, 5]))
     assert sorted(sizes.tolist()) == [2, 3]
     assert group_sizes(entity, np.array([], dtype=int), np.array([], dtype=int)).size == 0
+
+
+def test_group_members_are_the_people_of_each_component():
+    entity = ["a", "b", "a", "c", "d", "e", "f"]
+    groups = group_members(entity, np.array([0, 1, 3, 3, 4]), np.array([1, 2, 4, 5, 5]))
+    assert sorted(sorted(g) for g in groups) == [["a", "b"], ["c", "d", "e"]]
 
 
 def test_first_mover_logit_recovers_direction_and_is_zero_when_balanced():

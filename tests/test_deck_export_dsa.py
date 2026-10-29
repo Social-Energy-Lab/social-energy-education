@@ -182,3 +182,38 @@ def test_a_missing_source_leaves_its_numbers_out(deck, tmp_path):
     assert all(rows == [] for rows in sections.values())
     assert deck.deck_numbers(src, min_group=5, log=log) == {}
     assert any("missing" in line for line in log)
+
+
+def confirmatory_results():
+    rows = [
+        ("main", "C1", 75, 0.154, 0.0919, 0.3678),
+        ("main", "C2", 75, -0.019, 0.5521, 0.8831),
+        ("main", "C4_trust", 75, 1.099, 0.1443, 0.4330),
+        ("main", "C4_lust", 75, 1.012, 0.4417, 0.8831),
+        ("rssi_-70", "C1", 75, 0.18, 0.05, 0.28),
+    ]
+    return pl.DataFrame(
+        rows,
+        schema=["variant", "test", "n", "std_estimate", "p_one", "p_one_holm"],
+        orient="row",
+    )
+
+
+def test_confirmatory_numbers_come_from_the_main_variant(deck):
+    log = []
+    n = deck.deck_numbers({"confirmatory": confirmatory_results()}, min_group=5, log=log)
+    assert set(n) <= set(NUMBER_KEYS)
+    assert (n["conf_c1_sd"], n["conf_c1_p"], n["conf_c1_holm"]) == (0.15, 0.09, 0.37)
+    assert (n["conf_c4_trust_rr"], n["conf_c4_trust_p"], n["conf_c4_trust_holm"]) == (
+        1.1, 0.14, 0.43,
+    )  # fmt: skip
+    assert n["conf_c2_sd"] == -0.02 and n["conf_c4_lust_rr"] == 1.01
+    # 80% power, one-sided 5%, for r = 0.154: ((1.645 + 0.842) / atanh(0.154))^2 + 3 = 259.6.
+    assert n["conf_n_needed"] == 260
+
+
+def test_power_needs_a_positive_effect(deck):
+    df = confirmatory_results().with_columns(pl.lit(-0.1).alias("std_estimate"))
+    log = []
+    n = deck.deck_numbers({"confirmatory": df}, min_group=5, log=log)
+    assert "conf_n_needed" not in n

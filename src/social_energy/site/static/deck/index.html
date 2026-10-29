@@ -173,29 +173,48 @@
       the state now).</p></div>
     <div class="card"><h3>Acoustics</h3><p>Room loudness per hour. Not part of today.</p></div>
   </div>
-  <aside class="notes">Not yet: interviews coded by topic; written descriptions for
-    self-reports (we do not have them).</aside>
+  <aside class="notes">Not yet: interviews coded by topic; the field log's notes on presses
+    linked to the press episodes they describe.</aside>
 </section>
 
 <!-- 7 -->
 <section class="slide" aria-label="Confirmatory result">
   <p class="kicker"><span class="tier confirmatory">confirmatory</span> Results so far</p>
-  <h2>The test fixed in advance: an honest null</h2>
+  <h2>The test fixed in advance: no significant effect at this sample size</h2>
   <div class="cols">
     <div class="text">
-      <p class="headline"><strong>{n_confirmatory}</strong><span>participants with beacons and
-        a survey</span></p>
+      <table class="tests">
+        <thead>
+          <tr><th>Test ({n_confirmatory} people)</th><th>Effect</th><th>p</th><th>Holm p</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Trust → time close to others</td><td>{+conf_c1_sd} SD</td><td>{conf_c1_p}</td>
+            <td>{conf_c1_holm}</td></tr>
+          <tr><td>Trust → presses</td><td>×{conf_c4_trust_rr}</td><td>{conf_c4_trust_p}</td>
+            <td>{conf_c4_trust_holm}</td></tr>
+          <tr><td>Lust → presses</td><td>×{conf_c4_lust_rr}</td><td>{conf_c4_lust_p}</td>
+            <td>{conf_c4_lust_holm}</td></tr>
+          <tr><td>Lust → mixing across courses</td><td>{+conf_c2_sd} SD</td><td>{conf_c2_p}</td>
+            <td>{conf_c2_holm}</td></tr>
+        </tbody>
+      </table>
       <ul>
-        <li>Plan frozen before any survey scale was scored; code fixed before it touched the
-          data.</li>
-        <li>Baseline trust and lust for life do not predict network strength, cross-course
-          mixing or presses at the strength we could detect.</li>
-        <li>Moderate effects are not ruled out: the next phases repeat the tests and pool
-          them.</li>
+        <li>No test is significant after the plan's Holm correction.</li>
+        <li>Both trust estimates are positive, the pre-registered direction; their intervals
+          include no effect.</li>
+        <li>Both lust estimates are close to zero.</li>
+        <li>Detecting an effect like trust's takes about {conf_n_needed} people. The next phases
+          repeat the tests unchanged and pool them.</li>
       </ul>
     </div>
     <div class="viz-host chart" data-viz="null"></div>
   </div>
+  <aside class="notes">Plan frozen before any survey scale was scored; code fixed before it
+    touched the data. p is one-sided in the plan's direction; Holm corrects for the four tests and
+    is the one the plan counts. A within-course permutation check gives the same p. No sensitivity
+    variant makes a test significant. The two trust tests share one predictor, so they are not two
+    independent confirmations. The power figure treats the effect as a correlation (eighty per cent
+    power, one-sided at the five per cent level).</aside>
 </section>
 
 <!-- 8 -->
@@ -339,8 +358,9 @@
   <p class="kicker"><span class="tier">For the team</span></p>
   <h2>Gaps and questions</h2>
   <ol class="big-list">
-    <li><b>Self-report descriptions.</b> Some presses were meant to come with a written
-      description. We never received them: where are they?</li>
+    <li><b>Context for presses.</b> We read the field log's notes on presses as the
+      qualitative documentation, and will link them to the episodes. Is there more, such as
+      messages participants sent?</li>
     <li><b>Face to face.</b> Beacons say how close, roughly, not whether people faced each
       other. Is proximity enough, or do we need another instrument?</li>
     <li><b>Interview topics.</b> Coded for the membrane only. Which topics should we code?</li>

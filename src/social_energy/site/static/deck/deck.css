@@ -140,6 +140,14 @@ body.scroll .viz-host { overflow: visible; }
 .slide .viz .axis text, .slide .viz .axis .axis-title, .slide .viz .reference-label { font-size: max(12px, 0.62em); }
 .slide .viz .row-label { font-size: max(13px, 0.68em); }
 .slide .chart-note, .slide .pending { font-size: 0.68em; color: var(--ink-3); }
+.slide table.tests { border-collapse: collapse; font-size: 0.72em; margin: 0 0 1em; width: 100%; }
+.slide table.tests th, .slide table.tests td {
+  padding: 0.3em 0.6em 0.3em 0; text-align: left; border-bottom: 1px solid var(--rule);
+  font-variant-numeric: tabular-nums;
+}
+.slide table.tests th { color: var(--ink-3); font-weight: 500; }
+/* The moments chart repeats its headline ratio, which the slide's text already states. */
+.slide [data-viz="moments"] > .headline { display: none; }
 .slide .headline { margin: 0 0 0.6em; gap: 0.2em 0.7em; }
 .slide .headline strong { font-size: 2.6em; }
 .slide .headline span { font-size: 0.8em; }

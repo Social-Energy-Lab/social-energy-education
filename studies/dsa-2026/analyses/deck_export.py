@@ -16,7 +16,10 @@ Sources, all under ``$SOCIAL_ENERGY_DATA/dsa-2026/derived/``:
 - ``eda_press_profile``: ``analyses/exploratory/eda/presses_profile.csv``, one series.
 - ``membrane_reasons``: ``analyses/exploratory-membrane/descriptives.csv``, openers and closers.
 - Numbers: the same files plus EDA settings contrasts and synchrony, interview agreement,
-  convergence and behaviour.
+  convergence and behaviour, and ``analyses/confirmatory/results.csv`` (main variant).
+
+One number is derived rather than read: ``conf_n_needed``, the sample C1's standardised effect
+would need for 80% power at the plan's one-sided 5% (Fisher z, treating the effect as r).
 
 Every row carries the people behind it and goes through ``check_aggregates`` (cells under
 ``min_group`` dropped) in ``site_export.finish``. A number is written only when the people
@@ -26,13 +29,18 @@ behind it reach ``min_group``; a missing file leaves its rows and numbers out, w
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable
 from pathlib import Path
+from statistics import NormalDist
 
 import polars as pl
 
 from social_energy.site.aggregates import GRADIENT_MEASURES, REASONS, TERCILES, is_number
 
+#: ``confirmatory/results.csv`` tests -> the deck's number prefix and its effect column's suffix.
+CONFIRMATORY = {"C1": ("conf_c1", "sd"), "C2": ("conf_c2", "sd"),
+                "C4_trust": ("conf_c4_trust", "rr"), "C4_lust": ("conf_c4_lust", "rr")}  # fmt: skip
 #: ``pair_effects.csv`` samples -> the deck's ``sample`` key.
 GRADIENT_SAMPLES = {"all": "all", "within course": "within", "between course": "between"}
 #: Interview codebook groups -> the deck's ``direction`` key.
@@ -265,6 +273,14 @@ def deck_numbers(src: dict, *, min_group: int, log: list[str]) -> dict:
             withheld = r.get("withheld")
             put(key, r.get("excess_over_time_null") if not withheld else None,
                 r.get("people_copressing"))  # fmt: skip
+    if (df := src.get("confirmatory")) is not None:
+        for test, (prefix, kind) in CONFIRMATORY.items():
+            r = _one(df, variant="main", test=test) or {}
+            put(f"{prefix}_{kind}", r.get("std_estimate"), r.get("n"))
+            put(f"{prefix}_p", r.get("p_one"), r.get("n"))
+            put(f"{prefix}_holm", r.get("p_one_holm"), r.get("n"))
+        r = _one(df, variant="main", test="C1") or {}
+        put("conf_n_needed", n_for_power(r.get("std_estimate")), r.get("n"))
 
     # Whole numbers for counts and percentages, two decimals for effects.
     out = {}
@@ -276,6 +292,14 @@ def deck_numbers(src: dict, *, min_group: int, log: list[str]) -> dict:
         else:
             out[key] = round(value, 2)
     return out
+
+
+def n_for_power(r: object, alpha: float = 0.05, power: float = 0.8) -> int | None:
+    """People needed to detect correlation ``r`` one-sided at ``alpha`` with ``power``."""
+    if not is_number(r) or not 0 < r < 1:
+        return None
+    z = NormalDist().inv_cdf
+    return math.ceil(((z(1 - alpha) + z(power)) / math.atanh(r)) ** 2 + 3)
 
 
 # --- reading ----------------------------------------------------------------------------------
@@ -315,6 +339,7 @@ def read_deck(derived: Path, n_nodes: int, log: list[str]) -> tuple[dict, dict]:
         "gradients_qa": _load(grad / "qa_gradients.json", _json, log),
         "gradient_pairs": _load(grad / "pair_effects.csv", pl.read_csv, log),
         "gradient_presses": _load(grad / "press_terciles.csv", pl.read_csv, log),
+        "confirmatory": _load(a / "confirmatory" / "results.csv", pl.read_csv, log),
     }
     sections = {
         "data_state": data_state_rows(

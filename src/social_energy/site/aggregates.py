@@ -131,11 +131,28 @@ NUMBER_KEYS = (
     "gradient_trust_scales_within_pct",
     "gradient_excess_near",
     "gradient_excess_far",
+    # The confirmatory tests, main variant: standardised effect (C1, C2) or rate ratio (C4),
+    # one-sided p in the plan's direction, its Holm adjustment over the four tests, and the
+    # people C1's effect would need for 80% power.
+    "conf_c1_sd",
+    "conf_c1_p",
+    "conf_c1_holm",
+    "conf_c2_sd",
+    "conf_c2_p",
+    "conf_c2_holm",
+    "conf_c4_trust_rr",
+    "conf_c4_trust_p",
+    "conf_c4_trust_holm",
+    "conf_c4_lust_rr",
+    "conf_c4_lust_p",
+    "conf_c4_lust_holm",
+    "conf_n_needed",
 )
 
 
 #: Deck numbers that are counts (whole numbers in the synthetic demo).
 DECK_COUNTS = (
+    "conf_n_needed",
     "beacon_reboots",
     "eda_wearers",
     "eda_certain_wearers",
@@ -252,6 +269,10 @@ def synthetic_aggregates(
             return val(-9, 2)
         if key.startswith("gradient_excess"):
             return val(1, 3)
+        if key.startswith("conf_"):
+            if key.endswith(("_p", "_holm")):
+                return val(0.05, 0.95)
+            return val(0.85, 1.25) if key.endswith("_rr") else val(-0.3, 0.3)
         if key.startswith(("cascade_", "latency_", "plenum_")):
             return val(0.5, 3)
         if key == "company_gain":
