@@ -180,29 +180,29 @@
 <!-- 7 -->
 <section class="slide" aria-label="Confirmatory result">
   <p class="kicker"><span class="tier confirmatory">confirmatory</span> Results so far</p>
-  <h2>The test fixed in advance: trust points our way, too few people to tell</h2>
+  <h2>The test fixed in advance: no significant effect at this sample size</h2>
   <div class="cols">
     <div class="text">
       <table class="tests">
         <thead>
-          <tr><th>Test ({n_confirmatory} people)</th><th>Effect</th><th>p</th><th>Holm p</th>
-            <th></th></tr>
+          <tr><th>Test ({n_confirmatory} people)</th><th>Effect</th><th>p</th><th>Holm p</th></tr>
         </thead>
         <tbody>
           <tr><td>Trust → time close to others</td><td>{+conf_c1_sd} SD</td><td>{conf_c1_p}</td>
-            <td>{conf_c1_holm}</td><td class="dir ours">our way</td></tr>
+            <td>{conf_c1_holm}</td></tr>
           <tr><td>Trust → presses</td><td>×{conf_c4_trust_rr}</td><td>{conf_c4_trust_p}</td>
-            <td>{conf_c4_trust_holm}</td><td class="dir ours">our way</td></tr>
+            <td>{conf_c4_trust_holm}</td></tr>
           <tr><td>Lust → presses</td><td>×{conf_c4_lust_rr}</td><td>{conf_c4_lust_p}</td>
-            <td>{conf_c4_lust_holm}</td><td class="dir">flat</td></tr>
+            <td>{conf_c4_lust_holm}</td></tr>
           <tr><td>Lust → mixing across courses</td><td>{+conf_c2_sd} SD</td><td>{conf_c2_p}</td>
-            <td>{conf_c2_holm}</td><td class="dir">flat</td></tr>
+            <td>{conf_c2_holm}</td></tr>
         </tbody>
       </table>
       <ul>
-        <li>Trust in life goes the predicted way on both outcomes, but within chance: no test
-          is significant after the plan's Holm correction.</li>
-        <li>Lust for life shows no link.</li>
+        <li>No test is significant after the plan's Holm correction.</li>
+        <li>Both trust estimates are positive, the pre-registered direction; their intervals
+          include no effect.</li>
+        <li>Both lust estimates are close to zero.</li>
         <li>Detecting an effect like trust's takes about {conf_n_needed} people. The next phases
           repeat the tests unchanged and pool them.</li>
       </ul>

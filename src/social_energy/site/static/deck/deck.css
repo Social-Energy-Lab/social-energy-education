@@ -146,8 +146,6 @@ body.scroll .viz-host { overflow: visible; }
   font-variant-numeric: tabular-nums;
 }
 .slide table.tests th { color: var(--ink-3); font-weight: 500; }
-.slide table.tests .dir { color: var(--ink-3); white-space: nowrap; }
-.slide table.tests .dir.ours { color: var(--accent); }
 /* The moments chart repeats its headline ratio, which the slide's text already states. */
 .slide [data-viz="moments"] > .headline { display: none; }
 .slide .headline { margin: 0 0 0.6em; gap: 0.2em 0.7em; }
