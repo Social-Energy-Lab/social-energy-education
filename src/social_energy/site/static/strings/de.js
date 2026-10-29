@@ -185,6 +185,7 @@ export default {
 
   footer_project:
     "Ein Forschungsprojekt der Friedrich-Schiller-Universität Jena und des Max-Planck-Instituts für Geoanthropologie.",
+  deck_link: "Folien zum Teamtreffen am vierten November (Englisch)",
   footer_thanks: "Danke an alle, die mitgemacht haben.",
   footer_privacy: "Diese Seite setzt keine Cookies, zählt keine Besuche und lädt nichts von anderen Servern.",
 };

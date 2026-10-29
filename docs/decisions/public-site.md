@@ -31,6 +31,13 @@ timing. `[unknown: when and in which channel did Mahdi approve publishing the an
   demo. This limits further exposure; it cannot recall copies already made.
 - **Copy rule.** The findings' numbers live only in the asset. The copy in git uses placeholders.
 - **Team mode stays local**, unchanged.
+- **The team-meeting deck** (`/deck/`, added 2026-10-28; Álvaro looked at the real-data preview on
+  2026-10-29 and asked for it to be published) is part of the same site and the same asset. It widens what is
+  published by camp-level aggregates only: records in and kept per source, EDA around presses
+  (one series, shuffled-press band), share of interviewees naming each membrane opener or closer,
+  and the gradient analysis's pair correlations and co-press shares. Every row carries its people
+  and the small-cell rule applies; per-person EDA, interview codes or survey answers stay
+  unpublished. Its numbers follow the copy rule above.
 
 ## Consequences
 

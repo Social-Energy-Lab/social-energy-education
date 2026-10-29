@@ -20,6 +20,17 @@ AGGREGATE_SECTIONS: dict[str, tuple[str, ...]] = {
     "places": ("setting", "people", "rate", "lo", "hi"),
     # No label: the page names each test from the copy (``test_<id>``).
     "confirmatory": ("test", "people", "estimate", "lo", "hi", "scale"),
+    # The team-meeting deck (static/deck/). ``raw`` and ``clean`` are record counts per source;
+    # ``people`` is how many people the cleaned records cover.
+    "data_state": ("source", "people", "raw", "clean"),
+    # Partial r of membrane distance with close minutes, and its permutation null band.
+    "gradient_pairs": ("measure", "sample", "people", "r", "null_lo", "null_hi"),
+    # Co-press share (percent) by membrane-distance tercile, and its time-shuffle null.
+    "gradient_presses": ("measure", "tercile", "people", "share", "time_null"),
+    # Skin conductance around a press, minute offsets, against the shuffled-press band.
+    "eda_press_profile": ("offset", "people", "observed", "null_lo", "null_hi"),
+    # Share of interviewees (percent) naming what opens or closes their membrane.
+    "membrane_reasons": ("reason", "direction", "people", "share"),
 }
 NUMBERS = "numbers"
 SCALES = ("sd", "rr")
@@ -42,6 +53,29 @@ SAFE_NAME = re.compile(r"[a-z][a-z_]{0,31}")
 #: A latency band or group size: a number, a range or an open end ("0-10", "3-4", "5+").
 BAND = re.compile(r"\d{1,5}(-\d{1,5}|\+)?")
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+#: The deck's sources, membrane distances, samples and interview reasons (``deck_*`` copy).
+DATA_SOURCES = ("beacons", "presses", "survey", "eda", "heart_rate", "interviews")
+GRADIENT_MEASURES = ("trust", "lust", "trust_scales", "lust_scales", "all_scales")
+GRADIENT_SAMPLES = ("all", "within", "between")
+TERCILES = ("near", "middle", "far")
+REASON_DIRECTIONS = ("opens", "closes")
+REASONS = (
+    "people",
+    "programme",
+    "arts",
+    "vulnerability",
+    "freedom",
+    "being_heard",
+    "course",
+    "nature",
+    "conflict",
+    "fatigue",
+    "withdrawal_need",
+    "pressure",
+    "safety",
+    "loss",
+    "end",
+)
 # Shares are percentages 0-100.
 NUMBER_KEYS = (
     "n_participants",
@@ -60,6 +94,59 @@ NUMBER_KEYS = (
     "persistence_excursion",
     "company_gain",
     "plenum_vs_course",
+    # The team-meeting deck. Shares are percentages 0-100; rho, r and SD effects as they are.
+    "beacon_reboots",
+    "eda_wearers",
+    "eda_certain_wearers",
+    "hr_wearers",
+    "eda_usable_minutes",
+    "eda_clock_sync_pct",
+    "eda_clock_rate_pct",
+    "eda_clock_box_pct",
+    "eda_clock_uncertain_pct",
+    "eda_presses",
+    "eda_pressers",
+    "eda_meal_scr",
+    "eda_meal_scr_lo",
+    "eda_meal_scr_hi",
+    "eda_meal_hr",
+    "eda_sync_close",
+    "eda_sync_apart",
+    "interviews_coded",
+    "interviews_people",
+    "membrane_opened_pct",
+    "membrane_stable_pct",
+    "membrane_selective_pct",
+    "membrane_kappa_now",
+    "membrane_trust_rho",
+    "membrane_trust_rho_lo",
+    "membrane_trust_rho_hi",
+    "membrane_lust_rho",
+    "membrane_mixing_sd",
+    "membrane_mixing_sd_lo",
+    "membrane_mixing_sd_hi",
+    "gradient_people",
+    "gradient_pairs",
+    "gradient_trust_scales_pct",
+    "gradient_trust_scales_within_pct",
+    "gradient_excess_near",
+    "gradient_excess_far",
+)
+
+
+#: Deck numbers that are counts (whole numbers in the synthetic demo).
+DECK_COUNTS = (
+    "beacon_reboots",
+    "eda_wearers",
+    "eda_certain_wearers",
+    "hr_wearers",
+    "eda_usable_minutes",
+    "eda_presses",
+    "eda_pressers",
+    "interviews_coded",
+    "interviews_people",
+    "gradient_people",
+    "gradient_pairs",
 )
 
 
@@ -95,6 +182,12 @@ CATEGORIES = {
     "scale": _one_of(SCALES),
     "band": _matches(BAND),
     "size": _matches(BAND),
+    "source": _one_of(DATA_SOURCES),
+    "measure": _one_of(GRADIENT_MEASURES),
+    "sample": _one_of(GRADIENT_SAMPLES),
+    "tercile": _one_of(TERCILES),
+    "reason": _one_of(REASONS),
+    "direction": _one_of(REASON_DIRECTIONS),
 }
 
 
@@ -149,8 +242,16 @@ def synthetic_aggregates(
     def synthetic_number(key: str) -> float:
         # Counts are integers, ratios sit near 1, company_gain may take either sign, the rest
         # are shares in percent.
-        if key.startswith("n_"):
+        if key.startswith("n_") or key in DECK_COUNTS:
             return rng.randint(30, 600)
+        if key.startswith(("eda_meal", "eda_sync", "membrane_trust", "membrane_lust")):
+            return val(-0.4, 0.4)
+        if key.startswith("membrane_mixing") or key == "membrane_kappa_now":
+            return val(0.05, 0.9)
+        if key.startswith("gradient_") and key.endswith("_pct"):
+            return val(-9, 2)
+        if key.startswith("gradient_excess"):
+            return val(1, 3)
         if key.startswith(("cascade_", "latency_", "plenum_")):
             return val(0.5, 3)
         if key == "company_gain":
@@ -221,6 +322,7 @@ def synthetic_aggregates(
     ]
 
     numbers = {k: synthetic_number(k) for k in NUMBER_KEYS}
+    numbers.update(_synthetic_deck_numbers(rng))
     numbers["n_participants"] = n_participants
     if n_presses is not None:
         numbers["n_presses"] = n_presses
@@ -287,5 +389,71 @@ def synthetic_aggregates(
                 ("c4_lust", "rr", (0.6, 1.6, 0.15, 0.5)),
             )
         ],
+        **_synthetic_deck_sections(rng, people),
         NUMBERS: numbers,
+    }
+
+
+def _synthetic_deck_numbers(rng: random.Random) -> dict:
+    """Deck numbers that must agree with each other: EDA clock shares sum to 100."""
+    sync = round(rng.uniform(40, 70), 1)
+    rate = round(rng.uniform(15, 100 - sync - 5), 1)
+    return {
+        "eda_clock_sync_pct": sync,
+        "eda_clock_rate_pct": rate,
+        "eda_clock_box_pct": round(100 - sync - rate, 1),
+        "eda_clock_uncertain_pct": round(100 - sync, 1),
+    }
+
+
+def _synthetic_deck_sections(rng: random.Random, people) -> dict:
+    """Invented rows for the deck's charts, with the same schema the export writes."""
+
+    def val(lo: float, hi: float) -> float:
+        return round(rng.uniform(lo, hi), 3)
+
+    state = []
+    for source in DATA_SOURCES:
+        raw = rng.randint(50, 50_000)
+        state.append(
+            {"source": source, "people": people(), "raw": raw,
+             "clean": round(raw * rng.uniform(0.4, 0.98))}
+        )  # fmt: skip
+    pairs = []
+    for measure in GRADIENT_MEASURES:
+        for sample in GRADIENT_SAMPLES:
+            half = val(0.03, 0.1)
+            pairs.append(
+                {"measure": measure, "sample": sample, "people": people(),
+                 "r": val(-half * 1.2, half * 1.2), "null_lo": -half, "null_hi": half}
+            )  # fmt: skip
+    presses = []
+    for measure in ("trust", "lust"):
+        for tercile in TERCILES:
+            null = val(2, 5)
+            presses.append(
+                {"measure": measure, "tercile": tercile, "people": people(),
+                 "share": round(null * rng.uniform(1.4, 2.6), 3), "time_null": null}
+            )  # fmt: skip
+    profile = []
+    for offset in range(-10, 11):
+        half = val(0.15, 0.3)
+        profile.append(
+            {"offset": offset, "people": people(), "observed": val(-half, half),
+             "null_lo": -half, "null_hi": half}
+        )  # fmt: skip
+    reasons = [
+        {"reason": r, "direction": d, "people": people(), "share": val(10, 90)}
+        for r, d in (
+            ("people", "opens"), ("programme", "opens"), ("arts", "opens"),
+            ("freedom", "opens"), ("being_heard", "opens"), ("conflict", "closes"),
+            ("fatigue", "closes"), ("pressure", "closes"),
+        )
+    ]  # fmt: skip
+    return {
+        "data_state": state,
+        "gradient_pairs": pairs,
+        "gradient_presses": presses,
+        "eda_press_profile": profile,
+        "membrane_reasons": reasons,
     }

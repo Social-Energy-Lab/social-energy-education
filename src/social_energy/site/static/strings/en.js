@@ -184,6 +184,7 @@ export default {
 
   footer_project:
     "A research project of Friedrich Schiller University Jena and the Max Planck Institute of Geoanthropology.",
+  deck_link: "Slides for the team meeting on the fourth of November",
   footer_thanks: "Thank you to everyone who took part.",
   footer_privacy: "This page sets no cookies, counts no visits and loads nothing from other servers.",
 };
