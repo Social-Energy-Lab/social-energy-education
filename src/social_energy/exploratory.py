@@ -354,8 +354,8 @@ def null_compare(observed: float, null: Sequence[float], *, level: float = 0.95)
 # --- group moments, who goes first, ratios clustered by day ---------------------------------------
 
 
-def group_sizes(entity: Sequence[Hashable], first: np.ndarray, second: np.ndarray) -> np.ndarray:
-    """Distinct people in each connected component of events joined by the pairs
+def group_members(entity: Sequence[Hashable], first: np.ndarray, second: np.ndarray) -> list[set]:
+    """The distinct people of each connected component of events joined by the pairs
     ``(first[k], second[k])`` (e.g. the close pairs of :func:`co_event_pairs`). Events in no pair
     are not a group; a chain counts as one component (single linkage)."""
     parent = list(range(len(entity)))
@@ -373,7 +373,12 @@ def group_sizes(entity: Sequence[Hashable], first: np.ndarray, second: np.ndarra
     members: dict[int, set] = {}
     for k in set(np.asarray(first).tolist()) | set(np.asarray(second).tolist()):
         members.setdefault(root(k), set()).add(entity[k])
-    return np.array(sorted(len(m) for m in members.values()), dtype=np.int64)
+    return list(members.values())
+
+
+def group_sizes(entity: Sequence[Hashable], first: np.ndarray, second: np.ndarray) -> np.ndarray:
+    """Distinct people in each group of :func:`group_members`, sorted."""
+    return np.array(sorted(len(m) for m in group_members(entity, first, second)), dtype=np.int64)
 
 
 def first_mover_logit(diff: np.ndarray, *, max_iter: int = 50, tol: float = 1e-10) -> np.ndarray:

@@ -81,6 +81,7 @@ from social_energy.exploratory import (
     cluster_ratio,
     co_event_pairs,
     first_mover_logit,
+    group_members,
     group_sizes,
     shuffle_events,
 )
@@ -428,6 +429,30 @@ def observed_pairs(s: Setup, window: int = WINDOW) -> pl.DataFrame:
     )
 
 
+def size_people(s: Setup) -> tuple[list[int], int]:
+    """Distinct people in the observed groups of each size in ``SIZE_LABELS``, and in triangles:
+    the small-cell count for the group-size table, built the way ``statistics`` builds groups."""
+    a, b, gap, close = pairs_of(s, s.ts, LATENCY_WINDOW)
+    c = close & (gap <= WINDOW)
+    ca, cb, day = a[c], b[c], s.day[a[c]]
+    people = [set() for _ in SIZE_LABELS]
+    for d in range(len(s.days)):
+        m = day == d
+        for g in group_members(s.entity, ca[m], cb[m]):
+            people[min(len(g), 5) - 2] |= g
+    nb: dict[int, set] = {}
+    for u, v in zip(ca.tolist(), cb.tolist(), strict=True):
+        nb.setdefault(u, set()).add(v)
+        nb.setdefault(v, set()).add(u)
+    tri = set()
+    for u, v in zip(ca.tolist(), cb.tolist(), strict=True):
+        for w in nb[u] & nb[v]:
+            trio = {s.entity[u], s.entity[v], s.entity[w]}
+            if len(trio) == 3:
+                tri |= trio
+    return [len(x) for x in people], len(tri)
+
+
 def people_per(pairs: pl.DataFrame, col: str, labels: list) -> list[int]:
     out = []
     for lab in labels:
@@ -756,7 +781,8 @@ def main() -> None:
     latency.write_csv(out / "latency.csv")
 
     # 3. Size.
-    size = pl.concat([m.table("size", SIZE_LABELS), m.table("triangles", ["triangles"])])
+    sp, tp = size_people(main_setup)
+    size = pl.concat([m.table("size", SIZE_LABELS, sp), m.table("triangles", ["triangles"], [tp])])
     size.write_csv(out / "group_size.csv")
 
     # 5. Network relation.
