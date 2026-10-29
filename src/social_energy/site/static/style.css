@@ -32,6 +32,7 @@
   --hero-ink-2: #c3c2b7;
   --hero-ring: #3a3844;
   --hero-glow: #fff3b0;
+  --hero-accent: #f0c75e;
   --hero-course-1: #3987e5;
   --hero-course-2: #d95926;
   --hero-course-3: #199e70;
@@ -46,8 +47,11 @@
   --measure: 40rem;
 }
 
+/* Light when the device asks for it. A page may force a theme with data-theme on <html> (the
+   deck does, for a washed-out projector); the light tokens are therefore listed twice. */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
     --surface-0: #f6f4ef;
     --surface-1: #fcfcfb;
     --surface-2: #ecebe5;
@@ -67,6 +71,28 @@
     --course-5: #e87ba4;
     --course-6: #4a3aa7;
   }
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] {
+  color-scheme: light;
+  --surface-0: #f6f4ef;
+  --surface-1: #fcfcfb;
+  --surface-2: #ecebe5;
+  --ink-1: #141414;
+  --ink-2: #52514e;
+  --ink-3: #6e6d68;
+  --rule: #dedcd5;
+  --accent: #8a5a00;
+  --focus: #2a78d6;
+  --glow: #e0a400;
+  --banner-bg: #fbefc4;
+  --banner-ink: #4a3500;
+  --course-1: #2a78d6;
+  --course-2: #eb6834;
+  --course-3: #1baf7a;
+  --course-4: #eda100;
+  --course-5: #e87ba4;
+  --course-6: #4a3aa7;
 }
 
 * { box-sizing: border-box; }
@@ -265,8 +291,9 @@ main { counter-reset: chapter 1; }
   border: 1px solid var(--accent); border-radius: 999px; color: var(--ink-1); margin: 0 0 18px;
 }
 .chart-action:hover { background: var(--surface-2); }
-.chapter .legend-inline { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); margin: 0 0 6px; padding: 0; list-style: none; }
-.chapter .legend-inline li { display: flex; align-items: center; gap: 8px; margin: 0; }
+/* Inline legends under a chart, in a chapter or on a deck slide. */
+.chapter .legend-inline, .slide .legend-inline { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); margin: 0 0 6px; padding: 0; list-style: none; }
+.chapter .legend-inline li, .slide .legend-inline li { display: flex; align-items: center; gap: 8px; margin: 0; }
 .legend-inline svg { flex: none; }
 
 .chapter ul { padding-left: 1.2em; margin: 0 0 14px; }
