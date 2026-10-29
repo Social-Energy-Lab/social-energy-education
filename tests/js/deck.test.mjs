@@ -34,15 +34,41 @@ test("the hash picks a slide, clamped to the deck", () => {
   assert.equal(deck.slideFromHash("", 15), 0);
 });
 
-test("arrows, space and page keys move; F, N and D toggle", () => {
+test("arrows, space and page keys move; F, N and L toggle", () => {
   for (const k of ["ArrowRight", "ArrowDown", "PageDown", " "]) assert.equal(deck.keyAction(k), 1);
   for (const k of ["ArrowLeft", "ArrowUp", "PageUp"]) assert.equal(deck.keyAction(k), -1);
   assert.equal(deck.keyAction("Home"), "first");
   assert.equal(deck.keyAction("End"), "last");
   assert.equal(deck.keyAction("f"), "full");
   assert.equal(deck.keyAction("N"), "notes");
-  assert.equal(deck.keyAction("d"), "theme");
+  assert.equal(deck.keyAction("l"), "theme");
+  assert.equal(deck.keyAction("L"), "theme");
+  assert.equal(deck.keyAction("d"), null);
   assert.equal(deck.keyAction("x"), null);
+});
+
+test("L switches away from the theme on screen: the forced one, else the device's", () => {
+  assert.equal(deck.nextTheme(undefined, false), "light");
+  assert.equal(deck.nextTheme(undefined, true), "dark");
+  assert.equal(deck.nextTheme("light", false), "dark");
+  assert.equal(deck.nextTheme("dark", true), "light");
+  assert.equal(deck.slideNumber(3), "04");
+});
+
+test("each source says in one line why it keeps less than it recorded", () => {
+  const rows = viz.stateRows([
+    { source: "beacons", people: 79, raw: 1000, clean: 983 },
+    { source: "survey", people: 80, raw: 10, clean: 9 },
+    { source: "heart_rate", people: 60, raw: 100, clean: 49 },
+    { source: "interviews", people: 60, raw: 12, clean: 10 },
+  ]);
+  const why = Object.fromEntries(rows.map((r) => [r.key, viz.dropReason(r)]));
+  assert.match(why.beacons, /^Dropped, about 2%: copies/);
+  assert.equal(why.survey, "One double submission removed.");
+  assert.match(why.heart_rate, /about half of the worn minutes/);
+  assert.match(why.interviews, /^2 recordings are not from participants/);
+  assert.match(viz.dropReason({ key: "presses" }), /under 60 s apart are one episode/);
+  assert.equal(viz.roughShare(0.4), "about 0.4%");
 });
 
 test("data state keeps the source order and drops incomplete rows", () => {

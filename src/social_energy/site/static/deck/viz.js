@@ -41,6 +41,43 @@ export function stateRows(rows) {
   });
 }
 
+/** A share in plain words: "about half" near 50, else "about N%" (one decimal under 1). */
+export function roughShare(pct) {
+  if (!finite(pct)) return "some";
+  if (pct >= 45 && pct <= 55) return "about half";
+  return `about ${pct >= 1 ? Math.round(pct) : fmt1(pct)}%`;
+}
+
+/**
+ * Why a source keeps fewer records than it recorded, in one plain line. Counts and shares come
+ * from the row (the asset), never from this file.
+ */
+export function dropReason(row) {
+  const lost = finite(row?.raw) && finite(row?.clean) ? row.raw - row.clean : null;
+  const share = finite(row?.kept) ? 100 - row.kept : null;
+  const count = (n, one, many) => (n === 1 ? `One ${one}` : `${shortCount(n)} ${many}`);
+  switch (row?.key) {
+    case "beacons":
+      return `Dropped, ${roughShare(share)}: copies, records outside the camp window, and windows when a tag was broken (from the field notes).`;
+    case "presses":
+      return "Mostly merging: one moment is often several presses (many pressed twice, a 3 s hold each), so presses under 60 s apart are one episode. Also out: copies from overlapping readouts, staff (analysed separately), broken-tag windows, accidental presses.";
+    case "survey":
+      if (!finite(lost) || lost <= 0) return "Nothing removed.";
+      return `${count(lost, "double submission", "double submissions")} removed.`;
+    case "eda":
+      return "Minutes with artefacts (movement, a loose sensor, impossible jumps) are left out: they would fake arousal peaks.";
+    case "heart_rate":
+      return `The finger-clip pulse sensor is fragile: ${roughShare(share)} of the worn minutes have no clean heartbeat.`;
+    case "interviews":
+      if (!finite(lost) || lost <= 0) return "Every coded interview is analysed.";
+      return lost === 1
+        ? "One recording is not from a participant with interview consent, so it is outside the analysis unit."
+        : `${shortCount(lost)} recordings are not from participants with interview consent, so they are outside the analysis unit.`;
+    default:
+      return "";
+  }
+}
+
 /** A count in short form: 1,234 · 56.7k · 63.7M. */
 export function shortCount(v) {
   if (!finite(v)) return "–";
@@ -162,11 +199,12 @@ export function drawState(el, agg, opts) {
   for (const r of rows) {
     const row = document.createElement("div");
     row.className = "state-row";
-    row.innerHTML = `<div class="state-name"></div><div class="state-track"><div class="state-bar"></div></div><div class="state-text"></div>`;
+    row.innerHTML = `<div class="state-name"></div><div class="state-track"><div class="state-bar"></div></div><div class="state-text"></div><div class="state-reason"></div>`;
     row.querySelector(".state-name").textContent = r.name;
     const people = finite(r.people) ? ` · ${shortCount(r.people)} people` : "";
     row.querySelector(".state-text").textContent =
       `${shortCount(r.clean)} of ${shortCount(r.raw)} ${r.unit}${people}`;
+    row.querySelector(".state-reason").textContent = dropReason(r);
     row.title = `${r.name}: ${fmt1(r.kept)}% kept`;
     const bar = row.querySelector(".state-bar");
     bar.dataset.kept = `${Math.round(r.kept)}%`;
@@ -176,7 +214,7 @@ export function drawState(el, agg, opts) {
     });
   }
   el.append(list);
-  caption(el, "Bar: share of records kept after cleaning and consent filtering.");
+  caption(el, "Bar: share of recorded data that is usable after cleaning and consent filtering.");
 }
 
 /** EDA minutes by clock source: one stacked bar from the asset's numbers. */
@@ -191,7 +229,7 @@ export function drawClockBar(el, numbers) {
   const bar = document.createElement("div");
   bar.className = "stack";
   const legend = document.createElement("ul");
-  legend.className = "stack-legend";
+  legend.className = "legend-inline";
   for (const [key, name, v] of parts) {
     const seg = document.createElement("div");
     seg.className = `seg seg-${key}`;
@@ -315,7 +353,7 @@ export function drawEdaProfile(el, agg, opts) {
       .transition().duration(1600).ease(d3.easeCubicInOut).attr("stroke-dashoffset", 0); // prettier-ignore
   }
   const legend = document.createElement("ul");
-  legend.className = "stack-legend";
+  legend.className = "legend-inline";
   legend.innerHTML =
     '<li><span class="sw sw-line-accent"></span>around the real presses</li><li><span class="sw sw-band"></span>expected if presses were shuffled (95%)</li>';
   fig.append(legend);
@@ -350,7 +388,7 @@ export function drawGradients(el, agg, opts) {
   el.replaceChildren();
   if (!groups.length) return emptyNote(el, opts.t);
   const fig = block(el, "Membrane difference and time spent close");
-  const rowH = 54;
+  const rowH = 46;
   const m = { t: 30, b: 44, r: 14 };
   const height = m.t + groups.length * rowH + m.b;
   const probe = svgIn(fig, 10, "");
@@ -380,7 +418,7 @@ export function drawGradients(el, agg, opts) {
     .attr("transform", (_, i) => `translate(0,${m.t + i * rowH})`); // prettier-ignore
   g.append("text").attr("class", "row-label").attr("x", labelW - 10).attr("y", rowH / 2)
     .attr("dy", "0.35em").attr("text-anchor", "end").text((d) => d.name); // prettier-ignore
-  const dy = (d) => rowH / 2 + (d.sampleIndex - 1) * 13;
+  const dy = (d) => rowH / 2 + (d.sampleIndex - 1) * 12;
   const dots = g.selectAll("g.dot").data((d) => d.dots).join("g").attr("class", "dot");
   dots.append("line").attr("class", "null-band").attr("x1", (d) => x(d.null_lo))
     .attr("x2", (d) => x(d.null_hi)).attr("y1", dy).attr("y2", dy); // prettier-ignore
@@ -392,7 +430,7 @@ export function drawGradients(el, agg, opts) {
   else marks.transition().delay((d) => 300 + d.sampleIndex * 150).duration(GROW_MS * 1.6)
     .ease(ease()).attr("cx", (d) => x(d.r)); // prettier-ignore
   const legend = document.createElement("ul");
-  legend.className = "stack-legend";
+  legend.className = "legend-inline";
   for (const [i, [, name]] of SAMPLES.entries()) {
     const li = document.createElement("li");
     li.innerHTML = `<span class="sw sw-dot sample-${i}"></span>`;
@@ -448,10 +486,55 @@ export function drawCopress(el, agg, opts) {
   if (reducedMotion(opts)) bars.attr("width", w);
   else bars.transition().delay((_, i) => 200 + i * 80).duration(GROW_MS).ease(ease()).attr("width", w);
   const legend = document.createElement("ul");
-  legend.className = "stack-legend";
+  legend.className = "legend-inline";
   legend.innerHTML =
     '<li><span class="sw sw-bar"></span>observed</li><li><span class="sw sw-chance"></span>expected from each person\'s own timing</li>';
   fig.append(legend);
+}
+
+/**
+ * The title's night sky: six course clusters on a ring, a few ties, a few glows. Decorative and
+ * invented, in the network's colours; not data.
+ */
+export function drawSky(el) {
+  el.replaceChildren();
+  const W = 520;
+  const H = 520;
+  const rand = rng(11);
+  const svg = d3
+    .select(el)
+    .append("svg")
+    .attr("class", "sky")
+    .attr("viewBox", `0 0 ${W} ${H}`)
+    .attr("aria-hidden", "true");
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = 170;
+  svg.append("circle").attr("class", "sky-ring").attr("cx", cx).attr("cy", cy).attr("r", R);
+  const dots = [];
+  for (let c = 0; c < 6; c++) {
+    const a = (c / 6) * 2 * Math.PI - Math.PI / 2;
+    for (let i = 0; i < 9; i++) {
+      const r = R + (rand() - 0.5) * 120;
+      const b = a + (rand() - 0.5) * 0.75;
+      dots.push({ c, x: cx + r * Math.cos(b), y: cy + r * Math.sin(b) });
+    }
+  }
+  const ties = [];
+  for (const d of dots) {
+    const near = dots.filter((e) => e !== d && Math.hypot(e.x - d.x, e.y - d.y) < 62);
+    for (const e of near.slice(0, 2)) if (rand() < 0.55) ties.push([d, e]);
+  }
+  svg.append("g").selectAll("line").data(ties).join("line")
+    .attr("class", ([a, b]) => `sky-tie ${a.c === b.c ? `c${a.c + 1}` : "cx"}`)
+    .attr("x1", ([a]) => a.x).attr("y1", ([a]) => a.y).attr("x2", ([, b]) => b.x).attr("y2", ([, b]) => b.y); // prettier-ignore
+  svg.append("g").selectAll("circle").data(dots).join("circle")
+    .attr("class", (d) => `c${d.c + 1}`).attr("cx", (d) => d.x).attr("cy", (d) => d.y).attr("r", 5.5); // prettier-ignore
+  for (const d of [dots[4], dots[23], dots[41]]) {
+    svg.append("circle").attr("class", "sky-glow").attr("cx", d.x).attr("cy", d.y).attr("r", 14)
+      .attr("opacity", 0.22); // prettier-ignore
+    svg.append("circle").attr("class", "sky-glow").attr("cx", d.x).attr("cy", d.y).attr("r", 6);
+  }
 }
 
 /** The membrane logic, schematically: two membranes of twelve scales, a gradient, a flow. */

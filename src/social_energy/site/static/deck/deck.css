@@ -1,51 +1,10 @@
-/* The team-meeting deck, on top of the site's style.css: light by default (projectors wash out
-   dark slides), dark with D. One slide fills the screen; under 760px the slides scroll. */
-
-:root:not([data-theme="dark"]) {
-  color-scheme: light;
-  --surface-0: #f6f4ef;
-  --surface-1: #fcfcfb;
-  --surface-2: #ecebe5;
-  --ink-1: #141414;
-  --ink-2: #52514e;
-  --ink-3: #6e6d68;
-  --rule: #dedcd5;
-  --accent: #8a5a00;
-  --focus: #2a78d6;
-  --glow: #e0a400;
-  --banner-bg: #fbefc4;
-  --banner-ink: #4a3500;
-  --course-1: #2a78d6;
-  --course-2: #eb6834;
-  --course-3: #1baf7a;
-  --course-4: #eda100;
-  --course-5: #e87ba4;
-  --course-6: #4a3aa7;
-  --band: rgba(20, 20, 20, 0.09);
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --surface-0: #111014;
-  --surface-1: #19181d;
-  --surface-2: #232129;
-  --ink-1: #f4f1ea;
-  --ink-2: #c3c2b7;
-  --ink-3: #8f8e88;
-  --rule: #2e2d33;
-  --accent: #f0c75e;
-  --focus: #f0c75e;
-  --banner-bg: #3a2e0c;
-  --banner-ink: #fff3b0;
-  --course-1: #3987e5;
-  --course-2: #d95926;
-  --course-3: #199e70;
-  --course-4: #c98500;
-  --course-5: #d55181;
-  --course-6: #9085e9;
-  --band: rgba(255, 255, 255, 0.1);
-}
+/* The team-meeting deck, on top of the site's style.css: the site's own theme (dark, light when
+   the device asks), L forces the other one for a washed-out projector. Colours are the site's
+   tokens; this file holds the slide layout only. One slide fills the screen; under 760px the
+   slides scroll. */
 
 body.deck {
+  --band: color-mix(in srgb, var(--ink-1) 10%, transparent);
   background: var(--surface-0);
   color: var(--ink-1);
   font-size: clamp(15px, 0.9vw + 0.75vh, 26px);
@@ -59,7 +18,7 @@ body.deck.scroll { overflow: auto; font-size: 16px; }
   box-sizing: border-box;
   height: 100vh;
   height: 100dvh;
-  padding: 4.5vh 5vw 9vh;
+  padding: 8vh 5vw 9vh;
   flex-direction: column;
   gap: 1.2vh;
   overflow: hidden;
@@ -69,17 +28,18 @@ body.scroll .slide {
   display: flex;
   height: auto;
   min-height: 0;
-  padding: 40px var(--gutter) 32px;
+  padding: 56px var(--gutter) 32px;
   border-bottom: 1px solid var(--rule);
   overflow: visible;
 }
 
 .slide .kicker {
   font-size: 0.72em;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   color: var(--ink-3);
   margin: 0;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.7em;
   align-items: center;
 }
@@ -90,7 +50,18 @@ body.scroll .slide {
   margin: 0 0 0.4em;
   max-width: 30em;
 }
-.slide h1 { font-size: 2.6em; }
+.slide h1 { font-size: 2.6em; letter-spacing: -0.01em; }
+/* The slide number in gold above the heading, as the site numbers its chapters. */
+.slide h2[data-n]::before {
+  content: attr(data-n);
+  display: block;
+  font-family: var(--sans);
+  font-size: 0.36em;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  margin-bottom: 0.4em;
+}
 .slide h2 { font-size: 1.85em; }
 .slide h3 { font-size: 1em; margin: 0 0 0.3em; }
 .slide p { margin: 0 0 0.7em; }
@@ -98,7 +69,7 @@ body.scroll .slide {
 .slide li { margin: 0 0 0.6em; }
 .slide li::marker { color: var(--accent); }
 .slide .small, .slide .hint { font-size: 0.78em; color: var(--ink-3); }
-.slide .tier { font-size: 1em; margin: 0; }
+.slide .tier { font-size: 1em; margin: 0; line-height: 1.5; }
 .slide .takeaway {
   border-left: 4px solid var(--accent);
   padding: 0.3em 0 0.3em 0.8em;
@@ -106,10 +77,47 @@ body.scroll .slide {
   margin-top: 0.8em;
 }
 
+/* The night sky of the site's hero, for the title and the network: night in both themes. */
+.night-slide, body.on-night {
+  --surface-0: var(--hero-bg);
+  --surface-1: var(--hero-bg-2);
+  --surface-2: var(--hero-ring);
+  --ink-1: var(--hero-ink);
+  --ink-2: var(--hero-ink-2);
+  --ink-3: var(--hero-ink-2);
+  --rule: var(--hero-ring);
+  --accent: var(--hero-accent);
+  --focus: var(--hero-accent);
+  --banner-bg: #3a2e0c;
+  --banner-ink: var(--hero-glow);
+  color-scheme: dark;
+}
+.night-slide {
+  background:
+    radial-gradient(ellipse 70% 60% at 60% 50%, var(--hero-bg-2) 0%, var(--hero-bg) 72%),
+    var(--hero-bg);
+  color: var(--ink-1);
+}
+body.on-night { background: var(--hero-bg); }
+
 .title-slide { justify-content: center; }
+.title-slide .cols { flex: 0 1 auto; align-items: center; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); }
 .title-slide .lede { font-size: 1.15em; max-width: 34em; color: var(--ink-2); }
 .title-slide .facts { color: var(--ink-2); max-width: 36em; }
 .title-slide .hint { margin-top: 2vh; }
+svg.sky { display: block; width: 100%; max-height: 70vh; }
+.sky .sky-ring { fill: none; stroke: var(--hero-ring); stroke-dasharray: 1 5; }
+.sky .sky-tie { stroke-width: 1; stroke-opacity: 0.45; }
+.sky .sky-glow { fill: var(--hero-glow); }
+.sky .c1 { fill: var(--hero-course-1); stroke: var(--hero-course-1); }
+.sky .c2 { fill: var(--hero-course-2); stroke: var(--hero-course-2); }
+.sky .c3 { fill: var(--hero-course-3); stroke: var(--hero-course-3); }
+.sky .c4 { fill: var(--hero-course-4); stroke: var(--hero-course-4); }
+.sky .c5 { fill: var(--hero-course-5); stroke: var(--hero-course-5); }
+.sky .c6 { fill: var(--hero-course-6); stroke: var(--hero-course-6); }
+.sky .cx { stroke: rgba(255, 255, 255, 0.55); }
+.sky circle { stroke: none; }
+body.scroll .title-slide .cols { grid-template-columns: 1fr; }
 
 .cols {
   flex: 1;
@@ -132,11 +140,11 @@ body.scroll .viz-host { overflow: visible; }
 .slide .viz .axis text, .slide .viz .axis .axis-title, .slide .viz .reference-label { font-size: max(12px, 0.62em); }
 .slide .viz .row-label { font-size: max(13px, 0.68em); }
 .slide .chart-note, .slide .pending { font-size: 0.68em; color: var(--ink-3); }
-.slide .headline strong { font-size: 2.2em; }
+.slide .headline { margin: 0 0 0.6em; gap: 0.2em 0.7em; }
+.slide .headline strong { font-size: 2.6em; }
+.slide .headline span { font-size: 0.8em; }
 .slide .chart-action { display: none; }
-/* The site scopes its inline legends to .chapter; the deck reuses the chapters' charts. */
-.slide .legend-inline { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.7em; color: var(--ink-2); margin: 0 0 6px; padding: 0; list-style: none; }
-.slide .legend-inline li { display: flex; align-items: center; gap: 8px; margin: 0; }
+.slide .legend-inline { font-size: 0.7em; margin-top: 0.4em; }
 
 /* The network: a stage that fits the slide. */
 .slide [data-viz="network"] .stage { max-height: 62vh; }
@@ -159,18 +167,18 @@ body.scroll .cards { grid-template-columns: 1fr; gap: 12px; }
 .card p { margin: 0; color: var(--ink-2); }
 .big-list { font-size: 1.02em; max-width: 44em; }
 
-/* Data state */
-.state { display: grid; gap: 0.9em; }
+/* Data state: per source the name and counts, the usable share as a bar, why it drops. */
+.state { display: grid; gap: 0.7em; }
 .state-row {
   display: grid;
-  grid-template-columns: minmax(7em, 11em) minmax(0, 1fr);
-  grid-template-areas: "name track" ". text";
-  column-gap: 0.8em;
-  row-gap: 0.15em;
-  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "name text" "track track" "reason reason";
+  column-gap: 0.7em;
+  row-gap: 0.2em;
+  align-items: baseline;
 }
-.state-name { grid-area: name; font-weight: 600; font-size: 0.85em; }
-.state-track { grid-area: track; height: 1.1em; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.state-name { grid-area: name; font-weight: 600; font-size: 0.8em; }
+.state-track { grid-area: track; height: 0.75em; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
 .state-bar {
   height: 100%;
   width: 0;
@@ -178,25 +186,17 @@ body.scroll .cards { grid-template-columns: 1fr; gap: 12px; }
   border-radius: 4px;
   transition: width 900ms cubic-bezier(.2,.7,.2,1);
 }
-.state-text { grid-area: text; font-size: 0.72em; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.state-text { grid-area: text; font-size: 0.7em; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.state-reason { grid-area: reason; font-size: 0.66em; color: var(--ink-3); line-height: 1.35; }
+.state + .chart-note { margin-top: 1em; }
 
 /* Stacked bar and legends */
 .stack { display: flex; gap: 2px; height: 1.4em; border-radius: 4px; overflow: hidden; margin: 0.3em 0; }
 .seg-sync { background: var(--course-1); }
 .seg-rate { background: var(--course-4); }
 .seg-box { background: var(--course-6); }
-.stack-legend {
-  list-style: none;
-  padding: 0;
-  margin: 0.4em 0 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3em 1.2em;
-  font-size: 0.7em;
-  color: var(--ink-2);
-}
-.slide .stack-legend li { margin: 0; display: flex; gap: 0.45em; align-items: center; }
-.stack-legend .sw { width: 1.1em; height: 0.8em; border-radius: 2px; display: inline-block; flex: none; }
+/* Swatches in the deck's legends (the site's .sw is a hero swatch). */
+.legend-inline .sw { width: 1.1em; height: 0.8em; top: 0; border-radius: 2px; display: inline-block; flex: none; }
 .sw-line-accent { background: linear-gradient(var(--accent), var(--accent)) center / 100% 2px no-repeat; }
 .sw-band { background: var(--band); }
 .sw-bar { background: var(--accent); }
@@ -214,8 +214,7 @@ circle.sample { stroke: var(--surface-0); stroke-width: 2; }
 .viz .lane-rule { stroke: var(--rule); stroke-width: 1; }
 .viz .mark { fill: var(--accent); }
 .lane-programme .mark { fill: var(--ink-2); }
-.viz .moment { stroke: var(--focus); stroke-width: 2; }
-.dash .moment { stroke: var(--focus); stroke-width: 2; }
+.viz .moment, .dash .moment { stroke: var(--accent); stroke-width: 2; }
 
 svg.logic, svg.dash { display: block; max-height: 64vh; font-family: var(--sans); }
 .logic .core { fill: var(--surface-2); }
@@ -246,9 +245,22 @@ svg.logic, svg.dash { display: block; max-height: 64vh; font-family: var(--sans)
 .dash-eda { fill: none; stroke: var(--course-1); stroke-width: 2; }
 .dash-hr { fill: none; stroke: var(--course-2); stroke-width: 2; }
 .dash-press { fill: var(--accent); stroke: var(--surface-1); stroke-width: 2; }
-.dash-card { fill: var(--surface-0); stroke: var(--focus); }
+.dash-card { fill: var(--surface-0); stroke: var(--accent); }
 
-/* Chrome */
+/* Chrome: a way back to the site, top left like the site's header. */
+.home {
+  position: fixed;
+  left: 5vw;
+  top: 2.4vh;
+  z-index: 5;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  text-decoration: none;
+}
+.home:hover { color: var(--accent); }
+body.scroll .home { position: absolute; left: var(--gutter); top: 16px; }
+
 .badge {
   position: fixed;
   top: 10px;

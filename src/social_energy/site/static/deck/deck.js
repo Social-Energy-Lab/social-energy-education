@@ -1,6 +1,7 @@
 // The team-meeting deck: slides are the <section class="slide"> elements of index.html.
 // Keys: → ↓ PageDown Space next · ← ↑ PageUp previous · Home/End · F full screen · N notes ·
-// D dark theme. On a narrow screen the slides simply scroll.
+// L light/dark. The theme is the site's: dark, light when the device asks; L forces the other
+// one (a washed-out projector wants light). On a narrow screen the slides simply scroll.
 //
 // Numbers reach the slides only through {placeholders} in the HTML, filled from the public
 // asset's aggregates.numbers at runtime ({+name} shows the sign). A missing number shows "–".
@@ -16,6 +17,7 @@ import {
   drawGradients,
   drawLogic,
   drawReasons,
+  drawSky,
   drawState,
   drawSync,
 } from "./viz.js";
@@ -33,6 +35,15 @@ export function fillDeck(template, numbers, digits = 2) {
   });
 }
 
+/** The theme L switches to: the opposite of the forced one, else of what the device shows. */
+export function nextTheme(forced, deviceLight) {
+  const light = forced ? forced === "light" : Boolean(deviceLight);
+  return light ? "dark" : "light";
+}
+
+/** The slide number as the site numbers its chapters: 01, 02, … */
+export const slideNumber = (i) => String(i + 1).padStart(2, "0");
+
 /** The slide index a location hash points to (`#3` is the third slide), clamped. */
 export function slideFromHash(hash, count) {
   const n = Number.parseInt(String(hash ?? "").replace(/^#\/?/, ""), 10);
@@ -48,7 +59,7 @@ export function keyAction(key) {
   if (key === "End") return "last";
   if (key === "f" || key === "F") return "full";
   if (key === "n" || key === "N") return "notes";
-  if (key === "d" || key === "D") return "theme";
+  if (key === "l" || key === "L") return "theme";
   return null;
 }
 
@@ -103,6 +114,7 @@ async function drawViz(el) {
       drawCopress(more, agg, opts);
     } else if (kind === "logic") drawLogic(el, opts);
     else if (kind === "dashboard") drawDashboard(el, opts);
+    else if (kind === "sky") drawSky(el);
   } catch (err) {
     console.error(`viz ${kind}`, err);
   }
@@ -123,6 +135,10 @@ function show(i, { focus = false } = {}) {
     s.setAttribute("aria-hidden", String(!isScroll() && k !== current));
   });
   document.getElementById("counter").textContent = `${current + 1} / ${slides.length}`;
+  document.body.classList.toggle(
+    "on-night",
+    !isScroll() && slides[current].classList.contains("night-slide"),
+  );
   document.getElementById("progress").style.width = `${((current + 1) / slides.length) * 100}%`;
   try {
     history.replaceState(null, "", `#${current + 1}`);
@@ -154,7 +170,8 @@ function onKey(e) {
   else if (act === "notes") document.body.classList.toggle("show-notes");
   else if (act === "theme") {
     const root = document.documentElement;
-    root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+    const deviceLight = globalThis.matchMedia?.("(prefers-color-scheme: light)").matches;
+    root.dataset.theme = nextTheme(root.dataset.theme, deviceLight);
   } else if (act === "first") show(0, { focus: true });
   else if (act === "last") show(slides.length - 1, { focus: true });
   else show(current + act, { focus: true });
@@ -204,6 +221,10 @@ function watchScroll() {
 async function main() {
   setLang("en");
   slides = [...document.querySelectorAll(".slide")];
+  slides.forEach((s, k) => {
+    const h2 = s.querySelector("h2");
+    if (h2) h2.dataset.n = slideNumber(k);
+  });
   document.body.classList.toggle("scroll", isScroll());
   narrowQuery?.addEventListener?.("change", () => {
     document.body.classList.toggle("scroll", isScroll());

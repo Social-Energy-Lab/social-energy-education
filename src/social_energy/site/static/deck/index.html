@@ -6,9 +6,12 @@
     from the public data asset's aggregates.numbers. The names are NUMBER_KEYS in
     src/social_energy/site/aggregates.py; a new one needs a source in
     studies/dsa-2026/analyses/deck_export.py. Without the real asset the numbers are invented.
-  - A chart is <div data-viz="…">: network, logic, state, sync, null, moments, circles, eda,
+  - A chart is <div data-viz="…">: sky, network, logic, state, sync, null, moments, circles, eda,
     reasons, gradients, dashboard (see deck.js).
   - Speaker notes go in <aside class="notes"> (press N to show them).
+  - Look: the site's own theme (style.css), dark by default, light when the device asks; press L
+    to force light (or back to dark) for a washed-out projector. The slide number above each
+    heading is added by deck.js; class="night-slide" gives a slide the hero's night sky.
   - This page is public: camp-level statements only, nothing about a person or a group under 5,
     no quotes from participants or from unpublished texts.
 -->
@@ -28,30 +31,37 @@
 <script type="module" src="deck.js"></script>
 </head>
 <body class="deck">
+<a class="home" href="../">← Signaturen sozialer Energie · the site</a>
 <div id="badge" class="badge" role="note" hidden>Synthetic demo data: every number and chart here is invented</div>
 <p id="data-error" class="badge" role="alert" hidden>The data could not be loaded: numbers show as –</p>
 
 <main id="slides">
 
 <!-- 1 -->
-<section class="slide title-slide" aria-label="Title">
-  <p class="kicker">Social energy in education · DSA 2026 · team meeting, 4 November 2026</p>
-  <h1>Learning from the data: where we stand</h1>
-  <p class="lede">A light version of Mahdi's next steps: bring the data together, clean it, put
-    it on one clock, process each source, explore it, and a first test of the gradient theory.</p>
-  <ul class="facts">
-    <li>Everything here is camp-level: no person, no course, no group under 5 people.</li>
-    <li>One test was fixed in advance (confirmatory). Everything else is exploratory: leads for
-      the next phases, not findings.</li>
-  </ul>
-  <p class="hint">→ / ← to move · F full screen · N speaker notes</p>
+<section class="slide title-slide night-slide" aria-label="Title">
+  <div class="cols">
+    <div class="text">
+      <p class="kicker">Social energy in education · DSA 2026 · team meeting, 4 November 2026</p>
+      <h1>Learning from the data: where we stand</h1>
+      <p class="lede">A light version of Mahdi's next steps: bring the data together, clean it,
+        put it on one clock, process each source, explore it, and a first test of the gradient
+        theory.</p>
+      <ul class="facts">
+        <li>Everything here is camp-level: no person, no course, no group under 5 people.</li>
+        <li>One test was fixed in advance (confirmatory). Everything else is exploratory: leads
+          for the next phases, not findings.</li>
+      </ul>
+      <p class="hint">→ / ← to move · F full screen · N speaker notes · L light/dark</p>
+    </div>
+    <div class="viz-host" data-viz="sky"></div>
+  </div>
   <aside class="notes">Frame it as the answer to Mahdi's "next steps" note: most of steps 1–4 were
     needed for the analyses and are done; today is a status and a first look, then decisions.</aside>
 </section>
 
 <!-- 2 -->
 <section class="slide" aria-label="The logic">
-  <p class="kicker">The logic, in our words</p>
+  <p class="kicker"><span class="tier">The logic, in our words</span></p>
   <h2>Membranes, gradients and moments that matter</h2>
   <div class="cols">
     <div class="text">
@@ -75,14 +85,15 @@
 </section>
 
 <!-- 3 -->
-<section class="slide" aria-label="The camp as the beacons see it">
-  <p class="kicker">What the beacons see</p>
+<section class="slide night-slide" aria-label="The camp as the beacons see it">
+  <p class="kicker"><span class="tier">What the beacons see</span></p>
   <h2>The camp breathes</h2>
   <div class="cols wide-viz">
     <div class="text">
-      <p>{n_participants} participants with beacon consent. Each dot is a person (no names,
-        courses shuffled, no labels), a line is time spent close, a glow is a button press.
-        Night hours are hidden.</p>
+      <p class="headline"><strong>{n_participants}</strong><span>participants with beacon
+        consent</span></p>
+      <p>Each dot is a person (no names, courses shuffled, no labels), a line is time spent
+        close, a glow is a button press. Night hours are hidden.</p>
       <p class="small">Press play, or pick a day. The ring loosens on the excursion and the
         rotation day.</p>
     </div>
@@ -94,29 +105,34 @@
 
 <!-- 4 -->
 <section class="slide" aria-label="Where the data stands">
-  <p class="kicker">Step 1 · bringing the data together</p>
-  <h2>Full vs cleaned, per source</h2>
-  <div class="cols">
+  <p class="kicker"><span class="tier">Step 1 · bringing the data together</span></p>
+  <h2>Recorded vs usable, per source</h2>
+  <div class="cols wide-viz">
     <div class="text">
       <ul>
         <li>Every source is linked through one table per person and study ID, and filtered by
           <b>consent per module</b>.</li>
-        <li>Cleaning flags rather than deletes: duplicates, implausible times, restarted tags,
-          records outside the camp, staff. Presses are merged into episodes.</li>
-        <li>The programme (timetable, special days) is in the study configuration, on the same
-          clock.</li>
+        <li>Cleaning flags rather than deletes; under each bar, in plain words, why a source
+          keeps less than it recorded.</li>
+        <li>The programme (timetable, special days) is on the same clock.</li>
         <li>Still to collect: the survey and the AI interview after the academy.</li>
       </ul>
     </div>
     <div class="viz-host" data-viz="state"></div>
   </div>
-  <aside class="notes">People are those the kept records cover. Survey: one duplicate submission
-    removed; the confirmatory unit is people with beacons and a survey.</aside>
+  <aside class="notes">People are those the usable records cover. Beacons lose little: copies,
+    records outside the camp window, broken-tag windows from the field notes. Presses shrink most,
+    and mostly by merging: one moved moment is often several presses, so presses under a minute
+    apart are one episode; copies, staff (analysed separately), broken-tag windows and accidental
+    presses go too. Survey: the double submission is removed. EDA: artefact minutes (movement, a
+    loose sensor, impossible jumps) would fake arousal peaks. Heart rate: the finger-clip sensor is
+    fragile, many worn minutes have no clean beat. Interviews: a recording outside the analysis
+    unit is not used. The confirmatory unit is people with beacons and a survey.</aside>
 </section>
 
 <!-- 5 -->
 <section class="slide" aria-label="Time sync">
-  <p class="kicker">Step 2 · time sync</p>
+  <p class="kicker"><span class="tier">Step 2 · time sync</span></p>
   <h2>One clock for every source</h2>
   <div class="cols">
     <div class="text">
@@ -141,7 +157,7 @@
 
 <!-- 6 -->
 <section class="slide" aria-label="Processing per source">
-  <p class="kicker">Step 3 · processing</p>
+  <p class="kicker"><span class="tier">Step 3 · processing</span></p>
   <h2>What each source becomes</h2>
   <div class="cards">
     <div class="card"><h3>Survey</h3><p>Scored to trust in life and lust for life, six scales
@@ -167,11 +183,13 @@
   <h2>The test fixed in advance: an honest null</h2>
   <div class="cols">
     <div class="text">
+      <p class="headline"><strong>{n_confirmatory}</strong><span>participants with beacons and
+        a survey</span></p>
       <ul>
         <li>Plan frozen before any survey scale was scored; code fixed before it touched the
           data.</li>
         <li>Baseline trust and lust for life do not predict network strength, cross-course
-          mixing or presses at the strength we could detect (n = {n_confirmatory}).</li>
+          mixing or presses at the strength we could detect.</li>
         <li>Moderate effects are not ruled out: the next phases repeat the tests and pool
           them.</li>
       </ul>
@@ -205,11 +223,12 @@
   <h2>Courses form circles; special days break them, briefly</h2>
   <div class="cols">
     <div class="text">
+      <p class="headline"><strong>{mixing_excursion}%</strong><span>of tie time crosses courses
+        on the excursion</span></p>
       <ul>
-        <li>On ordinary days {mixing_ordinary_lo}–{mixing_ordinary_hi}% of tie time crosses
-          courses; random mixing would give {mixing_random}%.</li>
-        <li>Excursion {mixing_excursion}%, rotation day {mixing_rotation}%: the largest and most
-          robust effect in the data.</li>
+        <li>On ordinary days {mixing_ordinary_lo}–{mixing_ordinary_hi}%; random mixing would give
+          {mixing_random}%.</li>
+        <li>Rotation day {mixing_rotation}%: the largest and most robust effect in the data.</li>
         <li>But ties made on special days come back less often: {persistence_excursion}% vs
           {persistence_ordinary}% within three days.</li>
       </ul>
@@ -247,12 +266,13 @@
   <h2>In their own words: the membrane</h2>
   <div class="cols">
     <div class="text">
+      <p class="headline"><strong>{membrane_opened_pct}%</strong><span>describe their membrane
+        opening over the academy</span></p>
       <ul>
         <li>{interviews_coded} interviews coded, {interviews_people} participants analysed.
           Model-coded, not yet hand-checked.</li>
-        <li>{membrane_opened_pct}% describe their membrane opening over the academy;
-          {membrane_stable_pct}% stable. {membrane_selective_pct}% call it selective: open to
-          some, closed to others.</li>
+        <li>{membrane_stable_pct}% describe it as stable. {membrane_selective_pct}% call it
+          selective: open to some, closed to others.</li>
         <li>Everyday openness goes with trust in life (ρ {membrane_trust_rho},
           {membrane_trust_rho_lo} to {membrane_trust_rho_hi}), barely with lust
           ({membrane_lust_rho}).</li>
@@ -295,7 +315,7 @@
 
 <!-- 13 -->
 <section class="slide" aria-label="The exploration dashboard">
-  <p class="kicker">Step 4 · the exploration dashboard</p>
+  <p class="kicker"><span class="tier">Step 4 · the exploration dashboard</span></p>
   <h2>One person, one moment, the people around them</h2>
   <div class="cols wide-viz">
     <div class="text">
@@ -316,7 +336,7 @@
 
 <!-- 14 -->
 <section class="slide" aria-label="Gaps and questions">
-  <p class="kicker">For the team</p>
+  <p class="kicker"><span class="tier">For the team</span></p>
   <h2>Gaps and questions</h2>
   <ol class="big-list">
     <li><b>Self-report descriptions.</b> Some presses were meant to come with a written
@@ -332,7 +352,7 @@
 
 <!-- 15 -->
 <section class="slide" aria-label="Next steps">
-  <p class="kicker">Proposal</p>
+  <p class="kicker"><span class="tier">Proposal</span></p>
   <h2>Preregister the next phases</h2>
   <ul class="big-list">
     <li><b>New confirmatory tests:</b> shared moments, company at presses, special-day mixing
