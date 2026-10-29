@@ -191,6 +191,22 @@ def test_presses_follow_self_report_consent(tmp_path):
     assert meta["files"]["presses"]["count"] == 0
 
 
+def test_study_ids_name_the_right_person(world):
+    _meta, cols, doc, _ = world
+    ids = [p["study_id"] for p in doc["people"]]
+    assert sorted(ids) == ["1", "2", "3", "4"]
+    p1 = ids.index("1")
+    assert doc["people"][p1]["age"] == 16
+    assert set(cols["eda"]["node"].tolist()) == {p1}
+
+
+def test_study_ids_stay_in_person_json(world):
+    *_, bundle = world
+    for f in bundle.iterdir():
+        if f.name != "person.json":
+            assert b"study_id" not in f.read_bytes(), f.name
+
+
 def test_bundle_carries_no_entity_strings_or_free_text(world):
     *_, bundle = world
     for f in bundle.iterdir():

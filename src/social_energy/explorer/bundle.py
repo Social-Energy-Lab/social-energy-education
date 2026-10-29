@@ -1,10 +1,11 @@
 """The explorer bundle: an ID-free binary copy of already-filtered presence tables.
 
-The bundle is what the browser app reads. It is written only outside the repository, and it
-carries no study IDs, device IDs or names: nodes are shuffled indices ``0..N-1`` and the mapping
-back to the spine is not written anywhere. Filtering (consent, exclusions, participants only) is
-the caller's job and happens before ``write_bundle``; rows the bundle cannot place (an entity
-that is not a node, a bin outside the range, an RSSI below the floor) are dropped and counted.
+The bundle is what the browser app reads. It is written only outside the repository. It carries
+no device IDs or names, and its tables no study IDs: nodes are shuffled indices ``0..N-1``; only
+the team bundle's ``person.json`` names each node's study ID. Filtering (consent, exclusions,
+participants only) is the caller's job and happens before ``write_bundle``; rows the bundle
+cannot place (an entity that is not a node, a bin outside the range, an RSSI below the floor) are
+dropped and counted.
 
 Layout: ``meta.json`` plus one ``.bin`` file per table. A ``.bin`` file is its columns
 concatenated, little-endian, each ``count`` long; ``meta["files"]`` lists the columns in order.
@@ -108,7 +109,7 @@ def write_bundle(
     qa = dict(qa or {})
 
     # Nodes: shuffled from OS entropy (seed=None), so the order cannot be recomputed from this
-    # public code and says nothing about study IDs. A seed is for tests only.
+    # public code and the tables say nothing about study IDs. A seed is for tests only.
     entities = sorted(inp.nodes)
     order = np.random.default_rng(seed).permutation(len(entities))
     node_of = {e: int(order[i]) for i, e in enumerate(entities)}

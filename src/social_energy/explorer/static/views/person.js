@@ -34,6 +34,7 @@ export function create(root, ctx) {
     crumbs: [], // [{node, moment}]
     course: "",
     type: "",
+    q: "",
     open: new Set(), // expanded scales
   };
   const momentsCache = new Map();
@@ -47,7 +48,10 @@ export function create(root, ctx) {
   let closeRssi = null;
   let rendered = false;
 
-  const name = (i) => `Person ${i}`;
+  const name = ctx.personName;
+  // The picker lists people by study ID, numbers in numeric order.
+  const byName = Array.from({ length: nNodes }, (_, i) => i)
+    .sort((a, b) => name(a).localeCompare(name(b), undefined, { numeric: true }));
   const typeOf = (i) => pm.typeLabel(people[i].type) ?? "no survey type";
   const when = (sec) => {
     const bin = Math.min(nBins - 1, Math.floor(sec / binS));
@@ -65,6 +69,7 @@ export function create(root, ctx) {
       .map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
     el.innerHTML = `
       <div class="picker-filters">
+        <label>study ID <input type="search" data-q placeholder="find" size="10"></label>
         <label>course <select data-f="course"><option value="">all</option>${courseOpts}</select></label>
         <label>membrane type <select data-f="type"><option value="">all</option>${typeOpts}</select></label>
       </div>
@@ -73,15 +78,19 @@ export function create(root, ctx) {
       sel.value = st[sel.dataset.f];
       sel.addEventListener("change", () => { st[sel.dataset.f] = sel.value; pickerList(); });
     }
+    const q = el.querySelector("[data-q]");
+    q.value = st.q;
+    q.addEventListener("input", () => { st.q = q.value.trim().toLowerCase(); pickerList(); });
     pickerList();
   }
 
   function pickerList() {
     const list = $(".picker-list");
     const rows = [];
-    for (let i = 0; i < nNodes; i++) {
+    for (const i of byName) {
       if (st.course !== "" && ctx.nodeCourse[i] !== Number(st.course)) continue;
       if (st.type !== "" && pm.typeKey(people[i].type) !== st.type) continue;
+      if (st.q && !name(i).toLowerCase().includes(st.q)) continue;
       const p = people[i];
       const n = pm.pressesOf(b, i).length;
       const mods = [p.survey ? "survey" : null, p.membrane ? "interview" : null,
