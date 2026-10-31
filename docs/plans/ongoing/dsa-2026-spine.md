@@ -1,7 +1,7 @@
 # DSA 2026 spine: transcribe the field logs into the local spine
 
 **Priority:** high
-**Gate:** ready
+**Gate:** none
 **Next:** maintenance only: every remaining time was settled from the data on 2026-10-19; the few items still open in the private open_questions.md block nothing in the confirmatory analysis. Fold in late answers as they arrive and rerun the pipeline.
 
 **Goal:** a validated local spine for DSA 2026 (`$SOCIAL_ENERGY_DATA/dsa-2026/spine/`), so that every sensor record resolves to a person or location and the known bad windows are excluded.

@@ -1,7 +1,7 @@
 # Explorer: the person view
 
 **Priority:** high — target: in the team's hands before the research-group talk on 2026-11-03
-**Gate:** the PR's review by Álvaro
+**Gate:** blocked:Álvaro and Mahdi review the person view with the research team on the real bundle; its PRs #27 and #28 are merged (recheck 2026-11-04)
 **Next:** Álvaro and Mahdi go through a few people on the real bundle and say which follow-ups matter
 
 **Goal:** an internal dashboard in the local team explorer for going through one person, one
