@@ -86,6 +86,7 @@ While waiting on the research team (added 2026-10-17):
 - [x] Rerun everything once the beacon-consent ruling is in the spine.
 - [x] Check whether ties first made on the excursion or rotation day persist on later days.
 - [x] Lost windows start at the last readout that delivered records, including readouts that arrived without their header; validated against the tag's own rows versus its partners' (`read_deliveries`).
+- [x] Cross-course mixing outside class hours and without room neighbours (exploratory, 2026-11-04): `exploratory_mixing_outside_class.py`; rule in [`../../decisions/mixing-outside-class.md`](../../decisions/mixing-outside-class.md).
 - [ ] Persistence with shorter contacts, and self-reports between people who first met on a special day. The first half ran inside `exploratory_rhythm.py` (30-minute ties); the second is still open.
 - [x] Move the instrument rules into the toolkit with hand-derived tests: power cycles, restarts and lost windows (`social_energy.beacons.cycles`), press episodes and accidental runs (`social_energy.beacons.presses`). The analyses call them; outputs unchanged on the real data.
 - [ ] End-to-end run of the three analyses on `social_energy.synth` in CI (`add-analysis` skill). Blocked on shape: they read the upstream `Output/` tables, which the generator does not write; either the generator writes them or the analyses switch to our ingest after the dating fix.

@@ -77,9 +77,10 @@ What it cannot settle: a press visible to a neighbour within seconds looks the s
 
 ### H-MIX-1: special days mix the camp
 
-*Motivation:* the DSA 2026 analysis of the programme's rhythm (`studies/dsa-2026/analyses/exploratory_rhythm.py`) found a large within-person rise in cross-course mixing on the excursion and rotation days. Numbers in the private notes.
+*Motivation:* the DSA 2026 analysis of the programme's rhythm (`studies/dsa-2026/analyses/exploratory_rhythm.py`) found a large within-person rise in cross-course mixing on the excursion and rotation days. Numbers in the private notes. Most of that rise came from ordinary days containing class, when a group sits together by design (`exploratory_mixing_outside_class.py`); outside class hours it is much smaller. See [`../../decisions/mixing-outside-class.md`](../../decisions/mixing-outside-class.md).
 
 - **Hypothesis.** On special days a person's tie minutes cross their main group more than on ordinary days, above what random mixing among those present would give.
+- **Time counted.** Only hours outside the main group's timetabled sessions, listed in the phase plan before the phase starts. The whole-day figure is reported beside it, not instead of it.
 - **Unit.** Participants with beacon consent and a main group, present (tag seen for at least an hour) on at least one special day and three ordinary days.
 - **Statistic.** For each person and day, the cross-group share of tie minutes minus the share expected under random mixing among those present that day. The person's mean over special days minus their mean over ordinary days, pooled over special days. D is the mean over people.
 - **Test.** One-sided paired t on the per-person differences, with the Wilcoxon signed-rank test as a check. Supported when the t-test passes Holm.
