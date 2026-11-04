@@ -1,8 +1,8 @@
 # DSA 2026: networks around moments, and whether shared moments last
 
 **Priority:** high — the research team asked for descriptive network analyses to run beside the theory work
-**Gate:** none
-**Next:** write `studies/dsa-2026/analyses/moments_sensitivity.py` with its tests and run it (section C)
+**Gate:** decision:the research team reads the private notes and corrects the rival-mechanisms table (recheck 2026-11-18)
+**Next:** with the team's corrections in hand, decide on the two proposed experiments (gatherings; the same question over days), then retire this plan
 
 **Goal:** describe how a person's company changes in the hour around a self-report, and whether pairs who shared a moment spend more time together on later days than pairs who were equally close and did not share it. Everything here is **exploratory** under the frozen analysis plan (`studies/dsa-2026/research/analysis-plan.md`); leads that hold become candidates for the next-phase preregistration (`../ideas/next-phase-preregistration.md`).
 
@@ -74,6 +74,8 @@ Added after A and B ran, and before this was. It asks what their "no lead" is wo
 
 ## Read with care
 
+Two method points came out of section C and bind later analyses around presses. The clock-hour null also absorbs a real effect lasting about an hour, because shuffled presses land in the same hour and read the raised bins, so its estimates are not effect sizes. And with few shared pair-days per half, the split-half verdict on coming back is underpowered, so the all-days interval is the informative number there. The all-days interval of B's node bootstrap is also wider than it should be: at planted size zero it excluded zero less often than 5 %.
+
 The near window of shared against solo presses is partly built in: a shared press needs someone close. This was not stated in the rules above and was noticed on reading the output.
 
 ## Files
@@ -90,7 +92,7 @@ The near window of shared against solo presses is partly built in: a shared pres
 - [x] Study script and tests
 - [x] Run on the real data; write the private note
 - [x] Carry the outcome into the reply to the team and check it against the preregistration draft
-- [ ] C: script and tests; run; private note `dsa-2026/notes/moments-sensitivity-2026-11-04.md`
+- [x] C: script and tests; run; private note `dsa-2026/notes/moments-sensitivity-2026-11-04.md`
 
 ## Not doing now
 
