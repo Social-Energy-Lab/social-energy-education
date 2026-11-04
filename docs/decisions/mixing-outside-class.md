@@ -14,6 +14,6 @@ Room neighbours are checked as a second step. Sleeping rooms stay in the private
 
 ## Consequences
 
-- `exploratory_mixing_outside_class.py` reports both. The findings are in the private notes.
+- `exploratory_mixing_outside_class.py` reports both, for mixing and for whether new ties come back. The findings are in the private notes.
 - The frozen confirmatory test C2 is unchanged; it is not a comparison between days.
 - Next-phase hypothesis H-MIX-1 counts only hours outside group sessions.
