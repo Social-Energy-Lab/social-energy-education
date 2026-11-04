@@ -1,8 +1,8 @@
 # DSA 2026: networks around moments, and whether shared moments last
 
 **Priority:** high — the research team asked for descriptive network analyses to run beside the theory work
-**Gate:** none
-**Next:** write `social_energy.moments` with hand-derived tests, then `studies/dsa-2026/analyses/moments_networks.py`, then run it
+**Gate:** decision:the research team reads the private note and says whether a follow-up is wanted (recheck 2026-11-18)
+**Next:** take the private note `dsa-2026/notes/moments-networks-2026-11-04.md` to the research team, then retire this plan
 
 **Goal:** describe how a person's company changes in the hour around a self-report, and whether pairs who shared a moment spend more time together on later days than pairs who were equally close and did not share it. Everything here is **exploratory** under the frozen analysis plan (`studies/dsa-2026/research/analysis-plan.md`); leads that hold become candidates for the next-phase preregistration (`../ideas/next-phase-preregistration.md`).
 
@@ -56,6 +56,10 @@ For each press and each lag from −60 to +60 minutes in 5-minute bins (positive
 - **Placebo: the three days before.** The same contrast on close minutes in the three preceding days, holding fixed that day's minutes, minutes and ties before those three days, same course, seen bins in those days and the dummies. Pairs who share moments may simply be converging already. **A come-back result counts as a lead only if it replicates and the all-days placebo interval includes zero.** Otherwise it is reported as "already converging".
 - **Sensitivities.** −70 dBm; including co-presses under 10 s; moment days whose follow-up misses 24–27 Aug (17–20 Aug); cross-course pairs only.
 
+## Read with care
+
+The near window of shared against solo presses is partly built in: a shared press needs someone close. This was not stated in the rules above and was noticed on reading the output.
+
 ## Files
 
 - `src/social_energy/moments.py`: lag sums, windows, cluster-mass sign-flip test, component sizes, eigenvector centrality.
@@ -65,10 +69,10 @@ For each press and each lag from −60 to +60 minutes in 5-minute bins (positive
 
 ## Tasks
 
-- [ ] Toolkit and tests
-- [ ] Study script and tests
-- [ ] Run on the real data; write the private note
-- [ ] Carry what replicates into the preregistration draft and the reply to the team
+- [x] Toolkit and tests
+- [x] Study script and tests
+- [x] Run on the real data; write the private note
+- [x] Carry the outcome into the reply to the team and check it against the preregistration draft
 
 ## Not doing now
 

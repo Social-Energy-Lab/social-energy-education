@@ -19,7 +19,8 @@ autocorrelation of their company. Estimates are the means over people in the win
 and after the press, and the asymmetry (after minus before), with intervals over people. Lag curves
 also get cluster inference (``moments.cluster_mass``), which describes the shape; verdicts come from
 the windows, and a window is a lead only if it replicates under both nulls. By kind of press:
-``shared`` (in a co-located pair ``MIN_GAP`` to ``WINDOW`` seconds apart) and ``solo``.
+``shared`` (in a co-located pair ``MIN_GAP`` to ``WINDOW`` seconds apart) and ``solo``; a shared
+press needs someone close, so their near window differs by construction.
 Sensitivities under the main null: ``SENSITIVE_RSSI``; without 24-27 Aug. The one-minute check does
 ``close`` alone at 1-minute resolution, where a minute needs a record of the person and an exposure
 bin around it.
@@ -676,9 +677,9 @@ def main() -> None:
             pl.col("tied_later").mean().alias("share_tied_later"),
             pl.col("tied_earlier").mean().alias("share_tied_earlier"),
             pl.col("same_course").mean().alias("share_same_course"),
-            pl.col("today").expm1().median().alias("median_minutes_that_day"),
-            pl.col("later").expm1().median().alias("median_minutes_later"),
-            pl.col("previous").expm1().median().alias("median_minutes_before"),
+            (pl.col("today").exp() - 1).median().alias("median_minutes_that_day"),
+            (pl.col("later").exp() - 1).median().alias("median_minutes_later"),
+            (pl.col("previous").exp() - 1).median().alias("median_minutes_before"),
         ).sort("shared")
     )  # fmt: skip
     desc.write_csv(out / "come_back_descriptives.csv")
