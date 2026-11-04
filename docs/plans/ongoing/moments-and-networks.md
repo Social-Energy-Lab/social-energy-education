@@ -1,8 +1,8 @@
 # DSA 2026: networks around moments, and whether shared moments last
 
 **Priority:** high — the research team asked for descriptive network analyses to run beside the theory work
-**Gate:** decision:the research team reads the private notes and corrects the rival-mechanisms table (recheck 2026-11-18)
-**Next:** with the team's corrections in hand, decide on the two proposed experiments (gatherings; the same question over days), then retire this plan
+**Gate:** decision:the research team reads the private notes, corrects the rival-mechanisms table and says what size of gradient effect would matter (recheck 2026-11-18)
+**Next:** with the team's answers in hand, decide on the two proposed experiments (gatherings; the same question over days), then retire this plan
 
 **Goal:** describe how a person's company changes in the hour around a self-report, and whether pairs who shared a moment spend more time together on later days than pairs who were equally close and did not share it. Everything here is **exploratory** under the frozen analysis plan (`studies/dsa-2026/research/analysis-plan.md`); leads that hold become candidates for the next-phase preregistration (`../ideas/next-phase-preregistration.md`).
 
@@ -72,6 +72,20 @@ Added after A and B ran, and before this was. It asks what their "no lead" is wo
 - **Reading.** The smallest planted size detected in at least 80 % of runs is what the analysis could reliably have seen. Level 0 gives the false-lead rate. Below that size, the "no lead" says little.
 - **Limits.** Planted effects are uniform across people and moments, which is the easiest case: uneven real effects would be harder to detect. The gradient analysis (`exploratory_gradients.py`) is not covered here.
 
+### D. Could the gradient analysis have seen an effect?
+
+The same question for `exploratory_gradients.py`, the analysis the gradient theory leans on most. Added after it ran. Fixed here, before running; **it is not new evidence about the camp**.
+
+- **Background with no real signal.** Each run permutes the membranes within course, the analysis's own null, which breaks any real link between membrane and contact while keeping the real contact and the real co-presses.
+- **Noisy measurement.** The theory speaks of membranes, and we observe survey scores. In each run a person's true score on each column is the observed standardised score × √r plus noise × √(1 − r), with r the column's Cronbach's alpha from `confirmatory/reliability.csv`, so that the plant follows the true distance and the test sees the measured one. A single-item scale has no alpha and takes the median of the other scales' `[inferred]`. Everything is also run with r = 1, to show what the survey's noise costs.
+- **Planted, opposites attract (H-a).** log(1 + close minutes) rises by log(1 + g) per SD of the true distance, g ∈ {0, 5, 10, 20, 40 %}. All pairs and within-course pairs, person dummies and the other controls as in the analysis.
+- **Planted, high gradients make flow more probable (H-b).** A close partner's chance of co-pressing moves with the true distance, odds ratio per SD ∈ {1, 1.25, 1.5, 2, 3}, by flipping individual partner moments so that the overall share stays about the same.
+- **Measures.** `trust`, `lust`, `trust_scales`, `all_scales`, one at a time.
+- **Test.** The analysis's statistic against its node-permutation null, within course, 500 permutations per run. Detected: positive, and at least as extreme as observed in at most 5 % of the null, two-sided. Only the node null is replayed: the time-shuffle null moves the presses, which a plant on partner moments cannot follow.
+- **Runs.** 100 per level, seeded.
+- **Reading.** As in C: the smallest planted size detected in at least 80 % of runs. Level 0 gives the false-positive rate.
+- **Limits.** One test per run, while the analysis scanned many measures, samples and outcomes, so this flatters it. Plants are uniform over pairs and independent across partner moments, the easiest case. Membrane scores are treated as stable over the camp.
+
 ## Read with care
 
 Two method points came out of section C and bind later analyses around presses. The clock-hour null also absorbs a real effect lasting about an hour, because shuffled presses land in the same hour and read the raised bins, so its estimates are not effect sizes. And with few shared pair-days per half, the split-half verdict on coming back is underpowered, so the all-days interval is the informative number there. The all-days interval of B's node bootstrap is also wider than it should be: at planted size zero it excluded zero less often than 5 %.
@@ -84,6 +98,7 @@ The near window of shared against solo presses is partly built in: a shared pres
 - `tests/test_moments.py`: hand-derived expectations and a planted-effect oracle.
 - `studies/dsa-2026/analyses/moments_networks.py`, `tests/test_moments_networks_study.py`.
 - `studies/dsa-2026/analyses/moments_sensitivity.py`, `tests/test_moments_sensitivity_study.py` (section C).
+- `studies/dsa-2026/analyses/gradient_sensitivity.py`, `tests/test_gradient_sensitivity_study.py` (section D); `dyads.true_scores` and `dyads.flip_towards`.
 - Outputs under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/exploratory/moments-networks/`; results only in the private note `dsa-2026/notes/moments-networks-2026-11-04.md`.
 
 ## Tasks
@@ -93,6 +108,7 @@ The near window of shared against solo presses is partly built in: a shared pres
 - [x] Run on the real data; write the private note
 - [x] Carry the outcome into the reply to the team and check it against the preregistration draft
 - [x] C: script and tests; run; private note `dsa-2026/notes/moments-sensitivity-2026-11-04.md`
+- [x] D: script and tests; run; private note `dsa-2026/notes/gradient-sensitivity-2026-11-04.md`
 
 ## Not doing now
 

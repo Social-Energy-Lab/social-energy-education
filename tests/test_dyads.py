@@ -12,12 +12,14 @@ from social_energy.dyads import (
     Residualiser,
     attribute_distance,
     event_times,
+    flip_towards,
     node_dummies,
     node_permutation_null,
     null_position,
     pair_index,
     partial_fit,
     partner_coevents,
+    true_scores,
 )
 
 
@@ -159,3 +161,37 @@ def test_partner_coevents_window_is_inclusive_and_partner_without_events_counts(
     assert p.coevent.tolist() == [True, False]
     p = partner_coevents(["a", "b"], [100, 401], partners, window=300, bin_size=300)
     assert p.coevent.tolist() == [False, False]
+
+
+def test_true_scores_at_reliability_one_are_the_scores():
+    X = np.array([[1.0, 4.0], [2.0, 8.0], [3.0, 0.0]])
+    assert true_scores(X, [1.0, 1.0], np.random.default_rng(0)) == pytest.approx(X)
+
+
+def test_true_scores_correlate_by_the_root_of_the_reliability_and_keep_scale():
+    # r = 0.49 gives a correlation of 0.7; mean 5 and SD 2 survive.
+    rng = np.random.default_rng(0)
+    X = rng.normal(5, 2, (20000, 1))
+    t = true_scores(X, [0.49], rng)
+    assert np.corrcoef(X[:, 0], t[:, 0])[0, 1] == pytest.approx(0.7, abs=0.02)
+    assert t.mean() == pytest.approx(5, abs=0.05)
+    assert t.std() == pytest.approx(2, abs=0.05)
+
+
+def test_flip_towards_at_odds_one_or_z_zero_changes_nothing():
+    c = np.array([True, False, False, True])
+    rng = np.random.default_rng(0)
+    assert flip_towards(c, np.array([1.0, -1.0, 2.0, 0.0]), 1.0, rng).tolist() == c.tolist()
+    assert flip_towards(c, np.zeros(4), 3.0, rng).tolist() == c.tolist()
+
+
+def test_flip_towards_reaches_the_odds_asked_when_flags_are_unrelated_to_z():
+    # Overall share 0.2, odds 0.25. With odds ratio 2 per SD: z = +1 gives odds 0.5, so share 1/3;
+    # z = -1 gives odds 0.125, so share 1/9.
+    rng = np.random.default_rng(0)
+    n = 200_000
+    c = rng.random(n) < 0.2
+    z = rng.choice([-1.0, 1.0], n)
+    out = flip_towards(c, z, 2.0, rng)
+    assert out[z > 0].mean() == pytest.approx(1 / 3, abs=0.01)
+    assert out[z < 0].mean() == pytest.approx(1 / 9, abs=0.01)

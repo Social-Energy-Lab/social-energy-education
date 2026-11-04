@@ -223,3 +223,34 @@ def partner_coevents(
             who.append(o)
             hit.append(found)
     return PartnerEvents(np.asarray(ev, dtype=np.int64), who, np.asarray(hit, dtype=bool))
+
+
+# --- planting known effects, to see what a test can detect ----------------------------------------
+
+
+def true_scores(
+    X: np.ndarray, reliability: Sequence[float], rng: np.random.Generator
+) -> np.ndarray:
+    """Scores whose correlation with each column of ``X`` is ``sqrt(reliability)``: what the
+    measured ``X`` would be a noisy reading of, on the same mean and SD."""
+    X = np.asarray(X, dtype=float).reshape(len(X), -1)
+    r = np.asarray(reliability, dtype=float)
+    mean, sd = X.mean(axis=0), X.std(axis=0, ddof=1)
+    z = (X - mean) / sd
+    return mean + sd * (np.sqrt(r) * z + np.sqrt(1 - r) * rng.standard_normal(X.shape))
+
+
+def flip_towards(
+    c: np.ndarray, z: np.ndarray, odds_per_sd: float, rng: np.random.Generator
+) -> np.ndarray:
+    """Flags ``c`` with their chance moved by ``z``: the odds of a flag become the overall odds x
+    ``odds_per_sd ** z``. Each entry is flipped at most once, so what is planted comes on top of the
+    real flags rather than replacing them, and ``z`` = 0 changes nothing."""
+    c = np.asarray(c, dtype=bool)
+    base = float(c.mean())
+    odds = base / (1 - base) * odds_per_sd ** np.asarray(z, dtype=float)
+    target = odds / (1 + odds)
+    draw = rng.random(len(c))
+    up = (~c) & (target > base) & (draw < (target - base) / (1 - base))
+    down = c & (target < base) & (draw < (base - target) / base)
+    return (c | up) & ~down
