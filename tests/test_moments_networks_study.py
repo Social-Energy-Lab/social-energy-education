@@ -127,3 +127,93 @@ def test_lag_effects_are_zero_when_shuffles_read_the_same_bins(m):
     eff = m.lag_effects(grid, person, at, at[None, :], mask, np.array([-1, 0, 1]))
     assert np.nansum(np.abs(eff["k"])) == 0.0
     assert np.isnan(eff["k"][1]).all()  # person 1 has no presses
+
+
+def test_window_row_gives_a_verdict_and_withholds_small_cells(m):
+    big = np.array([1.0, 1.1, 0.9, 1.2, 0.8, 1.0])
+    row = m.window_row({"discovery": big, "replication": big, "all": big})
+    assert row["all"] == pytest.approx(1.0)
+    assert row["all_people"] == 6
+    assert row["verdict"] == "replicates"
+    few = np.array([1.0, 1.1, 0.9, np.nan, np.nan, np.nan])
+    row = m.window_row({"discovery": big, "replication": few, "all": big})
+    assert row["replication"] is None
+    assert row["verdict"] == "withheld"
+
+
+def test_run_lags_writes_every_window_of_every_kind(m):
+    grid = np.ones((2, 40))
+    person = np.array([0, 0, 0, 1, 1, 1])
+    at = np.array([10, 15, 20, 10, 15, 20])
+    days = [date(2026, 8, 15), date(2026, 8, 16)] * 3
+    kinds = {"all": np.ones(6, dtype=bool)}
+    rows, eff = m.run_lags(
+        {"close": grid}, person, at, days, at[None, :], kinds, m.LAGS, m.WINDOWS, {"null": "x"}
+    )
+    assert [r["window"] for r in rows] == ["before", "near", "after", "asymmetry"]
+    assert rows[0]["null"] == "x" and rows[0]["verdict"] == "withheld"  # two people only
+    assert set(eff["close"]) == {("all", "discovery"), ("all", "replication"), ("all", "all")}
+
+
+def _days():
+    return [date(2026, 8, 13 + k) for k in range(16)]
+
+
+def test_pair_table_row_by_row(m):
+    # Pair a-b, moment on 20 Aug (index 7). Minutes: 10 on each of the three days before, 60 that
+    # day, 70 on the day after. Earlier = 10 + 10 + 10 = 30, prior (before those three) = 0.
+    # Tie needs 60 minutes: that day and the next tie, none before.
+    days = _days()
+    minutes = np.zeros((2, 2, 16))
+    minutes[0, 1, 4:7] = 10
+    minutes[0, 1, 7] = 60
+    minutes[0, 1, 8] = 70
+    seen = np.zeros((2, 2, 16))
+    seen[0, 1, 8:11] = 5  # 15 bins both seen in the follow-up
+    d = date(2026, 8, 20)
+    rows = m.pair_table(
+        {("a", "b", d)}, set(), minutes, seen, {"a": 0, "b": 1}, {"a": 1, "b": 1}, days
+    )
+    r = rows.row(0, named=True)
+    assert r["shared"] and r["same_course"]
+    assert r["today"] == pytest.approx(np.log1p(60))
+    assert r["earlier"] == pytest.approx(np.log1p(30))
+    assert r["previous"] == pytest.approx(np.log1p(30))
+    assert r["prior"] == 0.0
+    assert r["later"] == pytest.approx(np.log1p(70))
+    assert r["seen_later"] == pytest.approx(np.log1p(15))
+    assert r["tied_later"] and not r["tied_earlier"]
+
+
+def test_pair_table_leaves_days_outside_the_moment_range_out(m):
+    z = np.zeros((2, 2, 16))
+    early = ("a", "b", date(2026, 8, 16))
+    d = date(2026, 8, 20)
+    rows = m.pair_table({early}, {("a", "b", d)}, z, z, {"a": 0, "b": 1}, {}, _days())
+    assert rows.height == 1 and not rows["shared"][0]
+
+
+def test_come_back_gives_all_three_outcomes_and_a_verdict(m, monkeypatch):
+    # Planted: shared pair-days have log minutes 1 higher afterwards, on both halves.
+    monkeypatch.setattr(m, "N_BOOT_NODE", 20)
+    rng = np.random.default_rng(0)
+    days = _days()
+    n, rows = 12, []
+    use = [date(2026, 8, x) for x in (20, 21, 22, 23)]
+    for k in range(600):
+        i, j = sorted(rng.choice(n, 2, replace=False).tolist())
+        day = use[k % 4]
+        shared = bool(rng.integers(0, 2))
+        rows.append({
+            "i": i, "j": j, "d": days.index(day), "day": day, "shared": shared,
+            "same_course": False, "today": rng.normal(), "earlier": rng.normal(),
+            "tied_earlier": False, "seen_later": rng.normal(), "prior": rng.normal(),
+            "tied_prior": False, "seen_previous": rng.normal(),
+            "later": float(shared) + rng.normal(0, 0.1), "tied_later": shared,
+            "previous": rng.normal(0, 0.1),
+        })  # fmt: skip
+    out = m.come_back(pl.DataFrame(rows), "main", n, 16)
+    assert [r["outcome"].split(" ")[0] for r in out] == ["close", "tied", "placebo:"]
+    assert out[0]["all_est"] == pytest.approx(1.0, abs=0.1)
+    assert out[0]["verdict"] == "replicates"
+    assert out[2]["verdict"] != "replicates"

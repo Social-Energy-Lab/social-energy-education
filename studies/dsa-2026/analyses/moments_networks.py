@@ -261,7 +261,7 @@ def window_row(by_half: dict[str, np.ndarray]) -> dict:
         people = m.n
         row |= dict.fromkeys((half, f"{half}_lo", f"{half}_hi"), None) | {f"{half}_people": people}
         if people >= MIN_GROUP:
-            row |= {half: m.mean, f"{half}_lo": m.lo, f"{half}_hi": m.hi}
+            row |= {half: m.estimate, f"{half}_lo": m.lo, f"{half}_hi": m.hi}
     vals = [row[k] for h in ("discovery", "replication") for k in (h, f"{h}_lo", f"{h}_hi")]
     row["verdict"] = "withheld" if any(v is None for v in vals) else eda_split.verdict(*vals)
     return row
@@ -600,9 +600,9 @@ def main() -> None:
     # A, -70 dBm, main null.
     grids70 = features(exposure, close_at(SENSITIVE_RSSI), course, people, lo, n_bins)
     t = draws["day-phase"]
-    r, _ = run_lags(grids70, person, at, day, (t - t % BIN_S - lo) // BIN_S, {"all": every}, LAGS,
-                    WINDOWS,
-                    {"null": "day-phase", "rssi": SENSITIVE_RSSI, "resolution": "5 min"})  # fmt: skip
+    labels = {"null": "day-phase", "rssi": SENSITIVE_RSSI, "resolution": "5 min"}
+    shuffled = (t - t % BIN_S - lo) // BIN_S
+    r, _ = run_lags(grids70, person, at, day, shuffled, {"all": every}, LAGS, WINDOWS, labels)
     rows += r
     print("lags -70", flush=True)
 
