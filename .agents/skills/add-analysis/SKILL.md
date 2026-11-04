@@ -19,6 +19,10 @@ Analyses answer research questions. They live with their study; the reusable par
 - Develop and test against `social_energy.synth` first. The analysis must run end to end on synthetic data in CI, even though its conclusions only mean something on real data.
 - If a function would be useful for another study, move it into `src/social_energy/` with its own tests. Study code should mostly be configuration and orchestration.
 
+## Caches
+
+A table cached from the contacts is reused only under `copresence_by_phase.cache_is_current`, so that a new ingest or spine rebuilds it. A cache that only checks its file exists mixes old data into a rerun without a sound.
+
 ## Reporting
 
 - Only aggregate results leave the local machine. Groups too small to protect anonymity are merged or suppressed (the ethics approval requires this).

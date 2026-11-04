@@ -249,6 +249,15 @@ MIN_GROUP = 5
 BLUE, ORANGE, GRAY = "#2a78d6", "#eb6834", "#8a8984"
 
 
+def cache_is_current(layout: paths.StudyLayout, *files: Path) -> bool:
+    """A cache built from the contacts holds only if it is newer than the ingest and the spine."""
+    if not all(f.exists() for f in files):
+        return False
+    sources = [layout.derived / "beacons" / "qa.json", *layout.spine.rglob("*")]
+    newest = max(f.stat().st_mtime for f in sources if f.exists())
+    return all(f.stat().st_mtime > newest for f in files)
+
+
 def course_of(spine: Spine) -> dict[str, str]:
     """Entity → course, from the local spine (``people.yaml``)."""
     return {

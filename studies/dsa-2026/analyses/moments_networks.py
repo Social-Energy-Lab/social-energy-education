@@ -477,7 +477,7 @@ def come_back(rows: pl.DataFrame, variant: str, n_people: int, n_days: int) -> l
 def minute_tables(layout, spine, participants: set, out: Path) -> tuple[pl.DataFrame, pl.DataFrame]:
     """One-minute close rows and seen minutes, cached under ``out``."""
     f_close, f_seen = out / "cache_minute_close.parquet", out / "cache_minute_seen.parquet"
-    if f_close.exists() and f_seen.exists():
+    if cp.cache_is_current(layout, f_close, f_seen):
         return pl.read_parquet(f_close), pl.read_parquet(f_seen)
     who = list(participants)
     closes, seens = [], []
