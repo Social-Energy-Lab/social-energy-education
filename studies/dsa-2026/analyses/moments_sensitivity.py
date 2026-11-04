@@ -54,6 +54,9 @@ N_SHUFFLE = 100
 N_BOOT = 200
 SEED = 20261105
 BLUE, ORANGE, GRAY = cp.BLUE, cp.ORANGE, cp.GRAY
+#: ``--quick``: a few runs, to catch a crash before the long run. Its output is not a result.
+if "--quick" in sys.argv:
+    N_RUNS, N_SHUFFLE, N_BOOT = 2, 5, 10
 
 
 def strata(rows: pl.DataFrame) -> pl.DataFrame:
@@ -131,7 +134,7 @@ def positive_lead(row: dict) -> bool:
     return row["verdict"] == "replicates" and row["discovery"] > 0
 
 
-# --- worker state: filled before the pool forks ---------------------------------------------------
+# --- worker state: built once per process; polars can hang in a forked child ---------------------
 
 STATE: dict = {}
 
@@ -180,11 +183,9 @@ def back_run(task: tuple) -> dict:
     }  # fmt: skip
 
 
-def main() -> None:
+def load_state() -> None:
     layout = paths.study(cp.STUDY)
     spine = Spine.load(layout.spine)
-    out = paths.study(cp.STUDY).derived / "analyses" / SLUG
-    out.mkdir(parents=True, exist_ok=True)
     b = mn.base(layout, spine)
     close = b["ends"].filter(pl.col("max_rssi") >= mn.CLOSE_RSSI)
     grids = mn.features(b["exposure"], close, b["course"], b["people"], b["lo"], b["n_bins"])
@@ -212,10 +213,17 @@ def main() -> None:
         n_people=len(b["people"]), n_days=len(days),
     )  # fmt: skip
 
+
+def main() -> None:
+    out = paths.study(cp.STUDY).derived / "analyses" / SLUG
+    out.mkdir(parents=True, exist_ok=True)
+    load_state()
+    rows = STATE["rows"]
+
     lag_tasks = [(f, d, r) for f in FEATURES for d in DELTAS for r in range(N_RUNS)]
     back_tasks = [("later", f, r) for f in FACTORS for r in range(N_RUNS)]
     back_tasks += [("tied_later", p, r) for p in POINTS for r in range(N_RUNS)]
-    with mp.get_context("fork").Pool(14) as pool:
+    with mp.get_context("spawn").Pool(14, initializer=load_state) as pool:
         lag_runs = [x for part in pool.imap_unordered(lag_run, lag_tasks, 8) for x in part]
         print("lags done", flush=True)
         back_runs = list(pool.imap_unordered(back_run, back_tasks, 4))

@@ -383,7 +383,12 @@ def design(rows: pl.DataFrame, controls: list[str], n_people: int, n_days: int) 
 
 
 def contrast(
-    rows: pl.DataFrame, outcome: str, controls: list, n_people: int, n_days: int, *,
+    rows: pl.DataFrame,
+    outcome: str,
+    controls: list,
+    n_people: int,
+    n_days: int,
+    *,
     n_boot: int | None = None,
 ) -> dict:
     """Estimate, interval and verdict of ``shared`` per half, by the day of the moment."""
