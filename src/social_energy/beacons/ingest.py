@@ -84,6 +84,9 @@ class BeaconConfig:
     # a peak this many times the other candidate's settles a split count.
     witness_peak_s: int = 10
     witness_min_peak_ratio: float = 3.0
+    # (readout_key, period, boot, restart) from ``beacons.sync``: uptime periods fitted to partners'
+    # records. Given, they replace the periods read from the clock anchors alone.
+    period_overrides: tuple[tuple[str, int, datetime, bool], ...] = ()
     # Tags' uptime counters run this many parts per million fast against the logger clock
     # (``cycles.estimate_clock_rate``). Records are dated as boot + uptime / (1 + rate).
     clock_rate_ppm: float = 0.0
@@ -315,9 +318,24 @@ def _add_boot_context(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFr
         pl.col("pc_time").alias("ts"),
         pl.col("current_timer").alias("timer"),
     )
-    cyc = power_cycles(
-        anchored, restart_margin_s=config.restart_margin_s, clock_rate_ppm=config.clock_rate_ppm
-    ).select("readout_key", "restart", "cycle", "cycle_start")
+    if config.period_overrides:
+        cyc = pl.DataFrame(
+            config.period_overrides,
+            schema={
+                "readout_key": pl.String,
+                "cycle": pl.Int64,
+                "cycle_start": pl.Datetime("us", "UTC"),
+                "restart": pl.Boolean,
+            },
+            orient="row",
+        ).join(anchored.select("readout_key"), on="readout_key", how="semi")
+    else:
+        cyc = power_cycles(
+            anchored,
+            restart_margin_s=config.restart_margin_s,
+            clock_rate_ppm=config.clock_rate_ppm,
+        )
+    cyc = cyc.select("readout_key", "restart", "cycle", "cycle_start")
     starts = (
         cyc.join(anchored.select("readout_key", "beacon"), on="readout_key")
         .group_by("beacon", "cycle")

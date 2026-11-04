@@ -95,6 +95,9 @@ def anchors(variant: str | None = None, clock_rate_ppm: float = CLOCK_RATE_PPM) 
 
     A sensitivity ingest passes its own ``variant`` and the clock rate it was dated with.
     """
+    fitted = cp.derived_root(variant) / "beacons" / "uptime_periods.parquet"
+    if fitted.exists():
+        return fitted_cycles(pl.read_parquet(fitted))
     r = our_table("readouts", variant).filter(
         pl.col("current_timer").is_not_null() & (pl.col("id_status") != "ambiguous")
     )
@@ -102,6 +105,15 @@ def anchors(variant: str | None = None, clock_rate_ppm: float = CLOCK_RATE_PPM) 
         "beacon", pl.col("pc_time").alias("ts"), pl.col("current_timer").alias("timer")
     )
     return power_cycles(found, restart_margin_s=RESTART_MARGIN_S, clock_rate_ppm=clock_rate_ppm)
+
+
+def fitted_cycles(periods: pl.DataFrame) -> pl.DataFrame:
+    """``beacons.sync`` periods in the shape ``lost_windows`` reads: a restart wherever a period
+    starts, and its fitted boot where a late stamp alone would imply a later one."""
+    start = pl.col("evidence").is_not_null() & (pl.col("evidence") != "first")
+    return periods.with_columns(start.alias("restart"), pl.col("boot").alias("implied")).select(
+        "beacon", "ts", "timer", "restart", "implied"
+    )
 
 
 def write_windows(
