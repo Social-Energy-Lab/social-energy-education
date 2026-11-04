@@ -1,8 +1,8 @@
 # Beacon dating: uptime periods from the implied boots, checked against partners
 
 **Priority:** high — wrong boots move a record's time by minutes to hours, under every timing analysis
-**Gate:** none
-**Next:** Álvaro tells the research team (draft in the private note `beacon-time-sync-2026-11-04.md`); compare with Tobias's reboot list when it arrives, then retire this plan
+**Gate:** input:the beacon team's reboot list
+**Next:** compare with the beacon team's reboot list and their answer on timer steps when they arrive, then retire this plan
 
 **Goal:** date beacon records from uptime periods that hold up under logger delays of hours, and tell "no data" from "no contact" in every tag-hour.
 

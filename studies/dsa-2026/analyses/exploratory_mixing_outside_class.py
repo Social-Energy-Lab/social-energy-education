@@ -24,12 +24,18 @@ Exposures, as pair-bins kept:
 * ``no_class_no_neighbours``: also without pairs in rooms numbered next to each other in the same
   list `[inferred]`: that numbers run along a corridor is a guess, and apartments are unknown.
 
+Persistence (``exploratory_rhythm.py``'s models) is rerun on ``all_day``, ``no_class`` and
+``no_class_no_room``: a tie is new on the pair's first tied day in the time kept, and comes back if
+tied again in the time kept. A course meets every day, so whole-day ties among classmates come back
+by timetable; outside class that no longer helps ordinary-day ties.
+
 Sleeping rooms are in the private roster (``context/personal/``), kept off the spine. They are read
 at run time, held in memory, and only aggregates are written. The random-mixing share is not
 adjusted for the pairs a room rule removes; they are a small part of all possible pairs.
 
 Run after ``copresence_by_phase.py build`` and ``exploratory_rhythm.py``'s inputs. Writes
-``daily.csv``, ``contrast.csv``, ``qa.json`` to
+``daily.csv``, ``contrast.csv``, ``persistence_rates.csv``, ``persistence_model.csv``, ``qa.json``
+to
 ``$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/exploratory/mixing-outside-class/``.
 
     uv run --extra analysis python studies/dsa-2026/analyses/exploratory_mixing_outside_class.py
@@ -51,13 +57,14 @@ import exploratory_rhythm as er
 
 from social_energy import paths
 from social_energy.outcomes import daily_close_ties, present_days
-from social_energy.rhythm import daily_mixing, period_mixing
+from social_energy.rhythm import daily_mixing, period_mixing, retie_opportunities
 from social_energy.spine import Spine
 from social_energy.study import StudyConfig
 
 ROSTER_GLOB = "*StudyIDs*.md"
 NIGHT = (time(2, 0), time(7, 30))
 TIE_MINUTES = (60, 30)
+PERSISTENCE_EXPOSURES = ("all_day", "no_class", "no_class_no_room")
 EXPOSURES = (
     "all_day",
     "class_only",
@@ -180,7 +187,8 @@ def main() -> None:
 
     period_all = {d: er.kind_of(d) for d in er.DAYS if d != er.ARRIVAL}
     period_no_dip = {d: k for d, k in period_all.items() if d not in er.DIP}
-    daily_rows, contrast_rows = [], []
+    index = {p: i for i, p in enumerate(people)}
+    daily_rows, contrast_rows, rate_rows, model_rows = [], [], [], []
     for name in EXPOSURES:
         for minutes in TIE_MINUTES:
             ties = daily_close_ties(
@@ -203,8 +211,27 @@ def main() -> None:
                         {"exposure": name, "tie_minutes": minutes, "days": days_label}
                         | er.mixing_contrast(pm, special)
                     )
+            if name in PERSISTENCE_EXPOSURES:
+                opps = retie_opportunities(ties, present, first_from=er.FIRST_NEW, days=er.DAYS)
+                per = er.persistence_table(opps, groups)
+                cross = per.filter(pl.col("cross"))
+                tag = {"exposure": name, "tie_minutes": minutes}
+                kinds = ["ordinary", *er.SPECIAL.values()]
+                for origin, table in (("all", per), ("cross_course", cross)):
+                    for r in er.persistence_rates(table, index, kinds):
+                        rate_rows.append(tag | {"origin": origin} | r)
+                for label, o in (
+                    ("day + lag terms", opps),
+                    ("cross-course new ties only",
+                     opps.join(cross.select("a", "b"), on=["a", "b"], how="semi")),
+                    ("follow-up without 24-27 Aug", opps.filter(~pl.col("day").is_in(er.DIP))),
+                ):  # fmt: skip
+                    for r in er.persistence_model(o, index, label):
+                        model_rows.append(tag | r)
     pl.concat(daily_rows).sort("exposure", "tie_minutes", "day").write_csv(out / "daily.csv")
     pl.DataFrame(contrast_rows, infer_schema_length=None).write_csv(out / "contrast.csv")
+    pl.DataFrame(rate_rows, infer_schema_length=None).write_csv(out / "persistence_rates.csv")
+    pl.DataFrame(model_rows, infer_schema_length=None).write_csv(out / "persistence_model.csv")
 
     same = pairs.filter(room_pairs(rooms))
     known = [p for p in people if groups[p] is not None]
