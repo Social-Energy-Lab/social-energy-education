@@ -430,7 +430,7 @@ def pair_table(
     idx = {d: k for k, d in enumerate(days)}
     rows = []
     for key_set, flag in ((shared, True), (comparison, False)):
-        for a, b, day in key_set:
+        for a, b, day in sorted(key_set):  # a set's order changes from run to run
             if not (FIRST_MOMENT <= day <= LAST_MOMENT) or a not in pos or b not in pos:
                 continue
             i, j, d = pos[a], pos[b], idx[day]

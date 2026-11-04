@@ -217,3 +217,11 @@ def test_come_back_gives_all_three_outcomes_and_a_verdict(m, monkeypatch):
     assert out[0]["all_est"] == pytest.approx(1.0, abs=0.1)
     assert out[0]["verdict"] == "replicates"
     assert out[2]["verdict"] != "replicates"
+
+
+def test_pair_table_rows_come_in_sorted_order_whatever_the_sets_order(m):
+    z = np.zeros((3, 3, 16))
+    d = date(2026, 8, 20)
+    pairs = {("b", "c", d), ("a", "c", d), ("a", "b", d)}
+    rows = m.pair_table(pairs, set(), z, z, {"a": 0, "b": 1, "c": 2}, {}, _days())
+    assert list(zip(rows["i"], rows["j"], strict=True)) == [(0, 1), (0, 2), (1, 2)]
