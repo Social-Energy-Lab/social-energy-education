@@ -1,7 +1,7 @@
 # DSA 2026: networks around moments, and whether shared moments last
 
 **Priority:** high — the research team asked for descriptive network analyses to run beside the theory work
-**Gate:** decision:the research team reads the private notes, corrects the rival-mechanisms table and says what size of gradient effect would matter (recheck 2026-11-18)
+**Gate:** decision:the research team reads the private notes, corrects the rival-mechanisms table and the proposed size of gradient effect that would matter (recheck 2026-11-18)
 **Next:** with the team's answers in hand, decide on the two proposed experiments (gatherings; the same question over days), then retire this plan
 
 **Goal:** describe how a person's company changes in the hour around a self-report, and whether pairs who shared a moment spend more time together on later days than pairs who were equally close and did not share it. Everything here is **exploratory** under the frozen analysis plan (`studies/dsa-2026/research/analysis-plan.md`); leads that hold become candidates for the next-phase preregistration (`../ideas/next-phase-preregistration.md`).
@@ -115,5 +115,5 @@ The near window of shared against solo presses is partly built in: a shared pres
 - **Which gatherings produce shared moments, and the same question over days in both directions:** proposed, and waiting for the team's correction of the rival-mechanisms table, which may change the features.
 - **Generative model:** waits for the team's correction of the rival-mechanisms table (private note `dsa-2026/notes/network-methods-reply-2026-11-04.md`).
 - **Community detection and dynamic block models:** a plain version recovers courses and the timetable; it needs a question about groups beyond them.
-- **Hidden Markov and Kalman models:** the membrane is measured once before the academy, so a hidden state has little to be checked against. `[unknown: was a post-academy survey wave fielded?]`
+- **Hidden Markov and Kalman models:** the membrane is measured once before the academy, so a hidden state has little to be checked against. `[unknown: was a post-academy survey wave fielded?]` No work here depends on one: a wave would be a bonus, and what the existing data allow comes first.
 - **Membrane distance in B:** whether coming back depends on the gradient waits until B itself shows something.
