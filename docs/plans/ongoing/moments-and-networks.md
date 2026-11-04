@@ -1,8 +1,8 @@
 # DSA 2026: networks around moments, and whether shared moments last
 
 **Priority:** high — the research team asked for descriptive network analyses to run beside the theory work
-**Gate:** none
-**Next:** write `studies/dsa-2026/analyses/gradient_sensitivity.py` with its tests and run it (section D)
+**Gate:** decision:the research team reads the private notes, corrects the rival-mechanisms table and says what size of gradient effect would matter (recheck 2026-11-18)
+**Next:** with the team's answers in hand, decide on the two proposed experiments (gatherings; the same question over days), then retire this plan
 
 **Goal:** describe how a person's company changes in the hour around a self-report, and whether pairs who shared a moment spend more time together on later days than pairs who were equally close and did not share it. Everything here is **exploratory** under the frozen analysis plan (`studies/dsa-2026/research/analysis-plan.md`); leads that hold become candidates for the next-phase preregistration (`../ideas/next-phase-preregistration.md`).
 
@@ -108,7 +108,7 @@ The near window of shared against solo presses is partly built in: a shared pres
 - [x] Run on the real data; write the private note
 - [x] Carry the outcome into the reply to the team and check it against the preregistration draft
 - [x] C: script and tests; run; private note `dsa-2026/notes/moments-sensitivity-2026-11-04.md`
-- [ ] D: script and tests; run; private note `dsa-2026/notes/gradient-sensitivity-2026-11-04.md`
+- [x] D: script and tests; run; private note `dsa-2026/notes/gradient-sensitivity-2026-11-04.md`
 
 ## Not doing now
 

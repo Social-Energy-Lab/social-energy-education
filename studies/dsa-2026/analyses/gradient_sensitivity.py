@@ -18,7 +18,8 @@ One test per run and uniform plants are the easiest case: the analysis itself sc
         studies/dsa-2026/analyses/gradient_sensitivity.py
 
 Run after ``confirmatory.py``, ``copresence_by_phase.py build`` and ``beacon_diagnostics.py``.
-Writes ``detection_contact.csv``, ``detection_copress.csv``, ``reliability_used.csv``, ``qa.json`` and a
+Writes ``detection_contact.csv``, ``detection_copress.csv``, ``reliability_used.csv``, ``qa.json``
+and a
 figure to ``$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/exploratory/gradient-sensitivity/``. Only
 rates over runs are written.
 """
