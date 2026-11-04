@@ -1,8 +1,8 @@
 # DSA 2026: networks around moments, and whether shared moments last
 
 **Priority:** high — the research team asked for descriptive network analyses to run beside the theory work
-**Gate:** decision:the research team reads the private note and says whether a follow-up is wanted (recheck 2026-11-18)
-**Next:** take the private note `dsa-2026/notes/moments-networks-2026-11-04.md` to the research team, then retire this plan
+**Gate:** none
+**Next:** write `studies/dsa-2026/analyses/moments_sensitivity.py` with its tests and run it (section C)
 
 **Goal:** describe how a person's company changes in the hour around a self-report, and whether pairs who shared a moment spend more time together on later days than pairs who were equally close and did not share it. Everything here is **exploratory** under the frozen analysis plan (`studies/dsa-2026/research/analysis-plan.md`); leads that hold become candidates for the next-phase preregistration (`../ideas/next-phase-preregistration.md`).
 
@@ -56,6 +56,22 @@ For each press and each lag from −60 to +60 minutes in 5-minute bins (positive
 - **Placebo: the three days before.** The same contrast on close minutes in the three preceding days, holding fixed that day's minutes, minutes and ties before those three days, same course, seen bins in those days and the dummies. Pairs who share moments may simply be converging already. **A come-back result counts as a lead only if it replicates and the all-days placebo interval includes zero.** Otherwise it is reported as "already converging".
 - **Sensitivities.** −70 dBm; including co-presses under 10 s; moment days whose follow-up misses 24–27 Aug (17–20 Aug); cross-course pairs only.
 
+### C. Could A and B have seen an effect?
+
+Added after A and B ran, and before this was. It asks what their "no lead" is worth, so it reports what the analyses find when an effect of known size is put in, and not new evidence about the camp. Fixed here, before running:
+
+- **Background with no real signal.** The effect is planted on pseudo-events, so the real presses and shared moments are not in the data being tested.
+  - *A:* pseudo-presses come from one draw of the day × clock-hour shuffle, for the same people in the same hours.
+  - *B:* the real shared pair-days are dropped. As many comparison pair-days as the real shared ones in each half become pseudo-shared, drawn within strata of same course × tied earlier × tercile of that day's minutes, in the real shared days' proportions.
+- **Planted in A: contacts widen after a moment.** For every pseudo-press, `close` or `unfamiliar` rises by δ in the person's exposure bins from +10 to +60 minutes. δ ∈ {0, 0.1, 0.25, 0.5, 1} people. Other features are not planted. Each run reads the planted grid under 100 shuffles per null, reused across runs.
+- **Planted in B: pairs come back.** Close minutes over the follow-up × f for pseudo-shared pair-days, f ∈ {1, 1.25, 1.5, 2, 3}, on the log-minutes outcome. Separately, tied later rises by p ∈ {0, 10, 20, 30} percentage points by turning untied pseudo-shared pair-days into tied ones at random, on the tied outcome. Node bootstrap with 200 draws per run. The placebo is not rerun, because the plant does not touch the days before.
+- **Runs.** 100 per level, seeded. A detection rate near 50 % carries about ±10 points.
+- **Counts as detected.**
+  - *A:* asymmetry and, reported separately, the after window, positive and "replicates" under **both** nulls.
+  - *B:* positive and "replicates". Reported beside it: the all-days interval excludes zero, and the median all-days estimate against what was planted.
+- **Reading.** The smallest planted size detected in at least 80 % of runs is what the analysis could reliably have seen. Level 0 gives the false-lead rate. Below that size, the "no lead" says little.
+- **Limits.** Planted effects are uniform across people and moments, which is the easiest case: uneven real effects would be harder to detect. The gradient analysis (`exploratory_gradients.py`) is not covered here.
+
 ## Read with care
 
 The near window of shared against solo presses is partly built in: a shared press needs someone close. This was not stated in the rules above and was noticed on reading the output.
@@ -65,6 +81,7 @@ The near window of shared against solo presses is partly built in: a shared pres
 - `src/social_energy/moments.py`: lag sums, windows, cluster-mass sign-flip test, component sizes, eigenvector centrality.
 - `tests/test_moments.py`: hand-derived expectations and a planted-effect oracle.
 - `studies/dsa-2026/analyses/moments_networks.py`, `tests/test_moments_networks_study.py`.
+- `studies/dsa-2026/analyses/moments_sensitivity.py`, `tests/test_moments_sensitivity_study.py` (section C).
 - Outputs under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/analyses/exploratory/moments-networks/`; results only in the private note `dsa-2026/notes/moments-networks-2026-11-04.md`.
 
 ## Tasks
@@ -73,9 +90,11 @@ The near window of shared against solo presses is partly built in: a shared pres
 - [x] Study script and tests
 - [x] Run on the real data; write the private note
 - [x] Carry the outcome into the reply to the team and check it against the preregistration draft
+- [ ] C: script and tests; run; private note `dsa-2026/notes/moments-sensitivity-2026-11-04.md`
 
 ## Not doing now
 
+- **Which gatherings produce shared moments, and the same question over days in both directions:** proposed, and waiting for the team's correction of the rival-mechanisms table, which may change the features.
 - **Generative model:** waits for the team's correction of the rival-mechanisms table (private note `dsa-2026/notes/network-methods-reply-2026-11-04.md`).
 - **Community detection and dynamic block models:** a plain version recovers courses and the timetable; it needs a question about groups beyond them.
 - **Hidden Markov and Kalman models:** the membrane is measured once before the academy, so a hidden state has little to be checked against. `[unknown: was a post-academy survey wave fielded?]`
