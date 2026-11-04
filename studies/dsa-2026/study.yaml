@@ -152,6 +152,17 @@ survey:
   # refuses until this holds the freeze date and commit.
   analysis_plan_frozen: "2026-10-19 109bc50"  # signed by Álvaro (analysis team)
 
+# When courses met, local time: the README's timetable, with the days the spine's events show
+# otherwise. No class on the excursion; on the rotation day the morning slots are the rotation
+# itself, not one's own course. The end on the rotation day is [inferred]: its event has none.
+course_hours:
+  default: [["09:00", "12:15"], ["16:30", "18:30"]]
+  exceptions:
+    "2026-08-16": [["14:00", "16:00"]]
+    "2026-08-18": []
+    "2026-08-22": [["16:45", "18:30"]]
+    "2026-08-23": [["14:00", "16:00"]]
+
 # How the explorer (social_energy.explorer) presents this study.
 explorer:
   # Display names. The official titles are not in the repo yet:
