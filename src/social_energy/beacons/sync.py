@@ -215,6 +215,19 @@ DEFAULT_ROUNDS = (
 )
 
 
+def change_point(early: np.ndarray, late: np.ndarray) -> tuple[int, int]:
+    """Where to switch from clock ``early`` to clock ``late``: the split with most matches.
+
+    Both are 0/1 per record in uptime order: does a partner's record agree under that clock? Returns
+    the first index on the late clock (0: all late, ``len``: all early) and that split's matches.
+    """
+    before = np.concatenate(([0], np.cumsum(early)))
+    after = np.concatenate((np.cumsum(late[::-1])[::-1], [0]))
+    totals = before + after
+    best = int(totals.argmax())
+    return best, int(totals[best])
+
+
 def _period_of_readouts(readouts: pl.DataFrame, periods: pl.DataFrame) -> pl.DataFrame:
     """``readout_key``, ``period``, ``boot`` for every readout, also those with no anchor."""
     placed = readouts.join(periods.select("readout_key", "period", "boot"), on="readout_key")
@@ -236,6 +249,121 @@ def _period_of_readouts(readouts: pl.DataFrame, periods: pl.DataFrame) -> pl.Dat
     return pl.concat([placed.select(columns), rest.select(columns)])
 
 
+def find_timer_steps(
+    records: pl.DataFrame,
+    periods: pl.DataFrame,
+    readouts: pl.DataFrame,
+    *,
+    window: tuple,
+    clock_rate_ppm: float = 0.0,
+    bin_s: int = 30,
+    step_s: int = 300,
+    min_gain: int = 50,
+    min_gain_share: float = 0.1,
+) -> pl.DataFrame:
+    """Clocks that moved between two readouts, so that one readout holds both sides of the step.
+
+    One boot per period cannot date such records. Wherever a tag's implied boot lastingly rises by
+    more than ``step_s`` between two readouts, the records of that stretch are tried against the
+    boots on both sides, in uptime order, and partners' records pick the split (``change_point``).
+    Late stamps look the same in the anchors, but their records match one boot throughout, so no
+    split gains anything. A split must gain ``min_gain`` matches and ``min_gain_share`` of the
+    stretch. Returns ``beacon``, ``period``, ``from_uptime``, ``to_uptime``, ``add_s``: add this to
+    the time of that period's records in that uptime range.
+    """
+    schema = {
+        "beacon": pl.Int64,
+        "period": pl.Int64,
+        "from_uptime": pl.Int64,
+        "to_uptime": pl.Int64,
+        "add_s": pl.Float64,
+    }
+    start, end = window
+    placed = _period_of_readouts(readouts, periods)
+    dated = (
+        records.join(placed.select("readout_key", "period", "boot"), on="readout_key")
+        .with_columns(
+            (
+                pl.col("boot") + real_seconds(pl.col("uptime_s").cast(pl.Int64), clock_rate_ppm)
+            ).alias("t")
+        )
+        .filter(pl.col("t").is_between(start, end))
+    )
+    hearing = {
+        key: np.unique(g["bin"].to_numpy())
+        for key, g in dated.with_columns((pl.col("t").dt.epoch("s") // bin_s).alias("bin"))
+        .select("beacon", "observed", "bin")
+        .unique()
+        .group_by(["beacon", "observed"])
+    }
+    rows = []
+    implied = pl.col("ts") - real_seconds(pl.col("timer"), clock_rate_ppm)
+    for g in (
+        periods.sort("beacon", "ts", "timer")
+        .with_columns(implied.alias("_implied"))
+        .partition_by("beacon", maintain_order=True)
+    ):
+        beacon = int(g["beacon"][0])
+        seconds = g["_implied"].dt.epoch("ms").to_numpy() / 1000
+        edge = np.minimum.accumulate(seconds[::-1])[::-1]
+        timer = g["timer"].to_numpy()
+        period = g["period"].to_numpy()
+        boots = g["boot"].dt.epoch("ms").to_numpy() / 1000
+        own = dated.filter(pl.col("beacon") == beacon)
+        for k in range(1, len(g)):
+            rise = edge[k] - edge[k - 1]
+            if rise <= step_s or timer[k] < timer[k - 1]:
+                continue
+            same = period[k] == period[k - 1]
+            # The clock before the step: the previous readout's boot. After it: this edge, or this
+            # period's fitted boot when the rise opened a period of its own.
+            early_boot = boots[k - 1]
+            late_boot = boots[k] if not same else edge[k]
+            if late_boot - early_boot <= step_s:
+                continue
+            stretch = (
+                own.filter(
+                    (pl.col("period") == int(period[k]))
+                    & (pl.col("uptime_s") >= int(timer[k - 1]))
+                    & (pl.col("uptime_s") <= int(timer[k]))
+                )
+                .select("observed", "uptime_s")
+                .unique()
+                .sort("uptime_s")
+            )
+            if not stretch.height:
+                continue
+            uptime = stretch["uptime_s"].to_numpy().astype(float) / (1 + clock_rate_ppm * 1e-6)
+            observed = stretch["observed"].to_numpy()
+            matches = {}
+            for name, boot in (("early", early_boot), ("late", late_boot)):
+                b = ((boot + uptime) // bin_s).astype(np.int64)
+                hit = np.zeros(len(b), dtype=np.int64)
+                for o in np.unique(observed):
+                    theirs = hearing.get((int(o), beacon))
+                    if theirs is None:
+                        continue
+                    mask = observed == o
+                    hit[mask] = np.isin(b[mask], theirs)
+                matches[name] = hit
+            split, best = change_point(matches["early"], matches["late"])
+            current = int((matches["late"] if not same else matches["early"]).sum())
+            gain = best - current
+            if gain < max(min_gain, min_gain_share * len(uptime)):
+                continue
+            ups = stretch["uptime_s"].to_numpy()
+            if same:  # dated from the early boot: the part after the split moves later
+                if split >= len(ups):
+                    continue
+                low, high, add = int(ups[split]), int(timer[k]), late_boot - early_boot
+            else:  # dated from the late boot: the part before the split moves earlier
+                if split <= 0:
+                    continue
+                low, high, add = int(ups[0]), int(ups[split - 1]), early_boot - late_boot
+            rows.append((beacon, int(period[k]), low, high, float(add)))
+    return pl.DataFrame(rows, schema=schema, orient="row")
+
+
 def fit_boots(
     readouts: pl.DataFrame,
     contacts: pl.LazyFrame,
@@ -247,8 +375,8 @@ def fit_boots(
     merge_s: int = 300,
     seed: int = 0,
     log=None,
-) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Periods with boots fitted to partners, and every round's lag per period.
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    """Periods with boots fitted to partners, every round's lag per period, and timer steps.
 
     ``readouts`` and ``contacts`` are an ingest's tables (ok contacts of the current boot are used);
     ``window`` is the (start, end) in UTC over which patterns are compared, so that tags lying
@@ -340,7 +468,10 @@ def fit_boots(
         )
         if log:
             log(number, lags, periods)
-    return periods, pl.concat(history)
+    steps = find_timer_steps(
+        records, periods, readouts, window=window, clock_rate_ppm=clock_rate_ppm
+    )
+    return periods, pl.concat(history), steps
 
 
 def ingest_with_sync(
@@ -353,12 +484,13 @@ def ingest_with_sync(
 ) -> dict[str, int]:
     """``ingest_with_witnesses``, then boots fitted to partners, then the records dated from them.
 
-    Also writes ``uptime_periods.parquet`` (one row per clock anchor) and ``boot_fit.parquet``
-    (every round's lag per period). ``window`` is the (start, end) in UTC to compare patterns over.
+    Also writes ``uptime_periods.parquet`` (one row per clock anchor), ``boot_fit.parquet`` (every
+    round's lag per period) and ``timer_steps.parquet``. ``window`` is the (start, end) in UTC to
+    compare patterns over.
     """
     paths, out = list(paths), Path(out)
     ingest_with_witnesses(paths, config, out)
-    periods, history = fit_boots(
+    periods, history, steps = fit_boots(
         pl.read_parquet(out / "readouts.parquet"),
         pl.scan_parquet(out / "contacts" / "*.parquet"),
         window=window,
@@ -367,6 +499,7 @@ def ingest_with_sync(
     )
     periods.select(PERIOD_COLUMNS).write_parquet(out / "uptime_periods.parquet")
     history.write_parquet(out / "boot_fit.parquet")
+    steps.write_parquet(out / "timer_steps.parquet")
     overrides = config.id_overrides
     witness = out / "id_witness.parquet"
     if witness.exists():
@@ -379,7 +512,12 @@ def ingest_with_sync(
     shutil.rmtree(out / "contacts")
     return ingest_logs_to(
         paths,
-        dataclasses.replace(config, id_overrides=overrides, period_overrides=tuple(rows.rows())),
+        dataclasses.replace(
+            config,
+            id_overrides=overrides,
+            period_overrides=tuple(rows.rows()),
+            clock_steps=tuple(steps.rows()),
+        ),
         out,
     )
 

@@ -87,6 +87,9 @@ class BeaconConfig:
     # (readout_key, period, boot, restart) from ``beacons.sync``: uptime periods fitted to partners'
     # records. Given, they replace the periods read from the clock anchors alone.
     period_overrides: tuple[tuple[str, int, datetime, bool], ...] = ()
+    # (beacon, cycle, from_uptime, to_uptime, add_s) from ``beacons.sync``: a clock that moved
+    # between two readouts. Records of that cycle in that uptime range get ``add_s`` added.
+    clock_steps: tuple[tuple[int, int, int, int, float], ...] = ()
     # Tags' uptime counters run this many parts per million fast against the logger clock
     # (``cycles.estimate_clock_rate``). Records are dated as boot + uptime / (1 + rate).
     clock_rate_ppm: float = 0.0
@@ -373,7 +376,10 @@ def _add_boot_context(readouts: pl.DataFrame, config: BeaconConfig) -> pl.DataFr
 
 
 def _resolve_boots(
-    records: pl.DataFrame, uptime_col: str, clock_rate_ppm: float = 0.0
+    records: pl.DataFrame,
+    uptime_col: str,
+    clock_rate_ppm: float = 0.0,
+    clock_steps: tuple[tuple[int, int, int, int, float], ...] = (),
 ) -> pl.DataFrame:
     """Decide which boot each record's uptime belongs to, and compute its time.
 
@@ -415,9 +421,25 @@ def _resolve_boots(
         .when(pl.col("_boots_back") == 1)
         .then(pl.col("prev_cycle_start"))
     )
+    moved = pl.lit(0.0)
+    for beacon, cycle, low, high, add_s in clock_steps:
+        moved = (
+            pl.when(
+                (pl.col("beacon") == beacon)
+                & (pl.col("cycle") == cycle)
+                & (pl.col("_boots_back") == 0)
+                & pl.col(uptime_col).is_between(low, high)
+            )
+            .then(pl.lit(float(add_s)))
+            .otherwise(moved)
+        )
     return records.with_columns(
         (pl.col("_boots_back") > 0).alias("pre_reboot"),
-        (anchor + real_seconds(pl.col(uptime_col), clock_rate_ppm)).alias("t"),
+        (
+            anchor
+            + real_seconds(pl.col(uptime_col), clock_rate_ppm)
+            + pl.duration(milliseconds=(moved * 1000).round().cast(pl.Int64))
+        ).alias("t"),
     ).drop("_seg", "_last_seg", "_no_current", "_boots_back")
 
 
@@ -475,7 +497,7 @@ def _flag_duplicates(records: pl.DataFrame, key: list[str]) -> pl.DataFrame:
 
 READOUT_CONTEXT = [
     "readout_key", "beacon", "readout_seq", "readout_order", "pc_time",
-    "current_timer", "cycle_start", "prev_cycle_start", "id_status",
+    "current_timer", "cycle", "cycle_start", "prev_cycle_start", "id_status",
 ]  # fmt: skip
 FLAGS = [
     "pre_reboot", "headerless", "implausible_time", "duplicate", "id_ambiguous", "invalid_value",
@@ -525,6 +547,7 @@ def _records(
             .with_columns(_invalid_value(config)),
             "uptime_s",
             config.clock_rate_ppm,
+            config.clock_steps,
         ),
         config).select(
         "beacon", "observed", "rssi", "t", "uptime_s", "readout_seq", *FLAGS,
@@ -536,6 +559,7 @@ def _records(
             data.filter(pl.col("kind") == "self_report").rename({"_uptime_s": "uptime_s"}),
             "uptime_s",
             config.clock_rate_ppm,
+            config.clock_steps,
         ),
         config).select(
         "beacon", "t", "uptime_s", "readout_seq", *FLAGS, "readout_key", "source", "line_no",
@@ -543,7 +567,9 @@ def _records(
     )  # fmt: skip
 
     eco = data.filter(pl.col("kind") == "eco")
-    eco = _resolve_boots(eco, "_enter", config.clock_rate_ppm).rename({"t": "t_enter"})
+    eco = _resolve_boots(eco, "_enter", config.clock_rate_ppm, config.clock_steps).rename(
+        {"t": "t_enter"}
+    )
     eco = eco.with_columns(
         (
             pl.col("t_enter")

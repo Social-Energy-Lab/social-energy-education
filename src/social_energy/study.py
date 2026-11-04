@@ -157,6 +157,17 @@ class StudyConfig:
             purged_devices=self.purged_devices(),
         )
 
+    def beacon_window(self) -> tuple[datetime, datetime] | None:
+        """The observation window in UTC, or None if the study sets none."""
+        window = self.raw.get("beacons", {}).get("observation_window")
+        if not window:
+            return None
+        tz = ZoneInfo(self.timezone)
+        return tuple(
+            _as_datetime(window[k]).replace(tzinfo=tz).astimezone(ZoneInfo("UTC"))
+            for k in ("start", "end")
+        )
+
     def eda_config(self) -> EdaConfig:
         section = self.raw["eda"]
         rotation = section.get("rotation_s", 3600)

@@ -11,7 +11,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from social_energy.beacons.sync import apply_boots, mirror_lag, uptime_periods
+from social_energy.beacons.sync import apply_boots, change_point, mirror_lag, uptime_periods
 
 
 def at(hh: int, mm: int = 0, day: int = 14) -> datetime:
@@ -200,6 +200,16 @@ def test_apply_boots_keeps_a_timer_step_as_its_own_period():
     assert fitted["boot"][1] == p["boot"][1] - timedelta(seconds=7200)
 
 
+def test_change_point_finds_where_the_clock_switched():
+    # First four records agree under the early clock, the last three under the late one.
+    early = np.array([1, 1, 1, 1, 0, 0, 0])
+    late = np.array([0, 0, 0, 0, 1, 1, 1])
+    assert change_point(early, late) == (4, 7)
+    # All agree under one clock: the split sits at the end, no records on the other.
+    assert change_point(np.ones(5, dtype=int), np.zeros(5, dtype=int)) == (5, 5)
+    assert change_point(np.zeros(5, dtype=int), np.ones(5, dtype=int)) == (0, 5)
+
+
 def no_lags() -> pl.DataFrame:
     return pl.DataFrame(
         schema={"beacon": pl.Int64, "period": pl.Int64, "lag_s": pl.Float64, "settled": pl.Boolean}
@@ -256,7 +266,9 @@ def test_oracle_late_periods_and_a_small_step_come_out_on_the_true_times(tmp_pat
     Eight tags share bursts of contact over two days. All boot at 2026-08-14 06:00 UTC, except that
     tag 1 reboots at 15 Aug 06:00 and tag 2's clock falls 30 min behind at 15 Aug 06:00 with no
     reboot. Tag 3 reboots at 15 Aug 12:00 and every readout after that is stamped 3 h late, so no
-    clean readout shows its boot. Every other readout is clean.
+    clean readout shows its boot. Tag 5's clock falls 2 h behind at 15 Aug 00:00, between two
+    readouts, so one readout holds records from both sides of the step. Every other readout is
+    clean.
     """
     from datetime import date
 
@@ -284,6 +296,8 @@ def test_oracle_late_periods_and_a_small_step_come_out_on_the_true_times(tmp_pat
             return 30 * 60
         if tag == 2 and minute >= 24 * 60:
             return 30
+        if tag == 5 and minute >= 18 * 60:
+            return 120
         return 0
 
     reads = [12 * 60, 24 * 60 - 5, 30 * 60 - 5, 36 * 60, 42 * 60, 48 * 60 - 1]
@@ -332,6 +346,16 @@ def test_oracle_late_periods_and_a_small_step_come_out_on_the_true_times(tmp_pat
     assert abs((found[1] - (t0 + timedelta(hours=30))).total_seconds()) <= 90
     contacts = pl.read_parquet(out / "contacts" / "*.parquet").filter(pl.col("beacon") == 3)
     assert contacts.height > 0
+    # Tag 5's records land on the truth on both sides of the step inside one readout.
+    truth = {int((t0 + timedelta(minutes=int(m))).timestamp()) for m in on[(4, 5)]}
+    five = pl.read_parquet(out / "contacts" / "*.parquet").filter(
+        (pl.col("beacon") == 5) & (pl.col("observed") == 4)
+    )
+    stamps = [int(x.timestamp()) for x in five["t"].to_list()]
+    hits = sum(x // 60 * 60 in truth or x // 60 * 60 + 60 in truth for x in stamps)
+    assert hits / len(stamps) >= 0.98
+    steps = pl.read_parquet(out / "timer_steps.parquet")
+    assert steps["beacon"].to_list() == [5]
     # Every contact of tag 4, which never moved, sits on a whole minute of the truth.
     four = pl.read_parquet(out / "contacts" / "*.parquet").filter(pl.col("beacon") == 4)
     assert four["t"].dt.second().unique().to_list() == [0]

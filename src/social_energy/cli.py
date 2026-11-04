@@ -7,8 +7,10 @@ social-energy init-spine studies/<id>/study.yaml
 social-energy ingest-beacons studies/<id>/study.yaml
     Parse every .log under $SOCIAL_ENERGY_DATA/<id>/raw/beacons/, one file at a time, into
     $SOCIAL_ENERGY_DATA/<id>/derived/beacons/: readouts, self_reports and eco_sessions parquet,
-    contacts/<local day>.parquet, plus qa.json. Refuses (exit 4) while any log names a device
-    listed under beacons.purged_devices in the study's private local.yaml.
+    contacts/<local day>.parquet, plus qa.json. With an observation window in study.yaml, boots are
+    fitted to partners' records (beacons.sync): uptime_periods, boot_fit and timer_steps. Refuses
+    (exit 4) while any log names a device listed under beacons.purged_devices in the study's
+    private local.yaml.
 
 social-energy purge-device studies/<id>/study.yaml --device N [--dry-run | --apply]
     Count the lines naming device N (as ID or ID2) in every .log under raw/beacons/. With --apply,
@@ -91,6 +93,7 @@ from .beacons import (
     BeaconConfig,
     PurgedDeviceError,
     check_purged,
+    ingest_with_sync,
     ingest_with_witnesses,
     purge_devices,
 )
@@ -190,7 +193,11 @@ def ingest_beacons(
         return 4
     if out.exists():
         shutil.rmtree(out)
-    qa = ingest_with_witnesses(logs, config, out)
+    window = study.beacon_window()
+    if window is None:
+        qa = ingest_with_witnesses(logs, config, out)
+    else:
+        qa = ingest_with_sync(logs, config, out, window=window)
     (out / "qa.json").write_text(json.dumps(qa, indent=2), encoding="utf-8")
     print(json.dumps(qa, indent=2))
     print(f"Wrote {out}")

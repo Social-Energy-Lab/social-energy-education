@@ -1,14 +1,14 @@
-"""Dating the DSA 2026 beacons from uptime periods fitted to partners, and what each tag-hour holds.
+"""Checks on the DSA 2026 beacon dating, and what each tag-hour holds.
 
-Not a research analysis. It builds the ingest with fitted boots as a variant beside the main one,
-so that nothing reads it until it has been checked, and writes the checks: how far each period sits
-from its partners under the old and the new boots, and the coverage of each tag-hour. Unit: tag and
-period, tag and hour. No spine, no people: all figures are per tag-type aggregate.
+Not a research analysis. It writes how far each period sits from its partners, under the fitted
+boots and under an earlier ingest for comparison, and the coverage of each tag-hour. Unit: tag and
+period, tag and hour. No people: the spine is read only to tell location tags from worn ones, and
+all figures are per tag-type aggregate.
 
-Inputs: raw logs, and ``derived/beacons/`` for the old boots. Outputs under
-``derived/sensitivity/time_sync/``: ``beacons/`` and ``analyses/beacon_time_sync/``.
+Inputs: ``derived/beacons/`` and, if present, the ingest of 2026-11-04 from before the fit
+(``derived/beacons-pre-sync-2026-11-04/``). Outputs: ``derived/analyses/beacon_time_sync/``.
 
-    uv run --extra analysis python studies/dsa-2026/analyses/beacon_time_sync.py [ingest|check|all]
+    uv run --extra analysis python studies/dsa-2026/analyses/beacon_time_sync.py
 """
 
 from __future__ import annotations
@@ -24,24 +24,15 @@ import copresence_by_phase as cp
 
 from social_energy import paths
 from social_energy.beacons.coverage import coverage_by_hour
-from social_energy.beacons.sync import ingest_with_sync, period_day_lags
+from social_energy.beacons.sync import period_day_lags
 from social_energy.spine import Spine
 from social_energy.study import StudyConfig
 
-VARIANT = "time_sync"
 SLUG = "beacon_time_sync"
 RECORDED = ("recorded", "recorded_eco")
 
 
-def window(config: StudyConfig) -> tuple:
-    """The observation window in UTC."""
-    w = pl.DataFrame({"t": [cp.WINDOW_START, cp.HANDOVER]}).with_columns(
-        pl.col("t")
-        .str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S")
-        .dt.replace_time_zone(config.timezone)
-        .dt.convert_time_zone("UTC")
-    )
-    return tuple(w["t"].to_list())
+PRE_SYNC = "beacons-pre-sync-2026-11-04"
 
 
 def old_periods(readouts: pl.DataFrame) -> pl.DataFrame:
@@ -113,44 +104,35 @@ def neither_side(cov: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def ingest() -> None:
-    study = StudyConfig.load(cp.STUDY_YAML)
-    layout = paths.study(cp.STUDY)
-    out = cp.derived_root(VARIANT) / "beacons"
-    logs = sorted((layout.raw / "beacons").rglob("*.log"))
-    qa = ingest_with_sync(logs, study.beacon_config(), out, window=window(study))
-    (out / "qa.json").write_text(json.dumps(qa, indent=2), encoding="utf-8")
-    print(json.dumps(qa), flush=True)
-
-
 def check() -> None:
     study = StudyConfig.load(cp.STUDY_YAML)
     config = study.beacon_config()
-    span = window(study)
-    new_dir = cp.derived_root(VARIANT) / "beacons"
-    old_dir = cp.derived_root() / "beacons"
-    out = cp.derived_root(VARIANT) / "analyses" / SLUG
+    span = study.beacon_window()
+    new_dir = cp.derived_root() / "beacons"
+    old_dir = cp.derived_root() / PRE_SYNC
+    out = cp.derived_root() / "analyses" / SLUG
     out.mkdir(parents=True, exist_ok=True)
 
-    old_readouts = pl.read_parquet(old_dir / "readouts.parquet")
     new_readouts = pl.read_parquet(new_dir / "readouts.parquet")
     periods = pl.read_parquet(new_dir / "uptime_periods.parquet")
     lags = {
-        "old": period_day_lags(
-            old_readouts,
-            pl.scan_parquet(old_dir / "contacts" / "*.parquet"),
-            old_periods(old_readouts),
-            window=span,
-            clock_rate_ppm=config.clock_rate_ppm,
-        ),
         "new": period_day_lags(
             new_readouts,
             pl.scan_parquet(new_dir / "contacts" / "*.parquet"),
             periods,
             window=span,
             clock_rate_ppm=config.clock_rate_ppm,
-        ),
+        )
     }
+    if old_dir.exists():
+        old_readouts = pl.read_parquet(old_dir / "readouts.parquet")
+        lags["old"] = period_day_lags(
+            old_readouts,
+            pl.scan_parquet(old_dir / "contacts" / "*.parquet"),
+            old_periods(old_readouts),
+            window=span,
+            clock_rate_ppm=config.clock_rate_ppm,
+        )
     for name, table in lags.items():
         table.write_parquet(out / f"lags_{name}.parquet")
     summary = {name: lag_shares(table) for name, table in lags.items()}
@@ -186,8 +168,4 @@ def check() -> None:
 
 
 if __name__ == "__main__":
-    command = sys.argv[1] if len(sys.argv) > 1 else "all"
-    if command in ("ingest", "all"):
-        ingest()
-    if command in ("check", "all"):
-        check()
+    check()
