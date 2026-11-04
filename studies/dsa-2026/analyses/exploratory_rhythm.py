@@ -127,7 +127,7 @@ def own_record_bins(layout: paths.StudyLayout, spine: Spine, people: set[str]) -
     Cached in the output folder; the acoustics analysis reads it as an exposure variant.
     """
     f = out_dir() / "own_record_bins.parquet"
-    if f.exists():
+    if cp.cache_is_current(layout, f):
         return pl.read_parquet(f).filter(pl.col("entity").is_in(people))
     lo, hi = cp.window_bounds()
     parts = []

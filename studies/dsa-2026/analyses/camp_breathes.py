@@ -195,8 +195,7 @@ def render(preview: bool = False, day: str | None = None, per_step: int = FRAMES
     out.mkdir(parents=True, exist_ok=True)
     participants = {p.ref for p in spine.people if p.role == "participant"}
     consented_sr = {f"person:{p}" for p in spine.consented("self_report")}
-    roster = next((layout.root / "context" / "personal").glob("*StudyIDs*.md"))
-    course = cp.course_of(roster)
+    course = cp.course_of(spine)
 
     start, nodes, close, seen, press_k, press_i, qa = build_arrays(
         participants, consented_sr, layout, spine

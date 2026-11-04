@@ -2,7 +2,7 @@
 
 **Priority:** high — wrong boots move a record's time by minutes to hours, under every timing analysis
 **Gate:** none
-**Next:** rerun everything on the fitted ingest, compare with the backups in the private note, tell the research team
+**Next:** Álvaro tells the research team (draft in the private note `beacon-time-sync-2026-11-04.md`); compare with Tobias's reboot list when it arrives, then retire this plan
 
 **Goal:** date beacon records from uptime periods that hold up under logger delays of hours, and tell "no data" from "no contact" in every tag-hour.
 
@@ -43,7 +43,8 @@ The beacon team's reboot count is not a target. Their validation is partly synth
 | Coverage table | ✅ |
 | Timing-sensitive analyses rerun, old and new compared, changes reported | ✅ |
 | `ingest-beacons` fits boots when the study sets a window | ✅ |
-| Replace `derived/beacons/`, rerun the rest (decided by Álvaro, 2026-11-04) | ⬜ |
+| Replace `derived/beacons/`, rerun the rest (decided by Álvaro, 2026-11-04) | ✅ |
+| Publish the site asset from the rerun (Álvaro, 2026-11-04) | ✅ |
 
 ## Open
 
