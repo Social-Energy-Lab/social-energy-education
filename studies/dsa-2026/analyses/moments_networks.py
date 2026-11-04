@@ -382,7 +382,10 @@ def design(rows: pl.DataFrame, controls: list[str], n_people: int, n_days: int) 
     )
 
 
-def contrast(rows: pl.DataFrame, outcome: str, controls: list, n_people: int, n_days: int) -> dict:
+def contrast(
+    rows: pl.DataFrame, outcome: str, controls: list, n_people: int, n_days: int, *,
+    n_boot: int | None = None,
+) -> dict:
     """Estimate, interval and verdict of ``shared`` per half, by the day of the moment."""
     out: dict = {}
     for half in HALVES:
@@ -399,7 +402,7 @@ def contrast(rows: pl.DataFrame, outcome: str, controls: list, n_people: int, n_
         a, b = part["i"].to_numpy(), part["j"].to_numpy()
         draws = [
             fit(y, X, (w[a] * w[b]).astype(float))
-            for w in node_bootstrap_weights(n_people, n_boot=N_BOOT_NODE, seed=SEED)
+            for w in node_bootstrap_weights(n_people, n_boot=n_boot or N_BOOT_NODE, seed=SEED)
         ]
         lo, hi = np.quantile(draws, [0.025, 0.975])
         out |= {f"{half}_est": fit(y, X), f"{half}_lo": float(lo), f"{half}_hi": float(hi)}
@@ -520,13 +523,9 @@ def minute_grid(close: pl.DataFrame, seen: pl.DataFrame, exposure, people: list,
     return g
 
 
-def main() -> None:
-    layout = paths.study(cp.STUDY)
-    spine = Spine.load(layout.spine)
-    out = out_dir()
+def base(layout, spine) -> dict:
+    """Presses, exposure, close rows and the grid they sit on, with the press order fixed."""
     data = xp.load(layout, spine)
-    course = cp.course_of(spine)
-    participants = {p.ref for p in spine.people if p.role == "participant"}
     exposure = data["exposure"].with_columns(
         pl.col("bin").dt.epoch("s").alias("bs"),
         pl.col("bin").dt.convert_time_zone(cp.TZ).dt.hour().alias("hour"),
@@ -535,24 +534,92 @@ def main() -> None:
         pl.col("t").dt.epoch("s").alias("ts"),
         pl.col("bin").dt.convert_time_zone(cp.TZ).dt.hour().alias("hour"),
     ).sort("entity", "t")  # fmt: skip
-    entity = presses["entity"].to_list()
-    ts = presses["ts"].to_numpy()
-    day = presses["day"].to_list()
     people = sorted(set(exposure["entity"]))
     pos = {e: i for i, e in enumerate(people)}
-    person = np.array([pos[e] for e in entity])
+    ts = presses["ts"].to_numpy()
     lo = int(exposure["bs"].min())
-    n_bins = (int(exposure["bs"].max()) - lo) // BIN_S + 1
-    at = (ts - ts % BIN_S - lo) // BIN_S
     ends = data["ends"].with_columns(pl.col("bin").dt.epoch("s").alias("bs"),
                                      cp.camp_day_expr(pl.col("bin")).alias("day"))  # fmt: skip
+    return {
+        "exposure": exposure, "presses": presses, "people": people, "pos": pos, "ts": ts, "lo": lo,
+        "entity": presses["entity"].to_list(), "day": presses["day"].to_list(),
+        "person": np.array([pos[e] for e in presses["entity"].to_list()]),
+        "n_bins": (int(exposure["bs"].max()) - lo) // BIN_S + 1,
+        "at": (ts - ts % BIN_S - lo) // BIN_S, "ends": ends, "course": cp.course_of(spine),
+    }  # fmt: skip
+
+
+def null_pools(presses: pl.DataFrame, exposure: pl.DataFrame, keys: list[str]) -> tuple[list, dict]:
+    """Each press's stratum, and each person's exposure bins per stratum."""
+    s = pl.concat_str([pl.col(k).cast(pl.String) for k in keys], separator="|")
+    stratum = presses.select(s).to_series().to_list()
+    pools = {
+        (e, k): np.asarray(b)
+        for e, k, b in exposure.with_columns(s.alias("s")).group_by("entity", "s")
+        .agg(pl.col("bs")).iter_rows()
+    }  # fmt: skip
+    return stratum, pools
+
+
+def seen_matrix(b: dict, days: list) -> np.ndarray:
+    """People x people x days: bins in which both were in exposure."""
+    people, pos, lo = b["people"], b["pos"], b["lo"]
+    day_pos = {d: k for k, d in enumerate(days)}
+    seen = np.zeros((len(people), len(people), len(days)))
+    for d, g in b["exposure"].filter(pl.col("day").is_in(days)).group_by("day"):
+        m = np.zeros((len(people), b["n_bins"]), dtype=np.float32)
+        m[[pos[e] for e in g["entity"]], (g["bs"].to_numpy() - lo) // BIN_S] = 1.0
+        seen[:, :, day_pos[d[0]]] = m @ m.T
+    return seen
+
+
+def minutes_at(b: dict, rssi: int, days: list) -> np.ndarray:
+    """People x people x days: close minutes."""
+    people, pos = b["people"], b["pos"]
+    day_pos = {d: k for k, d in enumerate(days)}
+    m = np.zeros((len(people), len(people), len(days)))
+    rows = b["ends"].filter(
+        (pl.col("max_rssi") >= rssi) & pl.col("entity").is_in(people)
+        & pl.col("other").is_in(people) & pl.col("day").is_in(days)
+    )  # fmt: skip
+    for (e, o, d), g in rows.group_by("entity", "other", "day"):
+        m[pos[e], pos[o], day_pos[d]] = g["bs"].n_unique() * BIN_MIN
+    return m
+
+
+def partners_at(b: dict, rssi: int) -> dict:
+    """Who was close and in exposure, per person and bin."""
+    unit = set(b["people"])
+    in_bin = set(b["exposure"].select("entity", "bs").iter_rows())
+    out: dict = {}
+    rows = b["ends"].filter(pl.col("max_rssi") >= rssi).select("entity", "bs", "other")
+    for e, bs, o in rows.iter_rows():
+        if e in unit and o in unit and (o, bs) in in_bin:
+            out.setdefault((e, bs), []).append(o)
+    return out
+
+
+def close_index(b: dict, rssi: int) -> CloseIndex:
+    rows = b["ends"].filter(pl.col("max_rssi") >= rssi).select("entity", "bs", "other")
+    return CloseIndex(rows.iter_rows(), bin_size=BIN_S)
+
+
+def main() -> None:
+    layout = paths.study(cp.STUDY)
+    spine = Spine.load(layout.spine)
+    out = out_dir()
+    b = base(layout, spine)
+    participants = {p.ref for p in spine.people if p.role == "participant"}
+    exposure, presses, people, pos = b["exposure"], b["presses"], b["people"], b["pos"]
+    entity, ts, day, person, lo = b["entity"], b["ts"], b["day"], b["person"], b["lo"]
+    n_bins, at, ends, course = b["n_bins"], b["at"], b["ends"], b["course"]
 
     def close_at(rssi: int) -> pl.DataFrame:
         return ends.filter(pl.col("max_rssi") >= rssi)
 
     close = close_at(CLOSE_RSSI)
     grids = features(exposure, close, course, people, lo, n_bins)
-    index = CloseIndex(close.select("entity", "bs", "other").iter_rows(), bin_size=BIN_S)
+    index = close_index(b, CLOSE_RSSI)
     p = co_event_pairs(entity, ts, index, window=WINDOW, bin_size=BIN_S)
     keep = p.close & (p.gap >= MIN_GAP)
     is_shared = np.zeros(len(entity), dtype=bool)
@@ -575,13 +642,7 @@ def main() -> None:
     rows, curves, clusters = [], [], []
     draws = {}
     for null, keys in NULLS.items():
-        s = pl.concat_str([pl.col(k).cast(pl.String) for k in keys], separator="|")
-        stratum = presses.select(s).to_series().to_list()
-        pools = {
-            (e, k): np.asarray(b)
-            for e, k, b in exposure.with_columns(s.alias("s")).group_by("entity", "s")
-            .agg(pl.col("bs")).iter_rows()
-        }  # fmt: skip
+        stratum, pools = null_pools(presses, exposure, keys)
         t = draw_shuffles(entity, stratum, pools, offset=0, n=N_SHUFFLE, seed=SEED)
         draws[null] = t
         shuffled = (t - t % BIN_S - lo) // BIN_S
@@ -637,36 +698,13 @@ def main() -> None:
     )
 
     # B.
-    unit = set(people)
     days = oc.DAYS
     n_days = len(days)
-    day_pos = {d: k for k, d in enumerate(days)}
-    expo = exposure.filter(pl.col("day").is_in(days))
-    seen = np.zeros((len(people), len(people), n_days))
-    for d, g in expo.group_by("day"):
-        m = np.zeros((len(people), n_bins), dtype=np.float32)
-        m[[pos[e] for e in g["entity"]], (g["bs"].to_numpy() - lo) // BIN_S] = 1.0
-        seen[:, :, day_pos[d[0]]] = m @ m.T
-    in_bin = set(exposure.select("entity", "bs").iter_rows())
-
-    def minutes_at(rssi: int) -> np.ndarray:
-        m = np.zeros((len(people), len(people), n_days))
-        rows_ = close_at(rssi).filter(pl.col("entity").is_in(people) & pl.col("other").is_in(people)
-                                      & pl.col("day").is_in(days))  # fmt: skip
-        for (e, o, d), g in rows_.group_by("entity", "other", "day"):
-            m[pos[e], pos[o], day_pos[d]] = g["bs"].n_unique() * BIN_MIN
-        return m
-
-    def partners_at(rssi: int) -> dict:
-        out_: dict = {}
-        for e, b, o in close_at(rssi).select("entity", "bs", "other").iter_rows():
-            if e in unit and o in unit and (o, b) in in_bin:
-                out_.setdefault((e, b), []).append(o)
-        return out_
+    seen = seen_matrix(b, days)
 
     results = []
-    minutes = minutes_at(CLOSE_RSSI)
-    partners = partners_at(CLOSE_RSSI)
+    minutes = minutes_at(b, CLOSE_RSSI, days)
+    partners = partners_at(b, CLOSE_RSSI)
     shared, comparison = pair_days(entity, ts, day, index, partners)
     main_rows = pair_table(shared, comparison, minutes, seen, pos, course, days)
     results += come_back(main_rows, "main", len(people), n_days)
@@ -692,11 +730,10 @@ def main() -> None:
         pair_table(near_shared, near_comparison, minutes, seen, pos, course, days),
         "with co-presses under 10 s", len(people), n_days,
     )  # fmt: skip
-    idx70 = CloseIndex(close_at(SENSITIVE_RSSI).select("entity", "bs", "other").iter_rows(),
-                       bin_size=BIN_S)  # fmt: skip
-    s70, c70 = pair_days(entity, ts, day, idx70, partners_at(SENSITIVE_RSSI))
+    s70, c70 = pair_days(entity, ts, day, close_index(b, SENSITIVE_RSSI),
+                         partners_at(b, SENSITIVE_RSSI))  # fmt: skip
     results += come_back(
-        pair_table(s70, c70, minutes_at(SENSITIVE_RSSI), seen, pos, course, days),
+        pair_table(s70, c70, minutes_at(b, SENSITIVE_RSSI, days), seen, pos, course, days),
         f"{SENSITIVE_RSSI} dBm", len(people), n_days,
     )  # fmt: skip
     res = pl.DataFrame(results, infer_schema_length=None)

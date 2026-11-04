@@ -12,6 +12,7 @@ from social_energy.moments import (
     eigenvector_centrality,
     lag_sums,
     person_lag_means,
+    plant_after,
     t_cut,
     window_mean,
 )
@@ -48,6 +49,24 @@ def test_window_mean_takes_the_lags_named_and_skips_missing():
     lags = np.array([-1, 0, 1, 2])
     assert window_mean(d, lags, -1, 1).tolist() == [2.0]  # (1 + 3) / 2
     assert window_mean(d, lags, 2, 2).tolist() == [10.0]
+
+
+def test_plant_after_raises_the_named_lags_adds_overlaps_and_keeps_missing():
+    # Events at bins 1 and 2, lags 1-2: bin 2 gets one, bin 3 two, bin 4 one; bin 3 of person 1
+    # never changes; a NaN stays NaN; the original is not touched.
+    values = np.zeros((2, 6))
+    values[0, 4] = np.nan
+    out = plant_after(values, np.array([0, 0]), np.array([1, 2]), 1, 2, 0.5)
+    assert out[0, :4].tolist() == [0.0, 0.0, 0.5, 1.0]
+    assert math.isnan(out[0, 4])
+    assert out[0, 5] == 0.0
+    assert out[1].tolist() == [0.0] * 6
+    assert values[0, 2] == 0.0
+
+
+def test_plant_after_at_the_edge_of_the_grid():
+    out = plant_after(np.zeros((1, 3)), np.array([0]), np.array([2]), 1, 5, 1.0)
+    assert out[0].tolist() == [0.0, 0.0, 0.0]
 
 
 def test_component_sizes():

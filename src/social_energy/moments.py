@@ -57,6 +57,20 @@ def window_mean(d: np.ndarray, lags: np.ndarray, lo: int, hi: int) -> np.ndarray
     return out
 
 
+def plant_after(
+    values: np.ndarray, person: np.ndarray, at: np.ndarray, lo: int, hi: int, delta: float
+) -> np.ndarray:
+    """A copy of ``values`` raised by ``delta`` at lags ``lo`` to ``hi`` after each event.
+
+    For checking what an analysis can see. Overlapping events add up; bins off the grid are
+    skipped and missing readings stay missing.
+    """
+    out = values.copy()
+    for p, b in zip(np.asarray(person).tolist(), np.asarray(at).tolist(), strict=True):
+        out[p, max(b + lo, 0) : max(b + hi + 1, 0)] += delta
+    return out
+
+
 def component_sizes(n: int, a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Size of each of ``n`` nodes' connected component, given the edges ``a[k]``-``b[k]``."""
     parent = list(range(n))
