@@ -2,7 +2,7 @@
 
 import dataclasses
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import polars as pl
@@ -161,3 +161,40 @@ def test_ingest_beacons_refuses_a_changed_config_in_the_main_folder(tmp_path, mo
     assert cli.ingest_beacons(study, changed, tmp_path / "elsewhere") == 2
     assert not (derived / "beacons").exists()
     assert not (tmp_path / "elsewhere").exists()
+
+
+def test_ingest_beacons_fits_boots_to_partners_only_when_the_study_sets_a_window(
+    tmp_path, monkeypatch
+):
+    data_root = tmp_path / "data-root"
+    camp = generate(CampSpec(), data_root / "synthetic-camp")
+    monkeypatch.setenv("SOCIAL_ENERGY_DATA", str(data_root))
+    path = _study_yaml(tmp_path, camp)
+    out = data_root / "synthetic-camp" / "derived" / "beacons"
+    called = []
+
+    def fake_ingest(*a, window="clock"):
+        out.mkdir(parents=True)
+        called.append(window)
+        return {}
+
+    monkeypatch.setattr(cli, "ingest_with_witnesses", fake_ingest)
+    monkeypatch.setattr(cli, "ingest_with_sync", fake_ingest)
+
+    assert StudyConfig.load(path).beacon_window() is None
+    assert cli.ingest_beacons(StudyConfig.load(path), None, out) == 0
+    assert called == ["clock"]
+
+    raw = yaml.safe_load(path.read_text())
+    raw["timezone"] = "Europe/Berlin"
+    raw["beacons"]["observation_window"] = {
+        "start": "2026-08-13 18:00:00",
+        "end": "2026-08-29 09:00:00",
+    }
+    path.write_text(yaml.safe_dump(raw))
+    assert cli.ingest_beacons(StudyConfig.load(path), None, out) == 0
+    # Berlin in August is UTC+2.
+    assert called[1] == (
+        datetime(2026, 8, 13, 16, tzinfo=UTC),
+        datetime(2026, 8, 29, 7, tzinfo=UTC),
+    )

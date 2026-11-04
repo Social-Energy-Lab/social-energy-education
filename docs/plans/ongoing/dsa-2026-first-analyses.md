@@ -21,7 +21,7 @@ Each is a choice, not a fact, until the research team signs it off. They are nam
 
 | Setting | Current value | Why | Status |
 |---|---|---|---|
-| Contact and press source | our ingest (`social-energy ingest-beacons`, `derived/beacons/`), `ok` records | dated from the power cycle start; resent copies flagged; `Output/` dates from late stamps and keeps copies | rule, validated 2026-10-02; `build --upstream` reproduces the `Output/` version |
+| Contact and press source | our ingest (`social-energy ingest-beacons`, `derived/beacons/`), `ok` records | dated from boots fitted to partners; resent copies flagged; `Output/` dates from late stamps and keeps copies | rule, validated 2026-10-02; `build --upstream` reproduces the `Output/` version |
 | Window | tag deployment on 13 Aug to the handover on 29 Aug 09:00 | after the handover tags lay together on benches | the handover window is not yet a spine exclusion |
 | Comparison days | 14–23 Aug | arrival day is atypical; restarts and battery fade weigh more late | `[inferred]` |
 | Exclusions | applied to both sides of every contact | a tag's partners hold half the data about its wearer | rule |
