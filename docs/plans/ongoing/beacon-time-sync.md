@@ -1,8 +1,8 @@
 # Beacon dating: uptime periods from the implied boots, checked against partners
 
 **Priority:** high — wrong boots move a record's time by minutes to hours, under every timing analysis
-**Gate:** none
-**Next:** finish the toolkit change on `feat/beacon-time-sync`, ingest into a new derived folder and run the evidence checks below
+**Gate:** decision:replace the main ingest with the fitted one, knowing reported results may move
+**Next:** Álvaro decides whether to replace `derived/beacons/` and rerun the rest; merge `feat/beacon-time-sync` first
 
 **Goal:** date beacon records from uptime periods that hold up under logger delays of hours, and tell "no data" from "no contact" in every tag-hour.
 
@@ -37,12 +37,17 @@ The beacon team's reboot count is not a target. Their validation is partly synth
 
 | Step | State |
 |---|---|
-| Toolkit functions, tests | ⏳ |
-| Ingest into a separate folder, `derived/beacons/` untouched | ⬜ |
-| Evidence checks, private note | ⬜ |
-| Coverage table | ⬜ |
-| Timing-sensitive analyses rerun, old and new compared, changes reported | ⬜ |
+| Toolkit functions, tests | ✅ |
+| Ingest into a separate folder, `derived/beacons/` untouched | ✅ |
+| Evidence checks, private note | ✅ |
+| Coverage table | ✅ |
+| Timing-sensitive analyses rerun, old and new compared, changes reported | ✅ |
 | Replace `derived/beacons/`, rerun the rest | ⬜ needs Álvaro's word, since results reported to the team may move |
+
+## Open
+
+- A timer step inside one readout's records cannot be expressed by one boot per period. These show up as period-days with a large remaining lag (`beacons.period_day_lags`). Flag them, or split the period by the partners' lag.
+- Analyses still read the fine bins of `derived/beacons/` as they were. Coverage reaches them only through the lost windows until each one chooses to use it.
 
 ## Out of scope
 
