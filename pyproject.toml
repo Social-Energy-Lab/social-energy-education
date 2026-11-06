@@ -21,10 +21,14 @@ analysis = [
     "networkx>=3.7",
     "statsmodels>=0.14",
 ]
+package = [
+    "pyzipper>=0.3.6",
+]
 
 [dependency-groups]
 dev = [
   "pytest>=8",
+  "pyzipper>=0.3.6",
   "ruff>=0.6",
   "statsmodels>=0.14",
 ]
