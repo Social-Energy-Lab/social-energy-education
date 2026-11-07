@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** none
-**Next:** build the 3 Nov deck from the private presentation material (`dsa-2026/notes/presentation-2026-11-03.md`); then take the next-phase preregistration (`../ideas/next-phase-preregistration.md`) to the research team
+**Next:** take the next-phase preregistration (`../ideas/next-phase-preregistration.md`) to the research team, with numbers from the fitted beacon dating (the 3 Nov talk used the old dating)
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 
@@ -67,7 +67,7 @@ While waiting on the research team (added 2026-10-17):
 - [x] EDA in the exploratory tier (2026-10-21): arousal around presses (shifted-press null within person-day and person-day-phase), by setting, zone, programme item and day (person-day fixed effects, movement and movement + clock hour + wear time), and minute-level synchrony of co-present wearers against shifted-partner and apart-pair nulls; both SCR rules. Re-run 2026-10-22 on corrected clocks, with a measured-clock sensitivity and PPG heart rate as a secondary outcome in all three. `studies/dsa-2026/analyses/exploratory_eda.py`; numbers in the private note only.
 - [x] Gradient theory, exploratory and outside the frozen plan (2026-10-28, asked by the research team after the freeze): do pairs whose membranes differ (absolute difference of the trust and lust composites, Euclidean distance over their z-scored scales) spend more or less time close, given joint exposure, course and a dummy per person, within and between courses; are the pairs who rarely meet more alike or more different; and does a close, exposed partner press too within 5 minutes more often when membranes differ. Nulls: membranes permuted among people of the same course (QAP), and for presses also the cascades time shuffle. `studies/dsa-2026/analyses/exploratory_gradients.py` (run after `confirmatory.py`; toolkit `social_energy.dyads`); writes `derived/analyses/exploratory/gradients/`. Numbers in the private note `exploratory-gradients-2026-10-28.md` only.
 - [x] Next-phase preregistration drafted from the exploratory leads, with C1, C2 and C4 as replications: [`../ideas/next-phase-preregistration.md`](../ideas/next-phase-preregistration.md) (2026-10-20).
-- [ ] Research-group presentation on 2026-11-03: the slide-by-slide material is written in the private half (`dsa-2026/notes/presentation-2026-11-03.md`, 2026-10-20, aggregates only); build the deck from it.
+- [x] Research-group presentation on 2026-11-03, from the private slide material (`dsa-2026/notes/presentation-2026-11-03.md`); given. Its numbers predate the fitted dating of 2026-11-04 (`beacon-time-sync.md`).
 - [x] Acoustics against press density (exploratory, 2026-10-17): `studies/dsa-2026/analyses/acoustics_presses.py` bins the AudioMoth features to the 5-minute beacon bins inside each recording slot and sets level and spectral features against press rates camp-wide and among people placed in the recorder's room (lost windows out of presses and hours, groups under five suppressed, correlations also within slot to separate the day's rhythm). Run it after `extract-acoustics`, `copresence_by_phase.py build` and `beacon_diagnostics.py` with `uv run --extra analysis python studies/dsa-2026/analyses/acoustics_presses.py`; it writes tables, three figures and `summary.json` to `derived/analyses/acoustics-presses/`. Findings in the private half.
 
 

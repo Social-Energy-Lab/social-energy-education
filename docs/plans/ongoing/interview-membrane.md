@@ -1,8 +1,8 @@
 # Interviews: the membrane as a self-reported variable
 
-**Priority:** high — target: a first exploratory result for the research-group talk on 2026-11-03
-**Gate:** none
-**Next:** the interview slide for 2026-11-03; the human check stays open (review sheet ready locally), so results are reported as model-coded
+**Priority:** high — the closest first-person reading of the construct; feeds the next-phase preregistration
+**Gate:** blocked:a person does the human check on the local review sheet, and the project lead reviews the codebook (recheck 2026-11-21)
+**Next:** with the human check done, the project lead reviews the codebook and results and decides what enters the preregistration; until then results are reported as model-coded (the 3 Nov talk did so)
 
 **Goal:** turn the membrane block of the in-person interviews into per-person codes (the state in
 everyday life, on arrival and at the interview, change, openers and closers, placed episodes) and

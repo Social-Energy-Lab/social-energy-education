@@ -1,7 +1,7 @@
 # Beacon dating: uptime periods from the implied boots, checked against partners
 
 **Priority:** high — wrong boots move a record's time by minutes to hours, under every timing analysis
-**Gate:** input:the beacon team's reboot list
+**Gate:** blocked:the beacon team's reboot list and answer on timer steps; the questions are drafted in the private notes (2026-11-04), not yet known to be sent (recheck 2026-11-21)
 **Next:** compare with the beacon team's reboot list and their answer on timer steps when they arrive, then retire this plan
 
 **Goal:** date beacon records from uptime periods that hold up under logger delays of hours, and tell "no data" from "no contact" in every tag-hour.

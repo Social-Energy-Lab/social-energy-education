@@ -1,8 +1,8 @@
 # Public site: DSA 2026 as animations
 
-**Priority:** high — target: live for the research-group talk on 2026-11-03
-**Gate:** none
-**Next:** live with real data since 2026-10-21 (release `site-data-dsa-2026`); team-meeting deck on branch `feat/meeting-deck-2026-11-04` waits on Álvaro's preview review, then re-upload the asset; remaining: group-size chart (people per size in `exploratory_cascades.py`, then re-export and `gh release upload --clobber`), Mahdi reads the German copy, fill the `[unknown: …]` in `docs/decisions/public-site.md`, then retire this plan
+**Priority:** high — public, and the approval behind it is not yet on record
+**Gate:** blocked:Mahdi reads the German copy, including the drafted class-hours sentence for "Do courses keep to themselves?", and says when he approved publishing (recheck 2026-11-21)
+**Next:** after Mahdi's read, add the class-hours sentence to the chapter "Do courses keep to themselves?" (the whole-day range counts class), re-export and `gh release upload --clobber`, fill the `[unknown: …]` in `docs/decisions/public-site.md`, then retire this plan. Site and deck are live with real data (deck PRs #26, #30; asset last re-uploaded 2026-11-04 from the fitted dating)
 
 **Goal:** a public web page, served by GitHub Pages from this repo, where anyone curious about the
 DSA 2026 results — the lab, colleagues, and the participants themselves — can watch the camp as an
@@ -14,7 +14,7 @@ Replaced `explorer-public-mode.md` (deleted; its follow-ups are at the end of th
 
 - **Branch:** `feat/public-site` — Tasks 1–9 built and reviewed (per-task reviews plus a final whole-branch review, all clean).
 - **Real data:** `studies/dsa-2026/analyses/site_export.py` has run; data, zip, preview and screenshots are under `$SOCIAL_ENERGY_DATA/dsa-2026/derived/site/`; numbers and checks in the private note `dsa-2026/notes/site-export-2026-10-21.md`.
-- **Open:** the group-size chart is empty until `exploratory_cascades.py` writes a people count per group size; the copy awaits Álvaro's review and Mahdi's read of the German; the `[unknown: …]` on Mahdi's approval in `docs/decisions/public-site.md`.
+- **Open:** the group-size chart was filled on 2026-10-29 (PR #30); the copy awaits Álvaro's review and Mahdi's read of the German; the `[unknown: …]` on Mahdi's approval in `docs/decisions/public-site.md`.
 
 ## Team-meeting deck (2026-10-28)
 
@@ -27,8 +27,9 @@ Replaced `explorer-public-mode.md` (deleted; its follow-ups are at the end of th
   come from `studies/dsa-2026/analyses/deck_export.py`, called by `site_export.py`. The scope
   widening is recorded in `docs/decisions/public-site.md`.
 - **Editing:** the slides are plain HTML in `deck/index.html`; its header comment says how.
-- **Gate:** Álvaro reviews the real-data preview (`derived/site/preview/deck/`) before any
-  `gh release upload --clobber` and workflow run. Until then the live deck is synthetic.
+- **Gate (passed):** Álvaro reviews the real-data preview (`derived/site/preview/deck/`) before any
+  `gh release upload --clobber` and workflow run. The real-data deck is live; Álvaro published the
+  asset again from the fitted-dating rerun on 2026-11-04.
 
 ## Why
 

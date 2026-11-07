@@ -2,7 +2,7 @@
 
 **Priority:** high
 **Gate:** none
-**Next:** carry the leads that replicated into `../ideas/next-phase-preregistration.md` and retire this plan
+**Next:** carry the leads that replicate on the fitted beacon dating (rerun 2026-11-04; verdicts moved, see the private note `dsa-2026/notes/beacon-time-sync-2026-11-04.md`) into `../ideas/next-phase-preregistration.md`, and retire this plan
 
 **Goal:** look at the EDA and heart-rate data in ways the first exploratory pass (`studies/dsa-2026/analyses/exploratory_eda.py`: presses, settings, minute-level synchrony) did not, and keep only what holds on days it was not found on. Everything here is **exploratory** under the frozen analysis plan (`studies/dsa-2026/research/analysis-plan.md`); leads that hold become candidates for the next-phase preregistration (`../ideas/next-phase-preregistration.md`).
 
