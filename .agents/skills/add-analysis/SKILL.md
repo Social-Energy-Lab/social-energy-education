@@ -23,6 +23,12 @@ Analyses answer research questions. They live with their study; the reusable par
 
 A table cached from the contacts is reused only under `copresence_by_phase.cache_is_current`, so that a new ingest or spine rebuilds it. A cache that only checks its file exists mixes old data into a rerun without a sound.
 
+## Around self-reports
+
+- Compare with shuffled presses in the same clock hour as well as the same phase of day. A phase-of-day null alone shows the timetable as a result.
+- Say what the clock-hour null costs: shuffled presses land in the same hour and read a real effect lasting about that long, so its estimates are not effect sizes.
+- A split-half verdict is too strict for a rare event, such as a later outcome of shared moments. Plant an effect of known size to see what the rule can catch, and read the all-days interval when the split is underpowered.
+
 ## Reporting
 
 - Only aggregate results leave the local machine. Groups too small to protect anonymity are merged or suppressed (the ethics approval requires this).
