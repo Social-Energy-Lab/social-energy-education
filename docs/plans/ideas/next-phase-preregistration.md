@@ -131,7 +131,7 @@ Agreed with the beacon team through [`next-field-phase-beacon-practice.md`](next
 - **Log announcements and researchers' reminders to press** (time, place) as ID-free events. A prompted press in a plenum is otherwise indistinguishable from a moved one.
 - **Group lists for special days** (who went where on an excursion), ID-only. They let H-MIX separate a group's own mixing from the day's.
 - **Staff consent and a short staff survey,** if staff are to be more than a descriptive side group.
-- **A post wave of the survey.** DSA had only a baseline. A post wave turns developmental signatures from inference into a measured change.
+- **A post wave of the survey, planned with the baseline.** DSA added one about three months after the academy. Fixing its timing and repeated items in advance turns developmental signatures from inference into a measured change.
 - **An RSSI ground-truth session** at each phase ([`rssi-ground-truth-session.md`](rssi-ground-truth-session.md)), so `close_rssi` is chosen on that phase's devices and rooms.
 
 ## Open questions

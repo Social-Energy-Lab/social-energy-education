@@ -51,7 +51,7 @@ For the research team:
 
 None open. Answered:
 
-- No post-academy wave was fielded (Álvaro, 2026-10-18): DSA 2026 has the baseline only.
+- ~~No post-academy wave was fielded (Álvaro, 2026-10-18).~~ Superseded: a post wave reached participants in November 2026 (Mahdi, 2026-11-17). Scoring it needs the post survey's item list. `[unknown: which baseline items does the post survey repeat, under which codes?]`
 - B19/B20 slider range: 1–10, as implemented. Confirmed from the form definition the platform served (structuredVersion 18), checked 2026-10-18; codebook `range_status: confirmed`.
 
 For Álvaro:

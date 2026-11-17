@@ -52,6 +52,6 @@ the research team's wish list for a data-exploration dashboard (private source d
   draw.
 - **EDA moment rule.** Calibrate the threshold with the research team, add movement adjustment
   as in `exploratory_eda.py`, and report how many moments the rule finds per person-day.
-- **Post wave.** The schema and view take a second survey wave; none was fielded at DSA 2026.
+- **Post wave.** The schema and view take a second survey wave. DSA 2026's post wave went out in November 2026; add it once it has closed and been scored.
 - **Programme labels** come from the spine verbatim. If a label ever names a person, the export
   should map it to its kind.
