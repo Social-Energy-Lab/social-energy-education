@@ -115,5 +115,5 @@ The near window of shared against solo presses is partly built in: a shared pres
 - **Which gatherings produce shared moments, and the same question over days in both directions:** proposed, and waiting for the team's correction of the rival-mechanisms table, which may change the features.
 - **Generative model:** waits for the team's correction of the rival-mechanisms table (private note `dsa-2026/notes/network-methods-reply-2026-11-04.md`).
 - **Community detection and dynamic block models:** a plain version recovers courses and the timetable; it needs a question about groups beyond them.
-- **Hidden Markov and Kalman models:** the membrane is measured once before the academy, so a hidden state has little to be checked against. `[unknown: was a post-academy survey wave fielded?]`
+- **Hidden Markov and Kalman models:** the membrane is measured once before the academy, so a hidden state has little to be checked against. A post wave went out in November 2026 (Mahdi, 2026-11-17), so a before/after check becomes possible once it closes.
 - **Membrane distance in B:** whether coming back depends on the gradient waits until B itself shows something.

@@ -18,8 +18,8 @@ who consented to its module (staff are never nodes):
 - Survey (``survey``): the trust and lust composites from ``confirmatory.py``
   (``composites.parquet``), every block B and C scale and gradient score from
   ``social-energy score-survey`` and the recoded items, kept submissions linked by platform
-  account exactly as ``confirmatory.linked_submissions`` does. One wave, ``pre``: no post wave was
-  fielded at DSA 2026 (``docs/context/instruments/survey.md``).
+  account exactly as ``confirmatory.linked_submissions`` does. One wave, ``pre``, for now: the post
+  wave (``docs/context/instruments/survey.md``) is added once it has closed and been scored.
 - Interview membrane codes (``interview_in_person``): the coder files that
   ``exploratory_membrane.py`` reads (``codes-reviewed/`` once the human check has been applied,
   else ``codes/``), reduced to codes. Evidence, notes and free-text labels are never read into
@@ -239,7 +239,7 @@ def person_data(layout, study: StudyConfig, spine: Spine, nodes: list[str]) -> P
         eda=eda_inputs(layout, spine),
         events=event_inputs(spine),
         notes={
-            "waves": "Baseline survey only: no post wave was fielded at this academy.",
+            "waves": "Baseline survey only: the post-academy wave is still running.",
             "membrane": (
                 "Interview codes after the human check."
                 if coded == "codes-reviewed"
