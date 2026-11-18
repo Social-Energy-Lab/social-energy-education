@@ -19,11 +19,21 @@ allows the pseudonymised data only to authorised research staff on access-restri
   app and the bundle to the server named in the study's private `local.yaml` over SSH and swaps
   them in whole. There is no upload page and nothing on the server writes data; the bundle is
   built locally exactly as for `explore`.
-- **Two locks.** The institute VPN (account plus second factor) to reach the server, then one
-  login per researcher, checked by the web server (basic auth over HTTPS).
-  `social-energy explorer-user --add NAME` asks for the password on the deploying machine and
-  sends only a SHA-512 crypt hash; `--remove NAME` withdraws access. Only researchers the project
-  lead names get a login.
+- **Two locks.** The institute VPN (account plus second factor) to reach the server, then the
+  explorer's own sign-in: one account per researcher, checked on every request
+  (`social_energy/explorer/auth_service.py`, standard library only, behind nginx
+  `auth_request`). Only researchers the project lead names get one.
+  - **Invites, not handed-out passwords.** An admin makes a one-time link (valid 7 days) in the
+    browser at `/auth/admin`; on it the researcher chooses their own password (12 characters or
+    more). A forgotten password is a new link. No admin ever knows anyone's password.
+  - **Admins** (the project lead and the deploying researcher) invite, reset and remove;
+    researchers only view. Removing someone signs them out at once.
+  - Passwords are kept only as scrypt hashes, session and invite tokens only as SHA-256 hashes.
+    Sessions last 12 hours (HttpOnly, Secure, SameSite=Strict cookie; forms carry a per-session
+    token). Five failures for one name or one address block it for 15 minutes.
+  - No second factor at sign-in: the VPN already asks for one.
+  - The first version (2026-11-18, the same day) used the web server's basic auth with
+    hand-made passwords; the service replaced it.
 - **Study IDs stay on screen.** The hosted copy is the team mode, not a public view: behind both
   locks it is the same access-restricted, pseudonymised data as on a researcher's machine.
 - **The server and its folder are private identifiers**, kept in `local.yaml`
