@@ -54,6 +54,20 @@ def test_archive_holds_the_app_and_the_bundle(tmp_path):
     assert not any(n.endswith((".pyc", ".md")) or "__pycache__" in n for n in names)
 
 
+def test_archive_carries_a_gzip_copy_of_each_bundle_file(tmp_path):
+    import gzip
+    import io
+    import tarfile
+
+    bundle = _bundle(tmp_path)
+    with tarfile.open(fileobj=io.BytesIO(deploy.archive(bundle)), mode="r:gz") as tar:
+        names = set(tar.getnames())
+        assert "bundle/pairs.bin.gz" in names and "bundle/meta.json.gz" not in names
+        packed = tar.extractfile("bundle/pairs.bin.gz").read()
+        assert gzip.decompress(packed) == (bundle / "pairs.bin").read_bytes()
+        assert tar.extractfile("bundle/compressed.json").read() == b'{"gzip": true}'
+
+
 def test_archive_refuses_a_folder_without_a_bundle(tmp_path):
     empty = tmp_path / "data" / "bundle"
     empty.mkdir(parents=True)

@@ -15,6 +15,7 @@ address for the links is ``explorer.deploy.url``. See ``docs/decisions/explorer-
 
 from __future__ import annotations
 
+import gzip
 import io
 import re
 import subprocess
@@ -85,7 +86,20 @@ def archive(bundle_dir: Path) -> bytes:
         for file in sorted(bundle_dir.iterdir()):
             if file.is_file():
                 _add(tar, file, f"bundle/{file.name}")
+                if file.name != "meta.json":
+                    _add_bytes(tar, gzip.compress(file.read_bytes(), 6, mtime=0),
+                               f"bundle/{file.name}.gz")  # fmt: skip
+        # The web server sends .bin files uncompressed, about 11 MB on DSA 2026 and 12 s over
+        # the VPN; the app reads the .gz copies (a fifth of that) when this marker is there.
+        _add_bytes(tar, b'{"gzip": true}', "bundle/compressed.json")
     return buf.getvalue()
+
+
+def _add_bytes(tar: tarfile.TarFile, data: bytes, name: str) -> None:
+    info = tarfile.TarInfo(name)
+    info.size = len(data)
+    info.mode = 0o644
+    tar.addfile(info, io.BytesIO(data))
 
 
 def remote_script(path: str) -> str:

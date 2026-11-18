@@ -13,19 +13,31 @@ import { explanations, personExplanations } from "./views/explain.js";
 const $ = (id) => document.getElementById(id);
 
 async function load() {
+  const status = $("loading");
   const meta = await (await fetch("bundle/meta.json")).json();
+  // The hosted copy ships a gzip copy of each file (deploy.py): a fifth of the bytes.
+  const gz = await fetch("bundle/compressed.json").then((r) => r.ok, () => false)
+    && typeof DecompressionStream === "function";
+  let done = 0;
+  const get = async (file) => {
+    const res = await fetch(`bundle/${file}${gz ? ".gz" : ""}`);
+    if (!res.ok) throw new Error(`${file}: HTTP ${res.status}`);
+    const body = gz ? new Response(res.body.pipeThrough(new DecompressionStream("gzip"))) : res;
+    const buf = await body.arrayBuffer();
+    done++;
+    status.textContent = `Loading the data… ${done} of ${total} files`;
+    return buf;
+  };
   const names = Object.keys(meta.files);
+  const total = names.length + (meta.person ? 1 : 0) + (meta.person?.moments ? 1 : 0);
   const buffers = Object.fromEntries(
-    await Promise.all(
-      names.map(async (n) => [n, await (await fetch(`bundle/${n}.bin`)).arrayBuffer()]),
-    ),
+    await Promise.all(names.map(async (n) => [n, await get(`${n}.bin`)])),
   );
+  const json = async (file) => JSON.parse(new TextDecoder().decode(await get(file)));
   // The person view's data, in a team bundle that carries it.
-  const personDoc = meta.person ? await (await fetch(`bundle/${meta.person.file}`)).json() : null;
+  const personDoc = meta.person ? await json(meta.person.file) : null;
   // What participants wrote about their moments: team bundles that carry it only.
-  const moments = meta.person?.moments
-    ? (await (await fetch(`bundle/${meta.person.moments}`)).json()).moments
-    : null;
+  const moments = meta.person?.moments ? (await json(meta.person.moments)).moments : null;
   return { meta, b: model.decode(meta, buffers), person: personDoc, moments };
 }
 
@@ -206,7 +218,9 @@ async function main() {
   let loaded;
   try {
     loaded = await load();
+    $("loading").hidden = true;
   } catch (err) {
+    $("loading").hidden = true;
     $("error").hidden = false;
     $("error").textContent = `Could not load the bundle: ${err.message}. Run the export first.`;
     return;
