@@ -46,6 +46,10 @@ allows the pseudonymised data only to authorised research staff on access-restri
   site's checks refuse it. It is free text by minors and may name other people, which makes it
   the most identifying thing in the bundle: it is shown in full to logged-in researchers and
   goes nowhere else.
+- **The halls' sound (added 2026-11-18).** Each AudioMoth recorder's level per 5-minute bin
+  (`sound.json`, from `acoustics_over_time.py`), shown against the day and in the paused frame
+  as "louder than N% of that hall's recorded time". It describes rooms, not people, and carries
+  no audio.
 - **Not yet decided:** interview passages and real names. Interview text needs a decision on
   which passages and under what consent; names wait for the project lead to confirm what the
   ethics approval and the consent allow.

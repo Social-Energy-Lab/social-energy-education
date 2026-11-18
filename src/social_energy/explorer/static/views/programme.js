@@ -7,7 +7,8 @@ const LANE_H = 17;
 const MAX_LANES = 8;
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-export function create(el, ctx) {
+// `maxLanes` keeps the strip short where it sits in the time bar.
+export function create(el, ctx, { maxLanes = MAX_LANES } = {}) {
   const events = ctx.events;
   const svg = d3.select(el).append("svg").attr("width", "100%");
   const more = document.createElement("p");
@@ -26,7 +27,7 @@ export function create(el, ctx) {
     }
     const c = ctx.colors;
     const width = el.clientWidth || 800;
-    const shown = Math.min(lanes.lanes, MAX_LANES);
+    const shown = Math.min(lanes.lanes, maxLanes);
     const top = 4;
     const axisY = top + Math.max(1, shown) * LANE_H + 4;
     const height = axisY + 18;
@@ -35,7 +36,7 @@ export function create(el, ctx) {
     const x = d3.scaleLinear().domain([lo, hi]).range([4, width - 4]);
 
     for (const it of lanes.items) {
-      if (it.lane >= MAX_LANES) continue;
+      if (it.lane >= maxLanes) continue;
       const e = events[it.k];
       const x0 = x(it.start);
       const w = Math.max(2, x(it.end) - x0 - 1);
@@ -57,9 +58,9 @@ export function create(el, ctx) {
           .text(fit(e.label, w - 8));
       }
     }
-    if (lanes.lanes > MAX_LANES) {
-      const extra = lanes.items.filter((it) => it.lane >= MAX_LANES).length;
-      more.textContent = `+${extra} more items at the same times; the frame below lists what runs at the playhead.`;
+    if (lanes.lanes > maxLanes) {
+      const extra = lanes.items.filter((it) => it.lane >= maxLanes).length;
+      more.textContent = `+${extra} more items at the same times; the frame lists what runs at the playhead.`;
     } else {
       more.textContent = "";
     }

@@ -19,6 +19,11 @@ concatenated, little-endian, each ``count`` long; ``meta["files"]`` lists the co
 With ``PersonData`` (team mode only) the bundle also carries the person view's ``eda.bin``,
 ``person.json`` and, when there are self-report descriptions, ``moments.json``, described in
 ``person.py``; ``meta["person"]`` names them.
+
+With ``sound`` the bundle carries ``sound.json``: ``{"rooms": [label, ...], "leq": [[dBFS or
+null per bin], ...]}``, one row per room in ``rooms`` order, levels rounded to 0.1 dB.
+``meta["sound"]`` names it. Levels are relative to each recorder's full scale: a room is
+compared with itself, not with another room.
 """
 
 from __future__ import annotations
@@ -68,6 +73,7 @@ class BundleInput:
     presses: pl.DataFrame  # entity, t (UTC)
     rssi_floor: int  # weakest RSSI kept in pairs
     persons: PersonData | None = None  # the person view's data; team mode only
+    sound: pl.DataFrame | None = None  # room (label), bin (UTC, a bin start), leq (dBFS)
 
 
 def _bin_index(col: str, inp: BundleInput) -> pl.Expr:
@@ -284,8 +290,30 @@ def write_bundle(
         stale.unlink(missing_ok=True)
         (out_dir / "eda.bin").unlink(missing_ok=True)
         (out_dir / "moments.json").unlink(missing_ok=True)
+    if inp.sound is not None and inp.sound.height:
+        doc, dropped = _sound_json(inp)
+        (out_dir / "sound.json").write_text(json.dumps(doc, separators=(",", ":")), "utf-8")
+        meta["sound"] = "sound.json"
+        meta["qa"]["sound_dropped"] = dropped
+    else:
+        (out_dir / "sound.json").unlink(missing_ok=True)
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     return meta
+
+
+def _sound_json(inp: BundleInput) -> tuple[dict, int]:
+    """Each room's level per bin; rows outside the bins or off the bin grid are dropped."""
+    rooms = sorted(inp.sound["room"].unique().to_list())
+    leq: list[list[float | None]] = [[None] * inp.n_bins for _ in rooms]
+    dropped = 0
+    for room, t, v in inp.sound.select("room", "bin", "leq").iter_rows():
+        sec = (t - inp.t0).total_seconds()
+        k, rest = divmod(sec, inp.bin_seconds)
+        if rest or not 0 <= k < inp.n_bins or v is None:
+            dropped += 1
+            continue
+        leq[rooms.index(room)][int(k)] = round(v, 1)
+    return {"rooms": rooms, "leq": leq}, dropped
 
 
 def read_bundle(bundle_dir: Path) -> tuple[dict, dict[str, dict[str, np.ndarray]]]:

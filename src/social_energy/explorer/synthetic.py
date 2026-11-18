@@ -83,7 +83,27 @@ def synthetic_inputs(camp: SyntheticCamp, *, persons: bool = False, seed: int = 
         presses=reports.select("entity", "t"),
         rssi_floor=int(pairs["max_rssi"].min()) if pairs.height else -128,
     )
+    inp = replace(inp, sound=synthetic_sound(inp, seed=seed))
     return replace(inp, persons=synthetic_persons(inp, seed=seed)) if persons else inp
+
+
+def synthetic_sound(inp: BundleInput, seed: int = 0) -> pl.DataFrame:
+    """Two made-up halls, loud by day and silent at night, recorded 07:00-23:00 only."""
+    rng = np.random.default_rng(seed + 7)
+    rows = []
+    for k in range(inp.n_bins):
+        t = inp.t0 + timedelta(seconds=k * inp.bin_seconds)
+        hour = t.hour + t.minute / 60
+        if not 7 <= hour < 23:
+            continue
+        for room, peak in (("synthetic hall A", 13.0), ("synthetic hall B", 20.0)):
+            day_curve = -62 + 12 * np.exp(-(((hour - peak) / 2.5) ** 2))
+            rows.append((room, t, float(day_curve + rng.normal(0, 2))))
+    return pl.DataFrame(
+        rows,
+        schema={"room": pl.String, "bin": pl.Datetime("us", "UTC"), "leq": pl.Float64},
+        orient="row",
+    )
 
 
 #: Made-up survey scales: (key, label, block, in the composite), four items each, range 1-4.

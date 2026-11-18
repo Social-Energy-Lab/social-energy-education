@@ -6,6 +6,7 @@ import { lowerBound, windowRange } from "../model.js";
 const R = 300; // home ring radius, world units
 const EXTENT = 430;
 const GLOW_S = 40 * 60;
+const HIT_PX = 14; // how near a dot the pointer must be to hover or pick it
 
 export function create(el, ctx, legendEl) {
   const { nNodes, nodeCourse, meta } = ctx;
@@ -217,6 +218,9 @@ export function create(el, ctx, legendEl) {
     }
     sim.force("x").initialize(nodes);
     sim.force("y").initialize(nodes);
+    // Paused, the layout settles and stops, so a dot stays where the eye (and the mouse) left it.
+    const target = state.playing ? 0.06 : 0;
+    if (sim.alphaTarget() !== target) sim.alphaTarget(target).restart();
 
     // Glow: presses in the last 40 minutes.
     const now = state.bin * meta.bin_seconds;
@@ -246,11 +250,12 @@ export function create(el, ctx, legendEl) {
     const mx = ev.clientX - rect.left;
     const my = ev.clientY - rect.top;
     let best = null;
-    let bestD = 10;
+    let bestD = HIT_PX;
     for (const n of nodes) {
       const d = Math.hypot(ox + n.x * s - mx, oy + n.y * s - my);
       if (d < bestD) { best = n; bestD = d; }
     }
+    canvas.style.cursor = best ? "pointer" : "";
     if (best) {
       const i = best.i;
       const [dlo, dhi] = ctx.dayRange(ctx.dayOfBin[Math.floor(st.bin)]);
@@ -299,17 +304,21 @@ export function create(el, ctx, legendEl) {
     const mx = ev.clientX - rect.left;
     const my = ev.clientY - rect.top;
     let best = null;
-    let bestD = 10;
+    let bestD = HIT_PX;
     for (const n of nodes) {
       const d = Math.hypot(ox + n.x * s - mx, oy + n.y * s - my);
       if (d < bestD) { best = n; bestD = d; }
     }
     return best;
   }
+  // The dot under the pointer when the button went down: a dot that drifts before the button
+  // comes up is still the one clicked.
+  let downOn = null;
+  canvas.addEventListener("pointerdown", (ev) => { downOn = nearest(ev); });
   let clickTimer = null;
   canvas.addEventListener("click", (ev) => {
     if (!st) return;
-    const best = nearest(ev);
+    const best = downOn ?? nearest(ev);
     if (!best) return;
     clearTimeout(clickTimer);
     clickTimer = setTimeout(() => {
@@ -319,7 +328,7 @@ export function create(el, ctx, legendEl) {
   });
   canvas.addEventListener("dblclick", (ev) => {
     clearTimeout(clickTimer);
-    const best = st && ctx.openPerson ? nearest(ev) : null;
+    const best = st && ctx.openPerson ? (downOn ?? nearest(ev)) : null;
     if (best) ctx.openPerson(best.i, Math.floor(st.bin));
   });
 

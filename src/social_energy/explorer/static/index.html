@@ -11,95 +11,134 @@
     <div class="title">
       <h1>Social Energy Explorer</h1>
       <span id="badge" class="badge"></span>
-      <span id="account" class="account" hidden></span>
       <div id="tabs" class="tabs" role="tablist" hidden>
         <button type="button" role="tab" data-tab="camp" aria-selected="true">Camp</button>
-        <button type="button" role="tab" data-tab="person" aria-selected="false">Person</button>
+        <button type="button" role="tab" data-tab="person" aria-selected="false">People</button>
       </div>
     </div>
     <div class="when">
-      <div id="when-day" class="when-day">…</div>
-      <div id="when-clock" class="when-clock"></div>
+      <span id="when-day" class="when-day">…</span>
+      <span id="when-clock" class="when-clock"></span>
       <div id="when-note" class="when-note"></div>
+    </div>
+    <div class="top-right">
+      <span id="account" class="account" hidden></span>
+      <a class="classic" href="classic.html" title="The layout before November 2026, kept for one release">classic view</a>
+      <button id="theme" type="button" aria-label="Toggle light and dark">◐</button>
     </div>
   </header>
 
-  <nav class="controls" aria-label="Controls">
-    <div class="group camp-only">
-      <button id="play" type="button" aria-label="Play">▶</button>
-      <label>speed
-        <select id="speed">
-          <option value="12">1 h / s</option>
-          <option value="36" selected>3 h / s</option>
-          <option value="72">6 h / s</option>
-          <option value="144">12 h / s</option>
-        </select>
-      </label>
-      <label>day <select id="day"></select></label>
-      <label>phase <select id="phase"></select></label>
+  <nav id="controls" class="controls" aria-label="Controls">
+    <div class="row">
+      <div class="group">
+        <button id="play" type="button" aria-label="Play">▶</button>
+        <label>day <select id="day"></select></label>
+        <label>jump to <select id="phase"></select></label>
+      </div>
+      <p class="sentence">
+        Lines join two people who were
+        <select id="close-plain" aria-label="How close counts as together"></select>
+        for at least
+        <select id="min-plain" aria-label="Minimum time together"></select>
+        in the last
+        <select id="win-plain" aria-label="How far back to look"></select>
+      </p>
+      <div class="group">
+        <label>highlight <select id="course"><option value="">all courses</option></select></label>
+        <button id="share" type="button" title="Copy a link to exactly this view: day, time, picked people, settings">Copy link</button>
+        <input id="share-out" class="share-out" type="text" readonly hidden aria-label="Link to this view">
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <div class="advanced-body">
+            <label title="Strongest signal a pair must reach in a 5-minute bin to count as close">
+              close range ≥ <output id="rssi-out"></output> dBm
+              <input id="rssi" type="range" min="-80" max="-50" step="1">
+            </label>
+            <label title="Minutes at close range within the window for a line between two people">
+              together ≥ <output id="min-out"></output> min
+              <input id="min" type="range" min="5" max="60" step="5">
+            </label>
+            <label title="How far back a line looks">
+              window <output id="win-out"></output>
+              <input id="win" type="range" min="30" max="360" step="30">
+            </label>
+            <label>playback speed
+              <select id="speed">
+                <option value="12">1 h / s</option>
+                <option value="36" selected>3 h / s</option>
+                <option value="72">6 h / s</option>
+                <option value="144">12 h / s</option>
+              </select>
+            </label>
+            <button id="reset" type="button">Reset to analysis defaults</button>
+            <p class="muted small">Signal strength is uncalibrated: "close" is the analysis's working
+            choice, not a distance. Space bar plays and pauses; ← → step 5 minutes.</p>
+          </div>
+        </details>
+      </div>
     </div>
-    <div class="group">
-      <label title="Strongest signal a pair must reach in a 5-minute bin to count as close">
-        close range ≥ <output id="rssi-out"></output> dBm
-        <input id="rssi" type="range" min="-80" max="-50" step="1">
-      </label>
-      <label class="camp-only" title="Minutes at close range within the window for a line between two people">
-        together ≥ <output id="min-out"></output> min
-        <input id="min" type="range" min="5" max="60" step="5">
-      </label>
-      <label class="camp-only" title="How far back a line looks">
-        window <output id="win-out"></output>
-        <input id="win" type="range" min="30" max="360" step="30">
-      </label>
+    <input id="scrub" class="scrub" type="range" min="0" step="1" aria-label="Time across the whole study" title="Drag through the whole study">
+    <div id="programme-panel" class="programme-bar" hidden>
+      <p class="bar-label">Programme of this day · dark: whole camp, light: some rooms · click an item to jump to it</p>
+      <div id="programme"></div>
     </div>
-    <div class="group">
-      <label class="camp-only">course <select id="course"><option value="">all</option></select></label>
-      <button id="reset" type="button">Reset to analysis defaults</button>
-      <button id="theme" type="button" aria-label="Toggle light and dark">◐</button>
-    </div>
-    <input id="scrub" class="scrub camp-only" type="range" min="0" step="1" aria-label="Time">
   </nav>
 
-  <main id="camp-view" class="grid">
-    <section id="programme-panel" class="panel programme-panel" hidden>
-      <h2>Programme today</h2>
-      <div id="programme"></div>
-      <details><summary>What am I looking at?</summary><div id="explain-programme"></div></details>
-    </section>
-    <section class="panel network-panel">
-      <h2>Who is close to whom</h2>
-      <div id="network" class="network"></div>
-      <div id="legend" class="legend"></div>
-      <details><summary>What am I looking at?</summary><div id="explain-network"></div></details>
-    </section>
-    <section class="panel">
-      <h2>How courses mix</h2>
-      <div id="matrix"></div>
-      <details><summary>What am I looking at?</summary><div id="explain-matrix"></div></details>
-    </section>
-    <section class="panel">
-      <h2>Where people are today</h2>
-      <div id="zones"></div>
-      <details><summary>What am I looking at?</summary><div id="explain-zones"></div></details>
-    </section>
-    <section class="panel">
-      <h2>Self-reports</h2>
-      <div id="presses"></div>
-      <details><summary>What am I looking at?</summary><div id="explain-presses"></div></details>
-    </section>
-    <section class="panel frame-panel">
-      <h2>Who is together in this frame</h2>
-      <div id="frame"></div>
-      <details><summary>What am I looking at?</summary><div id="explain-frame"></div></details>
-    </section>
-    <section class="panel strips-panel">
-      <h2>Across the whole study</h2>
-      <div id="strips"></div>
-      <details><summary>What am I looking at?</summary><div id="explain-strips"></div></details>
+  <main id="camp-view" class="workspace">
+    <div class="work">
+      <section class="panel network-panel">
+        <h2>Who is close to whom</h2>
+        <div id="network" class="network"></div>
+        <div id="legend" class="legend"></div>
+        <p class="hint muted small">Click a dot to pick a person, again to drop them. Double-click to open their page.</p>
+        <details><summary>What am I looking at?</summary><div id="explain-network"></div></details>
+      </section>
+      <section class="panel frame-panel">
+        <h2>Who is together in this frame</h2>
+        <div id="frame"></div>
+        <details><summary>What am I looking at?</summary><div id="explain-frame"></div></details>
+        <details><summary>About the programme strip</summary><div id="explain-programme"></div></details>
+      </section>
+    </div>
+
+    <section class="panel more">
+      <div class="more-tabs" role="tablist" aria-label="More views">
+        <span class="more-label">More views</span>
+        <button type="button" role="tab" data-more="strips" aria-selected="true">Across the whole study</button>
+        <button type="button" role="tab" data-more="matrix" aria-selected="false">How courses mix</button>
+        <button type="button" role="tab" data-more="zones" aria-selected="false">Where people are today</button>
+        <button type="button" role="tab" data-more="presses" aria-selected="false">Self-reports</button>
+        <button type="button" role="tab" data-more="sound" aria-selected="false" hidden>How the halls sounded</button>
+      </div>
+      <div class="more-pane" data-pane="strips">
+        <div id="strips"></div>
+        <details><summary>What am I looking at?</summary><div id="explain-strips"></div></details>
+      </div>
+      <div class="more-pane" data-pane="matrix" hidden>
+        <div id="matrix"></div>
+        <details><summary>What am I looking at?</summary><div id="explain-matrix"></div></details>
+      </div>
+      <div class="more-pane" data-pane="zones" hidden>
+        <div id="zones"></div>
+        <details><summary>What am I looking at?</summary><div id="explain-zones"></div></details>
+      </div>
+      <div class="more-pane" data-pane="sound" hidden>
+        <div id="sound"></div>
+        <details><summary>What am I looking at?</summary><div id="explain-sound"></div></details>
+      </div>
+      <div class="more-pane" data-pane="presses" hidden>
+        <div id="presses"></div>
+        <details><summary>What am I looking at?</summary><div id="explain-presses"></div></details>
+      </div>
     </section>
   </main>
 
-  <main id="person-view" class="person-grid" hidden>
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+  <aside id="person-view" class="drawer person-grid" aria-label="Person" hidden>
+    <div class="drawer-bar">
+      <button id="drawer-close" type="button">← Back to the camp</button>
+      <span class="muted small">The camp behind keeps the same time and picked people. Esc closes.</span>
+    </div>
     <section class="panel picker-panel">
       <h2>People</h2>
       <div id="person-picker"></div>
@@ -139,7 +178,7 @@
       <div id="person-dist"></div>
       <details><summary>What am I looking at?</summary><div id="explain-dist"></div></details>
     </section>
-  </main>
+  </aside>
   <div id="tooltip" class="tooltip" role="status" hidden></div>
   <div id="popup" class="popup" role="dialog" aria-label="Written description" hidden>
     <button type="button" class="pop-close" aria-label="Close">×</button>

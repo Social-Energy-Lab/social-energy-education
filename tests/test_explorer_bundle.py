@@ -176,3 +176,35 @@ def test_shuffle_is_not_reproducible_from_public_code(tmp_path):
         for k in range(3)
     }
     assert len(orders) > 1
+
+
+# Sound: each room's level per bin, in sound.json, with gaps as null.
+def _with_sound(sound: pl.DataFrame | None) -> BundleInput:
+    return BundleInput(**{**_golden().__dict__, "sound": sound})
+
+
+def test_sound_per_room_and_bin_with_gaps(tmp_path):
+    sound = pl.DataFrame({
+        "room": ["dining hall", "dining hall", "main hall", "main hall", "main hall"],
+        "bin": [_bin(0), _bin(2), _bin(1), _bin(9), _bin(1) + timedelta(seconds=60)],
+        "leq": [-50.04, -61.0, -40.26, -45.0, -99.0],
+    })  # fmt: skip
+    meta = write_bundle(_with_sound(sound), tmp_path / "b", CONFIG, timezone="UTC")
+    import json
+
+    doc = json.loads((tmp_path / "b" / meta["sound"]).read_text())
+    assert doc["rooms"] == ["dining hall", "main hall"]
+    assert doc["leq"] == [
+        [-50.0, None, -61.0, None, None, None],
+        [None, -40.3, None, None, None, None],
+    ]
+    # Outside the bins and off the bin grid are dropped and counted.
+    assert meta["qa"]["sound_dropped"] == 2
+
+
+def test_no_sound_leaves_no_sound_file(tmp_path):
+    sound = pl.DataFrame({"room": ["hall"], "bin": [_bin(0)], "leq": [-50.0]})
+    write_bundle(_with_sound(sound), tmp_path / "b", CONFIG, timezone="UTC")
+    meta = write_bundle(_with_sound(None), tmp_path / "b", CONFIG, timezone="UTC")
+    assert "sound" not in meta
+    assert not (tmp_path / "b" / "sound.json").exists()

@@ -115,6 +115,7 @@ export function create(root, ctx) {
     st.moment = moment;
     if (moment) st.day = dayOfMin(Math.floor(moment.sec / 60));
     render();
+    ctx.personChanged?.();
   }
 
   function jumpTo(other) {
@@ -680,6 +681,9 @@ export function create(root, ctx) {
     momentPanel();
     distribution();
   }
+
+  // Who the person view shows, for the link to this view.
+  ctx.currentPerson = () => st.node;
 
   ctx.openPerson = (node, bin) => {
     st.node = node;

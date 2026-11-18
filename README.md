@@ -7,6 +7,16 @@ Methods for studying **social energy** in educational settings. Following Hartmu
 >
 > Everything that cannot be published — source documents, the team's working notes, anything naming or tracking a person — lives in a separate **private** repo, which is also the data root. New here? Start with [`docs/context/onboarding.md`](docs/context/onboarding.md).
 
+## See it
+
+- **[The public page](https://social-energy-lab.github.io/social-energy-education/)**: what the
+  beacons showed at the first field phase, as an animated network and a short story, in English
+  and German. It is built from camp-level aggregates only.
+- **The team explorer** shows the same camp in full detail (people by study ID, the person view,
+  the written moments and the halls' sound). It runs behind the institute VPN and a login, for
+  the research team only. The address and how to get an invite are in the private repo.
+  `uv run social-energy explore studies/<id>/study.yaml --demo` shows it on a synthetic camp.
+
 ## Layout
 
 | Path | What it is |
