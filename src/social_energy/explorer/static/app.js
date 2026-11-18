@@ -140,6 +140,63 @@ function setupControls(ctx, state, set) {
   meta.courses.forEach((c, i) => $("course").append(new Option(c.name, String(i))));
   $("rssi").min = String(Math.max(-80, meta.rssi_floor));
 
+  // The plain sentence: "Lines join two people who were [close] for at least [15 min] in the
+  // last [2 h]". Each choice moves the matching slider under Advanced, and back.
+  const plainClose = model.closenessOptions(initialState(meta).closeRssi, Number($("rssi").min));
+  ctx.plain = {
+    close: plainClose.map((o) => [o.value, o.label]),
+    min: [5, 10, 15, 30, 60].map((m) => [m, `${m} min`]),
+    win: [30, 60, 120, 180, 360].map((m) => [m, m < 60 ? `${m} min` : `${m / 60} h`]),
+  };
+  for (const [id, key] of [["close-plain", "closeRssi"], ["min-plain", "minMinutes"], ["win-plain", "windowMinutes"]]) {
+    $(id).addEventListener("change", (e) => set({ [key]: Number(e.target.value) }));
+  }
+
+  // More views: one at a time; the view redraws when it is shown, so it measures its width.
+  for (const btn of document.querySelectorAll("[data-more]")) {
+    btn.addEventListener("click", () => {
+      for (const b2 of document.querySelectorAll("[data-more]")) {
+        b2.setAttribute("aria-selected", String(b2 === btn));
+      }
+      for (const pane of document.querySelectorAll("[data-pane]")) {
+        pane.hidden = pane.dataset.pane !== btn.dataset.more;
+      }
+      set({});
+    });
+  }
+
+  // Advanced is a menu: a click elsewhere or Esc closes it.
+  const adv = document.querySelector(".advanced");
+  document.addEventListener("click", (e) => { if (adv.open && !adv.contains(e.target)) adv.open = false; });
+  document.addEventListener("keydown", (e) => { if (e.code === "Escape") adv.open = false; });
+
+  // The person drawer.
+  const closeDrawer = () => set({ tab: "camp" });
+  $("drawer-close").addEventListener("click", closeDrawer);
+  $("drawer-backdrop").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Escape" && $("popup").hidden && state.tab === "person") closeDrawer();
+  });
+
+  // A link to this view. The clipboard needs a secure page; elsewhere the link is shown to copy.
+  $("share").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      $("share").textContent = "Link copied";
+      setTimeout(() => { $("share").textContent = "Copy link"; }, 2000);
+    } catch {
+      $("share-out").hidden = false;
+      $("share-out").value = location.href;
+      $("share-out").select();
+    }
+  });
+
+  // The time bar is sticky and its height varies (programme rows, wrapping): the workspace
+  // below fills what is left of the screen.
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--nav-h", `${$("controls").offsetHeight}px`);
+  }).observe($("controls"));
+
   scrub.addEventListener("input", () => set({ bin: Number(scrub.value), playing: false }));
   $("play").addEventListener("click", () => set({ playing: !state.playing }));
   $("speed").addEventListener("change", (e) => set({ speed: Number(e.target.value) }));
@@ -184,8 +241,8 @@ function setupControls(ctx, state, set) {
 function syncControls(ctx, state) {
   const bin = Math.floor(state.bin);
   const personTab = state.tab === "person";
-  $("camp-view").hidden = personTab;
   $("person-view").hidden = !personTab;
+  $("drawer-backdrop").hidden = !personTab;
   document.body.classList.toggle("person-mode", personTab);
   for (const btn of $("tabs").querySelectorAll("button")) {
     btn.setAttribute("aria-selected", String(btn.dataset.tab === state.tab));
@@ -201,13 +258,45 @@ function syncControls(ctx, state) {
   $("win-out").textContent =
     state.windowMinutes % 60 ? `${state.windowMinutes} min` : `${state.windowMinutes / 60} h`;
   $("course").value = state.course === null ? "" : String(state.course);
+  plainSelect($("close-plain"), state.closeRssi, ctx.plain.close, (v) => `${v} dBm (set under Advanced)`);
+  plainSelect($("min-plain"), state.minMinutes, ctx.plain.min, (v) => `${v} min`);
+  plainSelect($("win-plain"), state.windowMinutes, ctx.plain.win,
+    (v) => (v % 60 ? `${v} min` : `${v / 60} h`));
   const day = ctx.meta.days.find((d) => d.index === ctx.dayOfBin[bin]);
   if (day) $("day").value = String(day.start_bin);
   $("when-day").textContent = ctx.dayLabel(bin);
   $("when-clock").textContent = `${ctx.clockLabel(bin)} · ${ctx.phaseName(bin)}`;
   const camp = model.programmeAt(ctx.events, bin).filter((e) => e.all_camp).map((e) => e.label);
-  $("when-note").textContent = [...camp, ...ctx.noteAt(bin).map((n) => n.text),
+  const note = [...camp, ...ctx.noteAt(bin).map((n) => n.text),
     ...ctx.shadeAt(bin).map((n) => n.label)].join(" · ");
+  $("when-note").textContent = note;
+  $("when-note").title = note;
+}
+
+function fullSwing(ctx) {
+  const n = new Uint16Array(ctx.nBins);
+  for (const bin of ctx.b.seen.bin) n[bin]++;
+  const first = n.findIndex((k) => k >= ctx.nNodes / 2);
+  return first < 0 ? 0 : Math.min(ctx.nBins - 1, first + 2 * ctx.binsPerHour);
+}
+
+// Fill a plain choice; a value set with the Advanced sliders gets its own entry.
+function plainSelect(sel, value, options, customLabel) {
+  const opts = options.some(([v]) => v === value) ? options : [...options, [value, customLabel(value)]];
+  const key = opts.map(([v]) => v).join(",");
+  if (sel.dataset.key !== key) {
+    sel.dataset.key = key;
+    sel.replaceChildren(...opts.map(([v, label]) => new Option(label, String(v))));
+  }
+  sel.value = String(value);
+}
+
+// People in a link go by study ID where the bundle has one, else by index.
+function linkId(ctx, i) { return ctx.person?.people[i]?.study_id ?? String(i); }
+function linkNode(ctx, id) {
+  const byId = ctx.person?.people.findIndex((p) => p.study_id === id) ?? -1;
+  const node = byId >= 0 ? byId : /^\d+$/.test(id) ? Number(id) : -1;
+  return node >= 0 && node < ctx.nNodes ? node : null;
 }
 
 async function main() {
@@ -264,11 +353,17 @@ async function main() {
       <p class="pop-text">${esc(m.text)}</p>
       <p class="muted small">Transcribed from the participant's paper card. Free text by a minor: research team only.</p>
       <p>${m.sec !== null ? `<button type="button" data-go="${Math.floor(m.sec / ctx.meta.bin_seconds)}">Go to this time</button>` : m.day !== null ? `<button type="button" data-go="${ctx.dayRange(m.day)[0]}">Go to this day</button>` : ""}
+      <button type="button" data-pick="${m.node}">${state.picked.includes(m.node) ? "Unpick" : "Pick"} in the network</button>
       ${ctx.openPerson ? `<button type="button" data-person="${m.node}">Open this person</button>` : ""}</p>`;
     pop.hidden = false;
     pop.querySelector("[data-go]")?.addEventListener("click", (e) => {
       pop.hidden = true;
       set({ tab: "camp", bin: Number(e.target.dataset.go), playing: false });
+    });
+    pop.querySelector("[data-pick]").addEventListener("click", () => {
+      pop.hidden = true;
+      const has = state.picked.includes(m.node);
+      set({ tab: "camp", picked: has ? state.picked.filter((x) => x !== m.node) : [...state.picked, m.node] });
     });
     pop.querySelector("[data-person]")?.addEventListener("click", () => {
       pop.hidden = true;
@@ -288,7 +383,7 @@ async function main() {
   ];
   if (ctx.events.length) {
     $("programme-panel").hidden = false;
-    views.push(programme.create($("programme"), ctx));
+    views.push(programme.create($("programme"), ctx, { maxLanes: 3 }));
   }
   if (ctx.person) {
     views.push(person.create($("person-view"), ctx));
@@ -313,20 +408,38 @@ async function main() {
       // Controls first: they show the active tab, so views measure their real width.
       syncControls(ctx, state);
       for (const v of views) v.update(state, p, e, changed);
+      if (!state.playing && [...changed].some((k) => LINKED.has(k))) saveLink();
       changed.clear();
       dirty = false;
     }
     requestAnimationFrame(frame);
   };
-  // A link straight to a person (and a 5-minute bin): #person=12 or #person=12&bin=300, where the
-  // person is a study ID or, failing that, the shuffled index.
-  const hash = new URLSearchParams(location.hash.slice(1));
-  if (ctx.openPerson && hash.has("person")) {
-    const want = hash.get("person");
-    const byId = ctx.person?.people.findIndex((p) => p.study_id === want) ?? -1;
-    const node = byId >= 0 ? byId : Number(want);
-    const bin = hash.has("bin") ? Number(hash.get("bin")) : undefined;
-    if (node >= 0 && node < ctx.nNodes) ctx.openPerson(node, bin);
+  // The address keeps the view (model.viewToHash), so a link or a bookmark reopens it: the time,
+  // the picked people, the person open and any changed setting. #person=12&bin=300 still works.
+  const defaults = initialState(ctx.meta);
+  const LINKED = new Set(["bin", "playing", "picked", "tab", "closeRssi", "minMinutes", "windowMinutes", "course", "person"]);
+  const saveLink = () => {
+    const open = state.tab === "person" && ctx.currentPerson ? ctx.currentPerson() : null;
+    const hash = model.viewToHash({
+      ...state,
+      picked: state.picked.map((i) => linkId(ctx, i)),
+      person: open === null ? null : linkId(ctx, open),
+    }, defaults);
+    history.replaceState(null, "", `#${hash}`);
+  };
+  ctx.personChanged = () => { changed.add("person"); dirty = true; };
+  const want = model.hashToView(location.hash);
+  // Without a link, open where the camp is in full swing: two hours after the first 5 minutes
+  // in which half the participants were heard, so the window is full and the network has lines.
+  const patch = want.bin === undefined ? { bin: fullSwing(ctx) } : {};
+  if (want.bin !== undefined) patch.bin = Math.max(0, Math.min(ctx.nBins - 1, want.bin));
+  for (const k of ["closeRssi", "minMinutes", "windowMinutes"]) if (want[k] !== undefined) patch[k] = want[k];
+  if (want.course !== undefined && want.course >= 0 && want.course < ctx.meta.courses.length) patch.course = want.course;
+  if (want.picked) patch.picked = want.picked.map((id) => linkNode(ctx, id)).filter((n) => n !== null);
+  set(patch);
+  if (ctx.openPerson && want.person) {
+    const node = linkNode(ctx, want.person);
+    if (node !== null) ctx.openPerson(node, want.bin);
   }
   changed.add("init");
   requestAnimationFrame(frame);

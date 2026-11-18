@@ -30,7 +30,7 @@ export function create(el, ctx) {
     if (state.playing) {
       if (lastKey !== "playing") {
         lastKey = "playing";
-        el.innerHTML = "<p class='muted'>Pause (space bar or ▶) to see who is together in this frame.</p>";
+        el.innerHTML = "<p class='muted'>Playing. Pause (space bar or ▶) to see who is together at that moment, with their place, the programme and what they wrote.</p>";
       }
       return;
     }
@@ -86,6 +86,9 @@ export function create(el, ctx) {
     }
 
     // Picked people side by side.
+    if (!picked.length) {
+      parts.push("<p class='hint muted small'>Pick people (a dot in the network, or a row below) to compare them side by side.</p>");
+    }
     if (picked.length) {
       const tieOf = new Map(f.ties.map((t) => [t.a * 65536 + t.b, t]));
       const pk = (x, y) => Math.min(x, y) * 65536 + Math.max(x, y);

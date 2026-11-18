@@ -366,3 +366,52 @@ export function programmeAt(events, bin) {
   const on = events.filter((e) => bin >= e.start_bin && bin < e.end_bin);
   return [...on.filter((e) => e.all_camp), ...on.filter((e) => !e.all_camp)];
 }
+
+// The plain choices for "together means": a stricter step, the analysis default, a looser step
+// and everything recorded (the export floor). Signal strength is uncalibrated, so the labels
+// say stricter or looser, never metres.
+export function closenessOptions(defaultRssi, floor, step = 7) {
+  const opts = [
+    { key: "strict", value: defaultRssi + step, label: "very close (strongest signals only)" },
+    { key: "default", value: defaultRssi, label: "close (the analysis setting)" },
+    { key: "loose", value: defaultRssi - step, label: "nearby (weaker signals too)" },
+    { key: "all", value: floor, label: "anything recorded" },
+  ];
+  const out = [];
+  for (const o of opts) {
+    const v = Math.max(o.value, floor);
+    if (!out.some((x) => x.value === v)) out.push({ ...o, value: v });
+  }
+  return out;
+}
+
+// What the address keeps of a view: the 5-minute bin, picked people, the person open and any
+// setting that differs from the analysis defaults. People go by study ID (or index).
+export function viewToHash(view, defaults) {
+  const q = [`t=${Math.floor(view.bin)}`];
+  if (view.picked?.length) q.push(`pick=${view.picked.join(",")}`);
+  if (view.closeRssi !== defaults.closeRssi) q.push(`close=${view.closeRssi}`);
+  if (view.minMinutes !== defaults.minMinutes) q.push(`min=${view.minMinutes}`);
+  if (view.windowMinutes !== defaults.windowMinutes) q.push(`win=${view.windowMinutes}`);
+  if (view.course !== null && view.course !== undefined) q.push(`course=${view.course}`);
+  if (view.person !== null && view.person !== undefined) q.push(`person=${view.person}`);
+  return q.join("&");
+}
+
+// The view an address names; anything missing or malformed is left out. `bin=` is the older
+// spelling of `t=`.
+export function hashToView(hash) {
+  const h = new URLSearchParams(hash.replace(/^#/, ""));
+  const out = {};
+  const int = (k) => (h.has(k) && /^-?\d+$/.test(h.get(k)) ? Number(h.get(k)) : null);
+  const bin = int("t") ?? int("bin");
+  if (bin !== null) out.bin = bin;
+  const picked = (h.get("pick") ?? "").split(",").filter(Boolean);
+  if (picked.length) out.picked = picked;
+  for (const [k, name] of [["close", "closeRssi"], ["min", "minMinutes"], ["win", "windowMinutes"], ["course", "course"]]) {
+    const v = int(k);
+    if (v !== null) out[name] = v;
+  }
+  if (h.get("person")) out.person = h.get("person");
+  return out;
+}

@@ -29,3 +29,14 @@ own login, and sees the same data as `social-energy explore` shows locally
 - Presentation additions (2026-11-18): the day's programme by name, several people picked and
   compared, who is together in the paused frame (close now, and how long before), and the
   written descriptions. Deployed with the bundle of the same day.
+- Workspace layout (2026-11-18): the network and the paused frame side by side under a sticky
+  time bar that carries the day's programme; the other views as "More views" tabs; the three
+  sliders behind "Advanced", with a plain sentence in front ("Lines join two people who were
+  close for at least 15 min in the last 2 h"); the person view as a drawer over the camp; the
+  address keeps the view (time, picked people, person, changed settings) so a link reopens it.
+  The network stops moving when paused, so dots can be clicked.
+- **Remove the classic view** (`classic.html`, `classic.js`, `classic.css`) after the next field
+  phase, once nobody asks for it.
+- Not yet: ready-made starting points (a question that sets day, time and view), presentation
+  mode (full screen, bigger text, arrow keys through bookmarked moments), a key under every
+  view.

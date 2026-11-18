@@ -224,3 +224,28 @@ test("programmeLanes keeps overlapping items apart and all-camp items on top", (
   assert.deepEqual(items.map((i) => [i.k, i.lane, i.start, i.end]), [[1, 0, 2, 6], [0, 1, 0, 4], [2, 1, 4, 5]]);
   assert.deepEqual(m.programmeAt(ev, 3).map((e) => e.start_bin), [2, 0]);
 });
+
+// The plain "together means" choices and the link to a view.
+test("closeness choices sit around the analysis default, never below the floor", () => {
+  const opts = m.closenessOptions(-65, -80);
+  assert.deepEqual(opts.map((o) => o.value), [-58, -65, -72, -80]);
+  assert.equal(opts[1].key, "default");
+  // A floor above the loosest step drops the steps it cuts off.
+  assert.deepEqual(m.closenessOptions(-65, -70).map((o) => o.value), [-58, -65, -70]);
+});
+
+test("a view goes into the address and comes back, defaults left out", () => {
+  const defaults = { closeRssi: -65, minMinutes: 15, windowMinutes: 120 };
+  const view = { bin: 300, picked: ["62", "80"], closeRssi: -70, minMinutes: 15,
+    windowMinutes: 120, course: 2, person: null };
+  const hash = m.viewToHash(view, defaults);
+  assert.equal(hash, "t=300&pick=62,80&close=-70&course=2");
+  assert.deepEqual(m.hashToView(hash), { bin: 300, picked: ["62", "80"], closeRssi: -70, course: 2 });
+  assert.equal(m.viewToHash({ ...view, picked: [], closeRssi: -65, course: null, person: "31" }, defaults),
+    "t=300&person=31");
+});
+
+test("an address from before keeps working, and junk is ignored", () => {
+  assert.deepEqual(m.hashToView("person=12&bin=40"), { bin: 40, person: "12" });
+  assert.deepEqual(m.hashToView("t=abc&pick=&close=x&zzz=1"), {});
+});
