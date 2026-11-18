@@ -22,7 +22,8 @@ timing. `[unknown: when and in which channel did Mahdi approve publishing the an
   Plus story-chapter aggregates, with every cell under 5 people dropped.
 - **Never published:** study IDs or any mapping to people, staff, rooms or location labels,
   course names, QA flags, notes, seconds-resolution presses, interviews, survey answers per
-  person, EDA, per-room acoustics, any course-level result, any lookup of a person.
+  person, EDA, audio or per-second acoustic features, acoustics of any room other than the two
+  halls below, any course-level result, any lookup of a person.
 - **Release-asset route.** The study's `site_export.py` builds the asset locally; it is validated
   (`validate_site_data`: `mode: public`, no field outside the public schema) and uploaded as the
   GitHub release `site-data-dsa-2026`. `pages.yml` overlays it on the synthetic build and
@@ -38,6 +39,17 @@ timing. `[unknown: when and in which channel did Mahdi approve publishing the an
   and the gradient analysis's pair correlations and co-press shares. Every row carries its people
   and the small-cell rule applies; per-person EDA, interview codes or survey answers stay
   unpublished. Its numbers follow the copy rule above.
+- **The halls' sound** (the sound chapter, added 2026-11-18; Álvaro approved publishing it on
+  2026-11-18). `[unknown: has Mahdi agreed to publishing the hall sound levels?]` It widens what
+  is published by room-level sound of the two recorded halls (dining hall, main hall) only: per
+  hall and day, recorded hours, median level and the loudest tenth's level; per hall and
+  programme kind, recorded hours, median and quartiles of the level. Levels are relative dBFS,
+  not calibrated, so the page compares a hall only with itself. No audio, no per-second or
+  per-five-minute data, no programme labels, only kinds from a fixed list. These rows describe
+  rooms, not people, so the people small-cell rule is replaced for them by an hours rule: a day
+  needs at least one recorded hour, a programme kind at least half an hour
+  (`SOUND_MIN_HOURS`, enforced by `check_aggregates` and `validate_site_data`). Its numbers follow
+  the copy rule above.
 
 ## Consequences
 
