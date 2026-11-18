@@ -6,6 +6,7 @@
 // Nothing here touches the DOM, so it is tested with Node (tests/js/).
 
 const TYPES = { u8: Uint8Array, i8: Int8Array, u16: Uint16Array, u32: Uint32Array };
+const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
 /** Columns per table from meta.files and the raw .bin buffers (little-endian). */
 export function decode(meta, buffers) {
@@ -17,8 +18,14 @@ export function decode(meta, buffers) {
     const cols = {};
     for (const [col, type] of spec.columns) {
       const T = TYPES[type];
-      const arr = new T(spec.count);
       const size = T.BYTES_PER_ELEMENT;
+      if (LITTLE_ENDIAN) {
+        // Copy the column out (offsets need not be aligned) and view it: no per-value loop.
+        cols[col] = new T(buf.slice(offset, offset + size * spec.count));
+        offset += size * spec.count;
+        continue;
+      }
+      const arr = new T(spec.count);
       for (let i = 0; i < spec.count; i++) {
         const at = offset + i * size;
         arr[i] =

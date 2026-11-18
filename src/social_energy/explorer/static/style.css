@@ -275,3 +275,10 @@ table.pairs td.diag { color: var(--ink-3); }
 /* Hosted copy: who is signed in. */
 .account { font-size: 12px; color: var(--ink-2); }
 .account a { color: var(--accent); }
+
+.loading {
+  position: fixed; z-index: 30; inset: 40vh auto auto 50%; transform: translateX(-50%);
+  background: var(--surface-1); color: var(--ink-1); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 12px 18px; box-shadow: 0 8px 30px rgba(0,0,0,.25);
+}
+.loading[hidden] { display: none; }
