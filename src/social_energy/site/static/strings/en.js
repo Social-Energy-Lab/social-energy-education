@@ -171,9 +171,9 @@ export default {
   programme_party: "Party",
   programme_plenum: "Plenary",
   programme_rehearsal: "Rehearsal",
-  programme_special: "Special programme",
+  programme_special: "Special events",
   programme_sport: "Sport",
-  programme_team: "Team",
+  programme_team: "Team meetings",
   programme_no_item: "Nothing on the programme",
 
   ch_null_title: "What we did not find",

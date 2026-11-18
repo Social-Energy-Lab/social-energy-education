@@ -145,8 +145,8 @@ export default {
   setting_night: "Nacht",
 
   ch_sound_title: "Klangen die Säle nach dem Programm?",
-  ch_sound_body: "Zwei Rekorder haben während der Programmzeiten im großen Saal und in der Mensa mitgehört. Diese Seite spielt keinen Ton ab, sie zeigt nur Pegel: für jeden Saal, wie laut jeder Tag war und wie laut es bei jeder Art von Programmpunkt war.",
-  ch_sound_body2: "Die Pegel sind relativ: Jeder Rekorder misst gegen sein eigenes Maximum, nicht in geeichten Dezibel. Sinnvoll ist also nur der Vergleich eines Saals mit sich selbst, Tag für Tag oder Programmpunkt für Programmpunkt, nie der große Saal gegen die Mensa. Die leisen Tage sind meist Tage, an denen ein Saal kaum genutzt wurde, keine stillen Runden. Und eine Art von Programmpunkt mit wenigen aufgenommenen Stunden steht nur für wenige Ereignisse.",
+  ch_sound_body: "Zwei Aufnahmegeräte haben während der Programmzeiten im großen Saal und in der Mensa mitgehört. Diese Seite spielt keinen Ton ab, sie zeigt nur Pegel: für jeden Saal, wie laut jeder Tag war und wie laut es bei jeder Art von Programmpunkt war.",
+  ch_sound_body2: "Die Pegel sind relativ: Jedes Gerät misst gegen sein eigenes Maximum, nicht in geeichten Dezibel. Sinnvoll ist also nur der Vergleich eines Saals mit sich selbst, Tag für Tag oder Programmpunkt für Programmpunkt, nie der große Saal gegen die Mensa. Die leisen Tage sind meist Tage, an denen ein Saal kaum genutzt wurde, nicht Tage mit stillen Gruppen. Und eine Art von Programmpunkt mit wenigen aufgenommenen Stunden steht nur für wenige Ereignisse.",
   ch_sound_days: "Wie laut jeder Tag war",
   ch_sound_kinds: "Wie laut jede Art von Programmpunkt war",
   ch_sound_median: "Typischer Pegel (Median)",
@@ -157,7 +157,7 @@ export default {
   ch_sound_axis: "Pegel in dBFS (höher ist lauter)",
   ch_sound_aria_days: "Eine Linie zeigt den Median-Pegel jedes Tages, eine gestrichelte Linie den Pegel seines lautesten Zehntels; besondere Tage sind hinterlegt. Jeder Saal hat seine eigene Skala.",
   ch_sound_aria_kinds: "Eine Zeile je Art von Programmpunkt: Der Punkt ist der Median-Pegel, die Linie die mittlere Hälfte seiner Fünf-Minuten-Abschnitte, die Zahl rechts die aufgenommenen Stunden.",
-  ch_sound_note: "dBFS heißt Dezibel unter dem Maximum des Rekorders, daher sind die Werte negativ, und höher heißt lauter. Jeder Saal hat seine eigene Skala. Punkt: Median-Pegel; Linie: die mittlere Hälfte der Fünf-Minuten-Abschnitte. „Nichts im Programm“ sind alle Abschnitte, die kein Programmpunkt abdeckt; in der Mensa sind das meist Mahlzeiten.",
+  ch_sound_note: "dBFS heißt Dezibel unter dem Maximum des Geräts, daher sind die Werte negativ, und höher heißt lauter. Jeder Saal hat seine eigene Skala. Punkt: Median-Pegel; Linie: die mittlere Hälfte der Fünf-Minuten-Abschnitte. „Nichts im Programm“ sind alle Abschnitte, die kein Programmpunkt abdeckt; in der Mensa sind das meist Mahlzeiten.",
   room_main_hall: "Großer Saal",
   room_dining_hall: "Mensa",
   programme_band: "Band",
@@ -172,9 +172,9 @@ export default {
   programme_party: "Party",
   programme_plenum: "Plenum",
   programme_rehearsal: "Probe",
-  programme_special: "Sonderprogramm",
+  programme_special: "Besondere Aktionen",
   programme_sport: "Sport",
-  programme_team: "Team",
+  programme_team: "Teamtreffen",
   programme_no_item: "Nichts im Programm",
 
   ch_null_title: "Was wir nicht gefunden haben",
@@ -199,7 +199,7 @@ export default {
     "Alle Teilnehmenden, die zugestimmt haben, trugen ein kleines Funk-Armband. Die Armbänder hören einander: Für jeden Fünf-Minuten-Abschnitt wissen wir, wer nah beieinander war. Feste Sender in den Räumen verraten auch, in welchem Raum jemand war; das zeigt diese Seite nicht.",
   ch_how_button:
     "Am Armband ist ein Knopf. Wir haben gebeten, ihn zu drücken, wenn ein Moment einen bewegt, nicht unbedingt im guten Sinn. Was den Moment ausgemacht hat, wissen wir nicht.",
-  ch_how_sound: "Zwei Rekorder im großen Saal und in der Mensa haben während der Programmzeiten gemessen, wie laut es war. Wir nutzen nur die Pegel und die grobe Verteilung über die Tonhöhen, nie, was gesagt wurde.",
+  ch_how_sound: "Zwei Aufnahmegeräte im großen Saal und in der Mensa haben während der Programmzeiten gemessen, wie laut es war. Wir nutzen nur die Pegel und die grobe Verteilung über die Tonhöhen, nie, was gesagt wurde.",
   ch_how_not_recorded:
     "Nicht auf dieser Seite: wo jemand war, Fragebögen, Interviews und Beobachtungen. Sie gehören zur Studie, erscheinen hier aber nicht.",
   ch_how_privacy_title: "Was wir zum Schutz aller tun",
