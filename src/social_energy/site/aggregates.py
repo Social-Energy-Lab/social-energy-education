@@ -2,6 +2,10 @@
 
 Every row names how many ``people`` stand behind it; a row with fewer than ``min_group``
 people (or none stated) is dropped. Only the keys listed here can ever reach the site.
+
+The sound sections are the exception: their rows describe a hall, not people, so the people rule
+does not fit them. A sound row instead needs ``SOUND_MIN_HOURS`` recorded hours (one hour for a
+day, half an hour for a programme kind), so no number rests on a few minutes of one event.
 """
 
 from __future__ import annotations
@@ -31,7 +35,36 @@ AGGREGATE_SECTIONS: dict[str, tuple[str, ...]] = {
     "eda_press_profile": ("offset", "people", "observed", "null_lo", "null_hi"),
     # Share of interviewees (percent) naming what opens or closes their membrane.
     "membrane_reasons": ("reason", "direction", "people", "share"),
+    # The halls' sound (dBFS, relative to each recorder's full scale): per day, the median level
+    # and the level of the loudest tenth of five-minute slots; per programme kind, the median and
+    # quartiles. ``hours`` is how much was recorded. No ``people``: see SOUND_MIN_HOURS.
+    "sound_day": ("day", "room", "hours", "leq", "leq_p90"),
+    "sound_kind": ("room", "programme", "hours", "leq", "lo", "hi"),
 }
+#: Recorded hours a sound row needs, per section; it replaces the people rule for these rows.
+SOUND_MIN_HOURS = {"sound_day": 1.0, "sound_kind": 0.5}
+#: The recorded halls (``room_<key>`` in the copy).
+ROOMS = ("dining_hall", "main_hall")
+#: Programme kinds a hall's sound is shown by (``programme_<key>`` in the copy); ``no_item`` is
+#: every slot no programme item covered.
+SOUND_KINDS = (
+    "band",
+    "choir",
+    "concert",
+    "course",
+    "excursion",
+    "kuea",
+    "lecture",
+    "meal",
+    "orchestra",
+    "party",
+    "plenum",
+    "rehearsal",
+    "special",
+    "sport",
+    "team",
+    "no_item",
+)
 NUMBERS = "numbers"
 SCALES = ("sd", "rr")
 #: The copy's ``setting_<key>`` keys.
@@ -205,6 +238,8 @@ CATEGORIES = {
     "tercile": _one_of(TERCILES),
     "reason": _one_of(REASONS),
     "direction": _one_of(REASON_DIRECTIONS),
+    "room": _one_of(ROOMS),
+    "programme": _one_of(SOUND_KINDS),
 }
 
 
@@ -219,8 +254,17 @@ def bad_field(row: dict, allowed: tuple[str, ...]) -> str | None:
     return None
 
 
+def big_enough(section: str, row: dict, min_group: int) -> bool:
+    """The row's size rule: recorded hours for a sound section, else at least ``min_group``
+    people; a row stating neither fails."""
+    if section in SOUND_MIN_HOURS:
+        return is_number(row.get("hours")) and row["hours"] >= SOUND_MIN_HOURS[section]
+    return is_number(row.get("people")) and row["people"] >= min_group
+
+
 def check_aggregates(agg: dict, min_group: int = 5) -> dict:
-    """Copy of ``agg`` with small or unstated-people rows dropped and unknown keys removed."""
+    """Copy of ``agg`` with small or unstated-people rows (sound: too few hours) dropped and
+    unknown keys removed."""
     out = {}
     for section, rows in agg.items():
         if section == NUMBERS:
@@ -231,9 +275,7 @@ def check_aggregates(agg: dict, min_group: int = 5) -> dict:
                 # A missing value (None) is left out, as a key the row never had.
                 {k: v for k, v in row.items() if k in allowed and v is not None}
                 for row in rows
-                if is_number(row.get("people"))
-                and row["people"] >= min_group
-                and not row.get("suppressed")
+                if big_enough(section, row, min_group) and not row.get("suppressed")
             )
             # A value outside its enumeration, or not a finite number, drops the whole row.
             out[section] = [row for row in kept if bad_field(row, allowed) is None]
@@ -411,6 +453,7 @@ def synthetic_aggregates(
             )
         ],
         **_synthetic_deck_sections(rng, people),
+        **_synthetic_sound(random.Random(seed + 7919)),
         NUMBERS: numbers,
     }
 
@@ -478,3 +521,36 @@ def _synthetic_deck_sections(rng: random.Random, people) -> dict:
         "eda_press_profile": profile,
         "membrane_reasons": reasons,
     }
+
+
+def _synthetic_sound(rng: random.Random) -> dict:
+    """Invented hall sound for the four synthetic days: each hall at its own made-up level, one
+    quiet day in the main hall (a hall nobody used), and kinds with few or many hours."""
+    base = {"dining_hall": rng.uniform(-44, -36), "main_hall": rng.uniform(-52, -42)}
+    kinds = {
+        "dining_hall": ("meal", "party", "team", "no_item"),
+        "main_hall": ("plenum", "concert", "lecture", "choir", "no_item"),
+    }
+    quiet = rng.randrange(4)
+    days = []
+    for room, level in base.items():
+        for d in range(4):
+            unused = room == "main_hall" and d == quiet
+            leq = level - (rng.uniform(8, 14) if unused else rng.uniform(-3, 3))
+            days.append(
+                {"day": d, "room": room,
+                 "hours": round(rng.uniform(1, 2.5) if unused else rng.uniform(4, 11), 2),
+                 "leq": round(leq, 1), "leq_p90": round(leq + rng.uniform(3, 9), 1)}
+            )  # fmt: skip
+    by_kind = []
+    for room, level in base.items():
+        for kind in kinds[room]:
+            leq = level + (rng.uniform(-10, -4) if kind == "no_item" else rng.uniform(-3, 8))
+            by_kind.append(
+                {"room": room, "programme": kind,
+                 "hours": round(rng.uniform(0.5, 2) if kind in ("party", "choir")
+                                else rng.uniform(3, 25), 2),
+                 "leq": round(leq, 1), "lo": round(leq - rng.uniform(1, 5), 1),
+                 "hi": round(leq + rng.uniform(1, 5), 1)}
+            )  # fmt: skip
+    return {"sound_day": days, "sound_kind": by_kind}

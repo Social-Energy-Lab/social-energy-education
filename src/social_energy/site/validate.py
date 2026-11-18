@@ -18,6 +18,7 @@ from .aggregates import (
     NUMBER_KEYS,
     NUMBERS,
     SAFE_NAME,
+    SOUND_MIN_HOURS,
     bad_field,
     is_number,
 )
@@ -172,11 +173,19 @@ def _check_aggregates(agg: object, min_group: int) -> None:
             extra = sorted(set(row) - set(allowed))
             if extra:
                 raise SiteDataError(f"aggregates {section}[{i}] has unknown key {extra[0]}")
-            people = row.get("people")
-            if not is_number(people) or people < min_group:
-                raise SiteDataError(
-                    f"aggregates {section}[{i}] people {people!r} is below {min_group}"
-                )
+            if section in SOUND_MIN_HOURS:
+                # A hall's sound, not people: the hours rule instead of the small-cell rule.
+                hours, least = row.get("hours"), SOUND_MIN_HOURS[section]
+                if not is_number(hours) or hours < least:
+                    raise SiteDataError(
+                        f"aggregates {section}[{i}] hours {hours!r} is below {least}"
+                    )
+            else:
+                people = row.get("people")
+                if not is_number(people) or people < min_group:
+                    raise SiteDataError(
+                        f"aggregates {section}[{i}] people {people!r} is below {min_group}"
+                    )
             bad = bad_field(row, allowed)
             if bad is not None:
                 raise SiteDataError(

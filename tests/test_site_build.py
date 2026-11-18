@@ -152,7 +152,9 @@ def test_synthetic_numbers_match_the_synthetic_camp(built):
     assert n["n_participants"] == len(meta["nodes"])
     assert n["n_presses"] == meta["files"]["presses"]["count"]
     assert n["n_confirmatory"] <= n["n_participants"]
-    people = [r["people"] for s, rows in agg.items() if s != "numbers" for r in rows]
+    # Sound rows describe a hall and carry hours, not people.
+    people = [r["people"] for s, rows in agg.items() if s != "numbers" for r in rows
+              if not s.startswith("sound_")]  # fmt: skip
     assert max(people) <= n["n_participants"]
 
 
