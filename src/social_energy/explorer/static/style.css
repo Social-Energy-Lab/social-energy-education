@@ -325,3 +325,4 @@ table.pairs td.diag { color: var(--ink-3); }
 .loading[hidden] { display: none; }
 /* The smaller views were drawn for a side column: keep them at that width. */
 .more-pane[data-pane="matrix"], .more-pane[data-pane="zones"], .more-pane[data-pane="presses"] { max-width: 640px; }
+svg text.sound-title { fill: var(--ink-1); font-size: 12px; font-weight: 600; }

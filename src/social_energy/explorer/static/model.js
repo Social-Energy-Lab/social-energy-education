@@ -415,3 +415,14 @@ export function hashToView(hash) {
   if (h.get("person")) out.person = h.get("person");
   return out;
 }
+
+// A room's recorded levels, ascending, gaps (null) left out: the reference for louderThan.
+export function sortedLevels(levels) {
+  return Float32Array.from(levels.filter((v) => v !== null && v !== undefined)).sort();
+}
+
+// The percent of a room's recorded 5-minute bins quieter than `value`; null with no recording.
+export function louderThan(sorted, value) {
+  if (!sorted.length) return null;
+  return Math.round((100 * lowerBound(sorted, value)) / sorted.length);
+}

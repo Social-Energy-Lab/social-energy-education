@@ -2,7 +2,7 @@
 // close before this window (social: familiar or a new constellation), the programme running,
 // the self-reports in the window with what was written about them, and the people picked in the
 // network side by side.
-import { descriptionAt, descriptionsOf, frame, pairHistory, pressesIn, programmeAt, sharedMoments, windowRange } from "../model.js";
+import { descriptionAt, descriptionsOf, frame, louderThan, pairHistory, pressesIn, programmeAt, sharedMoments, windowRange } from "../model.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const SHARED_S = 5 * 60;
@@ -83,6 +83,16 @@ export function create(el, ctx) {
         ? prog.slice(0, 8).map((ev) => `<b>${esc(ev.label)}</b>${ev.all_camp ? "" : " <span class='muted'>(rooms)</span>"}`).join(" · ") +
           (prog.length > 8 ? ` · <span class="muted">+${prog.length - 8} more</span>` : "")
         : "<span class='muted'>nothing recorded</span>"}</p>`);
+    }
+
+    // How the halls sounded at the playhead, each against its own recorded time.
+    if (ctx.sound) {
+      const now = ctx.sound.rooms.map((room, r) => {
+        const v = ctx.sound.leq[r][bin];
+        return v === null ? `${esc(room)} <span class='muted'>not recorded</span>`
+          : `${esc(room)} <b>louder than ${louderThan(ctx.sound.sorted[r], v)}%</b> of its recorded time`;
+      });
+      parts.push(`<p class="frame-prog">Sound now: ${now.join(" · ")}</p>`);
     }
 
     // Picked people side by side.

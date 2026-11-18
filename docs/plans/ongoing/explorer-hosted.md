@@ -35,6 +35,8 @@ own login, and sees the same data as `social-energy explore` shows locally
   close for at least 15 min in the last 2 h"); the person view as a drawer over the camp; the
   address keeps the view (time, picked people, person, changed settings) so a link reopens it.
   The network stops moving when paused, so dots can be clicked.
+- The halls' sound (2026-11-18): a "How the halls sounded" tab and a "Sound now" line in the
+  frame, each hall against its own recorded time.
 - **Remove the classic view** (`classic.html`, `classic.js`, `classic.css`) after the next field
   phase, once nobody asks for it.
 - Not yet: ready-made starting points (a question that sets day, time and view), presentation

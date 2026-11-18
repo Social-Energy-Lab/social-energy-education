@@ -8,6 +8,7 @@ import * as strips from "./views/strips.js";
 import * as person from "./views/person.js";
 import * as programme from "./views/programme.js";
 import * as framePanel from "./views/frame.js";
+import * as soundView from "./views/sound.js";
 import { explanations, personExplanations } from "./views/explain.js";
 
 const $ = (id) => document.getElementById(id);
@@ -29,7 +30,7 @@ async function load() {
     return buf;
   };
   const names = Object.keys(meta.files);
-  const total = names.length + (meta.person ? 1 : 0) + (meta.person?.moments ? 1 : 0);
+  const total = names.length + (meta.person ? 1 : 0) + (meta.person?.moments ? 1 : 0) + (meta.sound ? 1 : 0);
   const buffers = Object.fromEntries(
     await Promise.all(names.map(async (n) => [n, await get(`${n}.bin`)])),
   );
@@ -38,7 +39,10 @@ async function load() {
   const personDoc = meta.person ? await json(meta.person.file) : null;
   // What participants wrote about their moments: team bundles that carry it only.
   const moments = meta.person?.moments ? (await json(meta.person.moments)).moments : null;
-  return { meta, b: model.decode(meta, buffers), person: personDoc, moments };
+  // How the halls sounded, per room and 5-minute bin (bundle.py): no people in it.
+  const sound = meta.sound ? await json(meta.sound) : null;
+  if (sound) sound.sorted = sound.leq.map((row) => model.sortedLevels(row));
+  return { meta, b: model.decode(meta, buffers), person: personDoc, moments, sound };
 }
 
 function themeColors(meta) {
@@ -315,6 +319,7 @@ async function main() {
     return;
   }
   const ctx = makeContext(loaded.meta, loaded.b, loaded.person, loaded.moments);
+  ctx.sound = loaded.sound;
   const state = initialState(ctx.meta);
   const tooltip = $("tooltip");
   ctx.tip = {
@@ -384,6 +389,10 @@ async function main() {
   if (ctx.events.length) {
     $("programme-panel").hidden = false;
     views.push(programme.create($("programme"), ctx, { maxLanes: 3 }));
+  }
+  if (ctx.sound) {
+    for (const node of document.querySelectorAll("[data-more='sound']")) node.hidden = false;
+    views.push(soundView.create($("sound"), ctx));
   }
   if (ctx.person) {
     views.push(person.create($("person-view"), ctx));

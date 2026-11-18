@@ -36,8 +36,12 @@ who consented to its module (staff are never nodes):
   read by ``social_energy.beacons.descriptions``. Rows without a study ID, or whose ID is not a
   participant, are counted and left out. Free text, so team bundle only.
 
-Run after ``confirmatory.py``, ``exploratory_eda.py``'s inputs (``ingest-eda``,
-``eda-heart-rate``) and the membrane coding.
+The **halls' sound** (camp view): each recorder's Leq per 5-minute bin from
+``acoustics_over_time.py``'s ``bins.parquet`` (dining hall, main hall). No people in it; left out
+with a message when that analysis has not run.
+
+Run after ``acoustics_over_time.py``, ``confirmatory.py``, ``exploratory_eda.py``'s inputs
+(``ingest-eda``, ``eda-heart-rate``) and the membrane coding.
 
 The bundle is written to ``$SOCIAL_ENERGY_DATA/dsa-2026/derived/explorer/bundle/``. It carries no
 study IDs, but it is pseudonymised individual data about minors: team use only, never shared.
@@ -298,6 +302,23 @@ def person_data(layout, study: StudyConfig, spine: Spine, nodes: list[str]) -> P
 # --- export --------------------------------------------------------------------------------------
 
 
+#: The recorders of ``acoustics_over_time.py`` as the explorer names them.
+SOUND_ROOMS = {"mensa": "dining hall", "plenum": "main hall"}
+
+
+def sound_inputs(layout) -> pl.DataFrame | None:
+    """Each hall's level per 5-minute bin, from ``acoustics_over_time.py``'s ``bins.parquet``."""
+    f = layout.derived / "analyses" / "acoustics-over-time" / "bins.parquet"
+    if not f.exists():
+        print(f"no sound: {f} missing (run acoustics_over_time.py first)")
+        return None
+    return pl.read_parquet(f).select(
+        pl.col("recorder").replace_strict(SOUND_ROOMS).alias("room"),
+        "bin",
+        pl.col("leq_dbfs").alias("leq"),
+    )
+
+
 def main() -> None:
     study = StudyConfig.load(cp.STUDY_YAML)
     ex = study.explorer_config()
@@ -331,6 +352,7 @@ def main() -> None:
         presses=presses.select("entity", "t"),
         rssi_floor=study.raw["beacons"]["rssi_threshold_dbm"]["person_tag"],
         persons=person_data(layout, study, spine, nodes),
+        sound=sound_inputs(layout),
     )
     out = layout.derived / "explorer" / "bundle"
     meta = write_bundle(inp, out, ex, timezone=study.timezone, mode="team", qa=qa)

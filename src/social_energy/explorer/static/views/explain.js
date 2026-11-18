@@ -44,6 +44,15 @@ export function explanations(ctx) {
     <p>Bundle: ${meta.nodes.length} participants, ${meta.files.pairs.count.toLocaleString("en-GB")}
     pair readings at or above ${meta.rssi_floor} dBm; dropped at export: ${n("pairs_no_node")} pair
     readings without a participant at one end, ${n("rooms_dropped")} room readings.</p>`);
+  if (document.getElementById("explain-sound")) set("explain-sound", `
+    <p>Each hall's sound level (Leq, the average loudness of a 5-minute bin) from the room's
+    AudioMoth recorder, inside its recording slots; a gap is not recorded. Levels are dBFS,
+    relative to that recorder's full scale, not calibrated decibels: each hall is drawn on its
+    own scale and compared only with itself, never with the other hall. "Louder than 70%" means
+    louder than 70% of all 5-minute bins that hall was recorded over the study.</p>
+    <p>No people are in this: it is the room. A quiet stretch can be the hall not being used.
+    Exploratory: the team's sound analysis (acoustics_over_time) has the figures by day and by
+    programme kind.</p>`);
   set("explain-programme", `
     <p>The day's programme as the field log recorded it: dark items were for the whole camp,
     light ones ran in some rooms only (electives, rehearsals, sport). A dashed edge means the end

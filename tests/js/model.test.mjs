@@ -249,3 +249,12 @@ test("an address from before keeps working, and junk is ignored", () => {
   assert.deepEqual(m.hashToView("person=12&bin=40"), { bin: 40, person: "12" });
   assert.deepEqual(m.hashToView("t=abc&pick=&close=x&zzz=1"), {});
 });
+
+test("a level's place among a room's recorded levels, gaps ignored", () => {
+  const sorted = m.sortedLevels([-50, null, -60, -40, null, -55]);
+  assert.deepEqual(Array.from(sorted), [-60, -55, -50, -40]);
+  assert.equal(m.louderThan(sorted, -50), 50); // above -60 and -55: 2 of the 4
+  assert.equal(m.louderThan(sorted, -61), 0);
+  assert.equal(m.louderThan(sorted, -40), 75);
+  assert.equal(m.louderThan(new Float32Array(0), -40), null);
+});
