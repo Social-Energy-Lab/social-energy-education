@@ -368,3 +368,61 @@ test("fitLabel: a label too wide for its column is ellipsized, a short one is ke
   assert.ok(long.startsWith(fit.slice(0, -1).trimEnd()), fit);
   assert.equal(chart.fitLabel(long, 3, measure), "…");
 });
+
+// --- the halls' sound -----------------------------------------------------------------------
+
+const sound = await load("chapters/sound.js");
+
+test("soundDays: one hall's days in order, rows without a level dropped", () => {
+  const rows = [
+    { day: "2026-08-03", room: "main_hall", hours: 4, leq: -41, leq_p90: -35 },
+    { day: "2026-08-02", room: "main_hall", hours: 2, leq: -50 },
+    { day: "2026-08-02", room: "dining_hall", hours: 6, leq: -38, leq_p90: -31 },
+    { day: "2026-08-04", room: "main_hall", hours: 3, leq: null },
+  ];
+  assert.deepEqual(sound.soundDays(rows, "main_hall"), [
+    { day: "2026-08-02", leq: -50, p90: null, hours: 2 },
+    { day: "2026-08-03", leq: -41, p90: -35, hours: 4 },
+  ]);
+  assert.deepEqual(sound.allDays(rows), ["2026-08-02", "2026-08-03"]);
+  assert.deepEqual(sound.soundDays(undefined, "main_hall"), []);
+});
+
+test("soundKinds: one hall's kinds, loudest median first, hours kept", () => {
+  const rows = [
+    { room: "dining_hall", programme: "no_item", hours: 20, leq: -48, lo: -52, hi: -44 },
+    { room: "dining_hall", programme: "party", hours: 0.5, leq: -30 },
+    { room: "main_hall", programme: "concert", hours: 3, leq: -25 },
+    { room: "dining_hall", programme: "meal", hours: 8, leq: -40, lo: -43, hi: -37 },
+  ];
+  const got = sound.soundKinds(rows, "dining_hall");
+  assert.deepEqual(
+    got.map((r) => [r.programme, r.hours]),
+    [["party", 0.5], ["meal", 8], ["no_item", 20]],
+  );
+  assert.equal(got[0].lo, null);
+});
+
+test("levelDomain: pads the range and keeps at least a few dB around a flat series", () => {
+  const [lo, hi] = sound.levelDomain([-40, -40, null]);
+  assert.ok(lo < -42.9 && hi > -37.1, `${lo} ${hi}`);
+  const [a, b] = sound.levelDomain([-50, -20]);
+  assert.ok(a < -50 && b > -20);
+});
+
+test("every room and programme kind the site accepts has copy in both languages", async () => {
+  const { readFileSync } = await import("node:fs");
+  const py = readFileSync(join(SRC, "site", "aggregates.py"), "utf8");
+  const tuple = (name) =>
+    [...py.match(new RegExp(`^${name} = \\(([^)]*)\\)`, "m"))[1].matchAll(/"([a-z_]+)"/g)].map(
+      (m) => m[1],
+    );
+  const rooms = tuple("ROOMS");
+  const kinds = tuple("SOUND_KINDS");
+  assert.deepEqual([...rooms].sort(), [...sound.ROOMS].sort());
+  assert.ok(kinds.includes("no_item"));
+  for (const strings of [de, en]) {
+    for (const r of rooms) assert.ok(strings[`room_${r}`], `room_${r}`);
+    for (const k of kinds) assert.ok(strings[`programme_${k}`], `programme_${k}`);
+  }
+});

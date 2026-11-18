@@ -5,7 +5,7 @@ import { loadSite } from "./data.js";
 import { copyOf, getLang, initLang, setLang, setNumbers, t } from "./i18n.js";
 import { mountPlayer, startPaused } from "./player.js";
 
-const CHAPTERS = ["day", "circles", "moments", "places", "null", "how"];
+const CHAPTERS = ["day", "circles", "moments", "places", "sound", "null", "how"];
 const reduced = startPaused(globalThis.matchMedia?.bind(globalThis));
 const modules = new Map();
 let site = null;
