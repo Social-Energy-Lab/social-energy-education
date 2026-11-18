@@ -272,3 +272,6 @@ table.pairs td.diag { color: var(--ink-3); }
 @media (max-width: 900px) {
   .frame-cols { grid-template-columns: 1fr; }
 }
+/* Hosted copy: who is signed in. */
+.account { font-size: 12px; color: var(--ink-2); }
+.account a { color: var(--accent); }

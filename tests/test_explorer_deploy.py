@@ -74,22 +74,35 @@ def test_push_sends_the_archive_to_the_host(tmp_path):
         calls.append((cmd, data))
 
     deploy.push(deploy.Target("box", "/srv/x"), _bundle(tmp_path), run=run)
-    ((cmd, data),) = calls
+    (cmd, data), (svc_cmd, svc) = calls
     assert cmd[:2] == ["ssh", "box"]
     assert "bundle/meta.json" in _names(data)
+    assert "/srv/x/service/auth_service.py" in svc_cmd[2] and b"def make_server" in svc
 
 
-@pytest.mark.parametrize("name", ["", "a b", "a:b", "a\nb", "x" * 65])
+@pytest.mark.parametrize("name", ["", "a b", "a:b", "a;b", "x" * 65])
 def test_bad_user_names_are_refused(name):
     with pytest.raises(deploy.DeployError, match="name"):
-        deploy.password_line(name, "$6$hash")
+        deploy.invite(deploy.Target("box", "/srv/x"), name, run=lambda c, d: b"")
 
 
-def test_password_line_replaces_an_existing_user():
-    old = "anna:$6$old\nben:$6$b\n"
-    new = deploy.with_user(old, deploy.password_line("anna", "$6$new"))
-    assert new == "ben:$6$b\nanna:$6$new\n"
+def test_invite_runs_the_service_on_the_server_and_returns_the_link():
+    calls = []
+
+    def run(cmd, data):
+        calls.append(cmd)
+        return b"https://site.test/auth/invite/abc\n"
+
+    target = deploy.Target("box", "/srv/x", "https://site.test")
+    assert deploy.invite(target, "Anna", admin=True, run=run) == "https://site.test/auth/invite/abc"
+    (cmd,) = calls
+    assert cmd[:2] == ["ssh", "box"]
+    assert cmd[2] == ("python3 /srv/x/service/auth_service.py invite anna --base "
+                      "https://site.test --admin --db /srv/x/auth.db")  # fmt: skip
 
 
-def test_removing_a_user_keeps_the_others():
-    assert deploy.without_user("anna:$6$a\nben:$6$b\n", "anna") == "ben:$6$b\n"
+def test_bad_site_url_is_refused():
+    with pytest.raises(deploy.DeployError, match="url"):
+        deploy.target(
+            {"explorer": {"deploy": {"ssh_host": "b", "path": "/srv/x", "url": "http://x"}}}
+        )

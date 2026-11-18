@@ -57,9 +57,10 @@ social-energy deploy-explorer studies/<id>/study.yaml
     local.yaml (explorer.deploy.ssh_host and path) over SSH, and swap it in whole. The server
     serves it behind the VPN and a login; see docs/decisions/explorer-hosted.md.
 
-social-energy explorer-user studies/<id>/study.yaml [--add NAME | --remove NAME]
-    List, add or remove the researchers who may log in to the hosted explorer. --add asks for
-    the password here and sends only its hash; adding an existing name changes its password.
+social-energy explorer-user studies/<id>/study.yaml [--add NAME [--admin] | --remove NAME]
+    List, invite or remove the researchers who may sign in to the hosted explorer. --add prints
+    a one-time link on which the person chooses their own password (for an existing name, a
+    reset). Admins do the same in the browser at /auth/admin.
 
 social-energy ingest-survey studies/<id>/study.yaml
     Parse raw/survey/zeitgeist/*/responses.jsonl into
@@ -538,33 +539,24 @@ def deploy_explorer(study: StudyConfig) -> int:
     return 0
 
 
-def explorer_user(study: StudyConfig, add: str | None = None, remove: str | None = None) -> int:
-    import getpass
-
+def explorer_user(
+    study: StudyConfig, add: str | None = None, remove: str | None = None, admin: bool = False
+) -> int:
     from .explorer import deploy
 
     try:
         target = deploy.target(study.local)
-        users = deploy.read_users(target)
         if add:
-            password = getpass.getpass(f"New password for {add}: ")
-            if len(password) < 12 or password != getpass.getpass("Again: "):
-                print("Refused: the passwords differ or are shorter than 12 characters")
-                return 1
-            users = deploy.with_user(
-                users, deploy.password_line(add, deploy.hash_password(password))
-            )
-            deploy.write_users(target, users)
+            link = deploy.invite(target, add, admin=admin)
+            print(f"Send {add} this one-time link (valid 7 days); on it they choose a password:")
+            print(f"    {link}")
         elif remove:
-            if remove not in deploy.user_names(users):
-                print(f"No user {remove!r}")
-                return 1
-            users = deploy.without_user(users, remove)
-            deploy.write_users(target, users)
+            deploy.remove(target, remove)
+            print(f"Removed {remove}.")
+        print(deploy.users(target).rstrip() or "No users yet.")
     except deploy.DeployError as err:
         print(f"Refused: {err}")
         return 1
-    print("Users: " + (", ".join(deploy.user_names(users)) or "none"))
     return 0
 
 
@@ -591,8 +583,9 @@ def main(argv: list[str] | None = None) -> int:
         "--device", type=int, action="append", default=[], help="purge-device: device ID"
     )
     users = parser.add_mutually_exclusive_group()
-    users.add_argument("--add", metavar="NAME", help="explorer-user: add a login, or reset it")
+    users.add_argument("--add", metavar="NAME", help="explorer-user: invite, or reset a password")
     users.add_argument("--remove", metavar="NAME", help="explorer-user: remove a login")
+    parser.add_argument("--admin", action="store_true", help="explorer-user --add: as an admin")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--dry-run", action="store_true", help="purge-device: only count lines (the default)"
@@ -608,7 +601,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "explore":
             return explore(study, port=args.port, open_browser=not args.no_browser, demo=args.demo)
         if args.command == "explorer-user":
-            return explorer_user(study, add=args.add, remove=args.remove)
+            return explorer_user(study, add=args.add, remove=args.remove, admin=args.admin)
         if args.command == "site-build":
             return site_build(study, args.out, args.data)
         return COMMANDS[args.command](study)

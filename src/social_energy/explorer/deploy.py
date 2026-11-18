@@ -6,9 +6,11 @@ one archive of the app (``static/``) and the bundle in memory, streams it over S
 whole: the server unpacks into ``<path>/.next`` and renames it to ``<path>/current``, which the
 web server serves. Nothing is written locally and the previous site is kept as ``<path>/.prev``.
 
-Logins are the web server's own (HTTP basic auth over HTTPS, behind the institute's VPN): one
-line per researcher in ``<path>/htpasswd``, with a SHA-512 crypt hash made on this machine. The
-password never leaves it in the clear. See ``docs/decisions/explorer-hosted.md``.
+Sign-in is the explorer's own service (``auth_service.py``, standard library only), shipped with
+every deploy to ``<path>/service/`` and restarting itself when it changes. Researchers are invited
+by name and choose their own password on a one-time link; admins manage them in the browser at
+``/auth/admin``. ``explorer-user`` here only bootstraps or scripts that, over SSH. The site's
+address for the links is ``explorer.deploy.url``. See ``docs/decisions/explorer-hosted.md``.
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .server import STATIC
+
+SERVICE = Path(__file__).with_name("auth_service.py")
 
 _SAFE_PATH = re.compile(r"^/[A-Za-z0-9._/-]+$")
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -38,6 +42,7 @@ class DeployError(RuntimeError):
 class Target:
     ssh_host: str
     path: str
+    url: str = "https://localhost"
 
 
 def target(local: dict) -> Target:
@@ -52,7 +57,10 @@ def target(local: dict) -> Target:
     path = str(path).rstrip("/")
     if not _SAFE_PATH.match(path) or path.count("/") < 2 or ".." in path.split("/"):
         raise DeployError(f"Unsafe remote path {path!r}: use an absolute folder like /srv/explorer")
-    return Target(str(host), path)
+    url = str(section.get("url") or "https://localhost").rstrip("/")
+    if not re.match(r"^https://[A-Za-z0-9.-]+(:[0-9]+)?$", url):
+        raise DeployError(f"Bad url {url!r}: use https://<host name>")
+    return Target(str(host), path, url)
 
 
 def _add(tar: tarfile.TarFile, file: Path, name: str) -> None:
@@ -100,51 +108,42 @@ def _ssh(cmd: list[str], data: bytes | None) -> bytes:
 
 
 def push(target: Target, bundle_dir: Path, run: Runner = _ssh) -> None:
-    """Send the app and the bundle to ``target`` and swap them in."""
+    """Send the app and the bundle to ``target`` and swap them in, then the sign-in service."""
     run(["ssh", target.ssh_host, remote_script(target.path)], archive(bundle_dir))
+    svc = f"{target.path}/service"
+    run(
+        ["ssh", target.ssh_host,
+         f"set -e; umask 022; mkdir -p {svc}; cat > {svc}/auth_service.py.new; "
+         f"if ! cmp -s {svc}/auth_service.py.new {svc}/auth_service.py; then "
+         f"mv {svc}/auth_service.py.new {svc}/auth_service.py; "
+         f"else rm {svc}/auth_service.py.new; fi"],
+        SERVICE.read_bytes(),
+    )  # fmt: skip
 
 
-# --- Logins -----------------------------------------------------------------------------------
+# --- Users, through the service's own command line on the server ------------------------------
 
 
-def password_line(name: str, hashed: str) -> str:
+def _service(target: Target, *args: str) -> list[str]:
+    cmd = f"python3 {target.path}/service/auth_service.py " + " ".join(args)
+    return ["ssh", target.ssh_host, f"{cmd} --db {target.path}/auth.db"]
+
+
+def _name(name: str) -> str:
     if not _SAFE_NAME.match(name):
         raise DeployError(f"Bad user name {name!r}: letters, digits, '.', '_' or '-' only")
-    return f"{name}:{hashed}\n"
+    return name.lower()
 
 
-def _lines(text: str) -> list[str]:
-    return [line for line in text.splitlines() if line.strip()]
+def invite(target: Target, name: str, admin: bool = False, run: Runner = _ssh) -> str:
+    """A one-time link on which ``name`` chooses a password (a reset, if they exist)."""
+    args = ["invite", _name(name), "--base", target.url] + (["--admin"] if admin else [])
+    return run(_service(target, *args), None).decode("utf-8").strip()
 
 
-def without_user(text: str, name: str) -> str:
-    kept = [line for line in _lines(text) if line.split(":", 1)[0] != name]
-    return "".join(f"{line}\n" for line in kept)
+def remove(target: Target, name: str, run: Runner = _ssh) -> None:
+    run(_service(target, "remove", _name(name)), None)
 
 
-def with_user(text: str, line: str) -> str:
-    return without_user(text, line.split(":", 1)[0]) + line
-
-
-def hash_password(password: str) -> str:
-    """SHA-512 crypt, which nginx checks through the system's crypt()."""
-    result = subprocess.run(
-        ["openssl", "passwd", "-6", "-stdin"],
-        input=password.encode("utf-8"),
-        capture_output=True,
-        check=True,
-    )
-    return result.stdout.decode("ascii").strip()
-
-
-def read_users(target: Target, run: Runner = _ssh) -> str:
-    return run(["ssh", target.ssh_host, f"cat {target.path}/htpasswd"], None).decode("utf-8")
-
-
-def write_users(target: Target, text: str, run: Runner = _ssh) -> None:
-    # Overwrite in place so the file keeps the owner and group the setup gave it.
-    run(["ssh", target.ssh_host, f"cat > {target.path}/htpasswd"], text.encode("utf-8"))
-
-
-def user_names(text: str) -> list[str]:
-    return [line.split(":", 1)[0] for line in _lines(text)]
+def users(target: Target, run: Runner = _ssh) -> str:
+    return run(_service(target, "users"), None).decode("utf-8")

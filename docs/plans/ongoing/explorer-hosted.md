@@ -2,7 +2,7 @@
 
 **Priority:** high — the project lead's ask: the team explorer without a data root on every machine
 **Gate:** none
-**Next:** add logins for the researchers the project lead names, and check it with them
+**Next:** the project lead signs in and invites the researchers he names
 
 **Goal:** the research team opens the team explorer in a browser on the institute VPN, with its
 own login, and sees the same data as `social-energy explore` shows locally
@@ -15,7 +15,9 @@ own login, and sees the same data as `social-energy explore` shows locally
 - [x] One-time server setup script (`scripts/explorer-server-setup.sh`) (2026-11-18).
 - [x] Run the setup on the server (2026-11-18).
 - [x] First deploy and first login (2026-11-18).
-- [ ] Logins for the researchers the project lead names.
+- [x] Own sign-in service with invite links and an admin page (`auth_service.py`) (2026-11-18).
+- [x] Run the updated setup on the server; admin invites for Álvaro and the project lead (2026-11-18).
+- [ ] Invites for the researchers the project lead names (admins do it at `/auth/admin`).
 - [ ] Check with the project lead in the browser.
 - [ ] Ask the institute for a proper certificate, so browsers stop warning.
 
