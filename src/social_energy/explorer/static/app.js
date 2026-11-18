@@ -6,6 +6,8 @@ import * as zones from "./views/zones.js";
 import * as presses from "./views/presses.js";
 import * as strips from "./views/strips.js";
 import * as person from "./views/person.js";
+import * as programme from "./views/programme.js";
+import * as framePanel from "./views/frame.js";
 import { explanations, personExplanations } from "./views/explain.js";
 
 const $ = (id) => document.getElementById(id);
@@ -20,7 +22,11 @@ async function load() {
   );
   // The person view's data, in a team bundle that carries it.
   const personDoc = meta.person ? await (await fetch(`bundle/${meta.person.file}`)).json() : null;
-  return { meta, b: model.decode(meta, buffers), person: personDoc };
+  // What participants wrote about their moments: team bundles that carry it only.
+  const moments = meta.person?.moments
+    ? (await (await fetch(`bundle/${meta.person.moments}`)).json()).moments
+    : null;
+  return { meta, b: model.decode(meta, buffers), person: personDoc, moments };
 }
 
 function themeColors(meta) {
@@ -37,7 +43,7 @@ function themeColors(meta) {
   };
 }
 
-function makeContext(meta, b, personDoc) {
+function makeContext(meta, b, personDoc, moments) {
   const nNodes = meta.nodes.length;
   const nBins = meta.n_bins;
   const t0 = Date.parse(meta.t0);
@@ -58,7 +64,7 @@ function makeContext(meta, b, personDoc) {
     return [start, next];
   };
   return {
-    meta, b, person: personDoc, nNodes, nBins, nodeCourse, courseSize, hasUnknown, dayOfBin, dayRange,
+    meta, b, person: personDoc, moments, events: personDoc?.events ?? [], nNodes, nBins, nodeCourse, courseSize, hasUnknown, dayOfBin, dayRange,
     binsPerHour: 3600 / meta.bin_seconds,
     locZone: meta.locations.map((l) => l.zone),
     courseName: (c) => (c < 0 ? "course not known" : meta.courses[c].name),
@@ -85,6 +91,7 @@ function initialState(meta) {
     course: null, // highlighted course index
     zone: null, // highlighted zone index
     cell: null, // [ci, cj] highlighted matrix cell
+    picked: [], // nodes picked in the network or the frame, highlighted everywhere
     tab: "camp", // "camp" or "person"
   };
 }
@@ -142,7 +149,7 @@ function setupControls(ctx, state, set) {
   $("reset").addEventListener("click", () => {
     const d = initialState(meta);
     set({ closeRssi: d.closeRssi, minMinutes: d.minMinutes, windowMinutes: d.windowMinutes,
-      course: null, zone: null, cell: null });
+      course: null, zone: null, cell: null, picked: [] });
   });
   $("theme").addEventListener("click", () => {
     const root = document.documentElement;
@@ -186,7 +193,8 @@ function syncControls(ctx, state) {
   if (day) $("day").value = String(day.start_bin);
   $("when-day").textContent = ctx.dayLabel(bin);
   $("when-clock").textContent = `${ctx.clockLabel(bin)} · ${ctx.phaseName(bin)}`;
-  $("when-note").textContent = [...ctx.noteAt(bin).map((n) => n.text),
+  const camp = model.programmeAt(ctx.events, bin).filter((e) => e.all_camp).map((e) => e.label);
+  $("when-note").textContent = [...camp, ...ctx.noteAt(bin).map((n) => n.text),
     ...ctx.shadeAt(bin).map((n) => n.label)].join(" · ");
 }
 
@@ -203,7 +211,7 @@ async function main() {
     $("error").textContent = `Could not load the bundle: ${err.message}. Run the export first.`;
     return;
   }
-  const ctx = makeContext(loaded.meta, loaded.b, loaded.person);
+  const ctx = makeContext(loaded.meta, loaded.b, loaded.person, loaded.moments);
   const state = initialState(ctx.meta);
   const tooltip = $("tooltip");
   ctx.tip = {
@@ -229,13 +237,45 @@ async function main() {
   };
   ctx.set = set;
 
+  // A pop-up with one written description in full (a page element, not a browser dialog).
+  const pop = $("popup");
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  ctx.showMoment = (m) => {
+    const when = m.sec !== null
+      ? `${ctx.dayLabel(m.sec / ctx.meta.bin_seconds)} ${ctx.clockLabel(m.sec / ctx.meta.bin_seconds)}`
+      : m.day !== null ? ctx.dayLabel(ctx.dayRange(m.day)[0]) : "no date";
+    pop.querySelector(".pop-body").innerHTML = `
+      <h3>${esc(ctx.personName(m.node))} <span class="muted">· ${esc(ctx.courseName(ctx.nodeCourse[m.node]))}</span></h3>
+      <p class="muted">${esc(when)}${m.when ? ` · written as “${esc(m.when)}”` : ""}</p>
+      <p class="pop-text">${esc(m.text)}</p>
+      <p class="muted small">Transcribed from the participant's paper card. Free text by a minor: research team only.</p>
+      <p>${m.sec !== null ? `<button type="button" data-go="${Math.floor(m.sec / ctx.meta.bin_seconds)}">Go to this time</button>` : m.day !== null ? `<button type="button" data-go="${ctx.dayRange(m.day)[0]}">Go to this day</button>` : ""}
+      ${ctx.openPerson ? `<button type="button" data-person="${m.node}">Open this person</button>` : ""}</p>`;
+    pop.hidden = false;
+    pop.querySelector("[data-go]")?.addEventListener("click", (e) => {
+      pop.hidden = true;
+      set({ tab: "camp", bin: Number(e.target.dataset.go), playing: false });
+    });
+    pop.querySelector("[data-person]")?.addEventListener("click", () => {
+      pop.hidden = true;
+      ctx.openPerson(m.node, m.sec !== null ? Math.floor(m.sec / ctx.meta.bin_seconds) : undefined);
+    });
+  };
+  pop.querySelector(".pop-close").addEventListener("click", () => { pop.hidden = true; });
+  document.addEventListener("keydown", (e) => { if (e.code === "Escape") pop.hidden = true; });
+
   const views = [
     network.create($("network"), ctx, $("legend")),
     matrix.create($("matrix"), ctx),
     zones.create($("zones"), ctx),
     presses.create($("presses"), ctx),
     strips.create($("strips"), ctx),
+    framePanel.create($("frame"), ctx),
   ];
+  if (ctx.events.length) {
+    $("programme-panel").hidden = false;
+    views.push(programme.create($("programme"), ctx));
+  }
   if (ctx.person) {
     views.push(person.create($("person-view"), ctx));
     personExplanations(ctx);
@@ -256,8 +296,9 @@ async function main() {
     if (dirty) {
       const p = params(state, ctx);
       const e = model.edges(ctx.b, p);
-      for (const v of views) v.update(state, p, e, changed);
+      // Controls first: they show the active tab, so views measure their real width.
       syncControls(ctx, state);
+      for (const v of views) v.update(state, p, e, changed);
       changed.clear();
       dirty = false;
     }

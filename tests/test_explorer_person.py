@@ -7,7 +7,7 @@ bundle and the site's checks never carry any of it.
 
 import json
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import numpy as np
 import polars as pl
@@ -300,3 +300,90 @@ def test_demo_bundle_has_the_person_view(tmp_path):
     meta = json.loads((out / "meta.json").read_text())
     assert meta["mode"] == "synthetic" and meta["person"]["file"] == "person.json"
     assert {c["key"] for c in meta["courses"]} == {"a", "b"}
+
+
+# --- self-report descriptions (team bundle only) -------------------------------------------------
+
+
+def _descriptions(rows):
+    return pl.DataFrame(
+        rows,
+        schema={"entity": pl.String, "t": pl.Datetime("us", "UTC"), "day": pl.Date,
+                "when": pl.String, "text": pl.String},
+        orient="row",
+    )  # fmt: skip
+
+
+def _camp_date():
+    shift = datetime.strptime(CONFIG.day_start, "%H:%M")
+    return (T0 - timedelta(hours=shift.hour, minutes=shift.minute)).date()
+
+
+def test_descriptions_follow_self_report_consent_and_nodes(tmp_path):
+    d0 = _camp_date()
+    persons = _persons(
+        consent=_persons().consent | {"self_report": frozenset({"person:1", "person:2"})},
+        descriptions=_descriptions([
+            ("person:1", T0 + timedelta(seconds=90), d0, "today 0:01", "  the  music\nmoved me "),
+            ("person:2", None, d0, "a date only", "everyone laughed"),
+            ("person:2", None, None, "the concert", "no date at all"),
+            ("person:1", T0 - timedelta(days=3), None, "before the bundle", "kept, not placed"),
+            ("person:3", T0, d0, "x", "no consent: dropped"),
+            ("person:99", T0, d0, "x", "not a node: dropped"),
+            ("person:2", T0, d0, "x", "   "),  # empty: dropped
+        ]),
+    )  # fmt: skip
+    meta = write_bundle(replace(_golden(), persons=persons), tmp_path / "b", CONFIG,
+                        timezone="UTC", seed=3)  # fmt: skip
+    doc = json.loads((tmp_path / "b" / "person.json").read_text())
+    moments = json.loads((tmp_path / "b" / "moments.json").read_text())
+    assert meta["person"]["moments"] == "moments.json"
+    one, two = _node(doc, study_id="1"), _node(doc, study_id="2")
+    # Per node: timed first, then dated, then the rest; whitespace collapsed.
+    assert moments["moments"] == sorted([
+        {"node": one, "sec": 90, "day": 0, "when": "today 0:01", "text": "the music moved me"},
+        {"node": one, "sec": None, "day": None, "when": "before the bundle",
+         "text": "kept, not placed"},
+        {"node": two, "sec": None, "day": 0, "when": "a date only", "text": "everyone laughed"},
+        {"node": two, "sec": None, "day": None, "when": "the concert", "text": "no date at all"},
+    ], key=lambda m: m["node"])  # fmt: skip
+    qa = meta["qa"]
+    assert qa["descriptions_without_consent"] == 1
+    assert qa["descriptions_no_node"] == 1
+    assert qa["descriptions_empty"] == 1
+    assert (qa["descriptions"], qa["descriptions_timed"], qa["descriptions_dated"]) == (4, 1, 2)
+    assert b"person:" not in (tmp_path / "b" / "moments.json").read_bytes()
+
+
+def test_long_descriptions_are_cut(tmp_path):
+    persons = _persons(descriptions=_descriptions([("person:1", T0, None, None, "x" * 5000)]))
+    write_bundle(replace(_golden(), persons=persons), tmp_path / "b", CONFIG, timezone="UTC")
+    moments = json.loads((tmp_path / "b" / "moments.json").read_text())["moments"]
+    assert len(moments[0]["text"]) == 2000 and moments[0]["text"].endswith("…")
+
+
+def test_no_descriptions_no_moments_file(world):
+    meta, *_, bundle = world
+    assert "moments" not in meta["person"] and not (bundle / "moments.json").exists()
+    persons = _persons(descriptions=_descriptions([("person:1", T0, None, None, "a moment")]))
+    write_bundle(replace(_golden(), persons=persons), bundle, CONFIG, timezone="UTC")
+    assert (bundle / "moments.json").exists()
+    write_bundle(_golden(), bundle, CONFIG, timezone="UTC")
+    assert not (bundle / "moments.json").exists()
+
+
+def test_site_checks_refuse_a_stray_descriptions_file(tmp_path):
+    camp = generate(CampSpec(lost=None, reboot=None, swap=None), tmp_path / "camp")
+    out = tmp_path / "public"
+    write_public_bundle(synthetic_inputs(camp), out, ExplorerConfig(),
+                        timezone=camp.spec.timezone, seed=0)  # fmt: skip
+    (out / "aggregates.json").write_text("{}")
+    (out / "moments.json").write_text('{"moments": []}')
+    with pytest.raises(SiteDataError, match=r"moments\.json"):
+        validate_site_data(out)
+
+
+def test_demo_bundle_has_synthetic_descriptions(tmp_path):
+    out = demo_bundle(tmp_path / "demo", ExplorerConfig(), timezone="Europe/Berlin")
+    moments = json.loads((out / "moments.json").read_text())["moments"]
+    assert moments and all(m["text"].startswith("synthetic:") for m in moments)

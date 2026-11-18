@@ -107,6 +107,25 @@ Checked against our ingest on DSA 2026 (2026-10-02): every disagreement is expla
 
 `[unknown: at which commit was the delivered Output/ produced?]`
 
+## Written descriptions of self-report moments
+
+Besides pressing, participants could describe a moment on a paper card: study ID, when, and
+what happened. A researcher transcribes the cards into a table, `ID`, `Time`, `Text`, as written
+(`social_energy.beacons.descriptions`).
+
+- **When is free text.** Most cards give a date (`21.08.2026`, `18.08.`), some a span
+  (`20.-21.08.`, "and others"), a few a clock time or hour range (`um 14:05 Uhr`, `15-16 Uhr`),
+  others only a programme item or nothing. The parser keeps the first day and the first clock
+  time and flags `date_range`, `uncertain` (a `?`), `implausible_date` (outside the study) and
+  `no_date`. Matching a card to a press is therefore loose: by day for most, and within about an
+  hour for the few with a time. A card is not proof that its writer pressed; some say they did
+  not.
+- **No ID, or a staff ID.** Some cards have none; staff wrote cards too. Both are flagged and
+  counted, never guessed.
+- **The text may name other people** (by name or by `ID-<n>`). It is shown only in the team
+  bundle behind the login ([decision](../../decisions/explorer-hosted.md)), never quoted in
+  this repo.
+
 ## Open questions
 
 - `[unknown: which firmware commit was flashed on each tag at camp start?]` The only runtime setting changed during the camp was eco auto-detection (see below, 2026-10-19). The firmware defaults are readable from the upstream repo (`dsa.conf`, `dsa_runtime.conf`, `shared/common_include.h`) and its history dates the production values to 2026-08-08..15. What the repo cannot say is which build went on which tag and which control commands were sent during the camp.

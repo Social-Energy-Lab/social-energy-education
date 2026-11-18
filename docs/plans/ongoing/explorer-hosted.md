@@ -21,9 +21,9 @@ own login, and sees the same data as `social-energy explore` shows locally
 
 ## Later
 
-- **Free text behind the login:** the self-report descriptions in a pop-up and the interview
-  themes (the project lead's level 3). Needs a bundle field for text, and the writer's refusal of
-  free text relaxed for team bundles only.
+- **Interview themes behind the login** (the project lead's level 3). The self-report
+  descriptions are in (2026-11-18): `moments.json`, team bundle only.
 - **Names** only if the project lead confirms the ethics approval and consent allow them.
-- The local additions for the presentation (programme names on the timeline, several people
-  highlighted, who is in the paused frame) reach the hosted copy with the next deploy.
+- Presentation additions (2026-11-18): the day's programme by name, several people picked and
+  compared, who is together in the paused frame (close now, and how long before), and the
+  written descriptions. Deployed with the bundle of the same day.

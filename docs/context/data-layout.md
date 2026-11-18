@@ -59,6 +59,7 @@ $SOCIAL_ENERGY_DATA/              the data root, and the private repo
 | EDA | copy each SD card as it is, **keeping modification times** (`cp -p`, `rsync -a`, or the archive): they are the only absolute clock. Measure the offset of the copy against an export's first timestamp and set `eda.mtime_to_utc_s` in `study.yaml`. Calibrated exports go beside them. Then `social-energy ingest-eda studies/<id>/study.yaml` | `raw/eda/sd-cards/<card>/`, `raw/eda/imported/<export>/` |
 | AudioMoth | copy each card as it is, one folder per device | `raw/audiomoth/<device>/` |
 | In-person interviews | copy each transmitter's volume, keeping the original folders (see [`instruments/qualitative.md`](instruments/qualitative.md)) | `raw/interview-audio/<kit>/<tx>/` |
+| Self-report descriptions | the transcribed paper cards as delivered (`ID`, `Time`, `Text`, one row per entry); the newest `.xlsx` is read | `raw/self-report-descriptions/` |
 | AI interviews + survey | `social-energy fetch-zeitgeist studies/<id>/study.yaml` (below) | `raw/ai-interviews/zeitgeist/<agent>/`, `raw/survey/zeitgeist/<agent>/` |
 | Context documents | convert the shared documents to markdown and index them | `context/sources/`, or `context/personal/` if they name or track people |
 

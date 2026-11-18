@@ -172,3 +172,55 @@ test("tiesSeries agrees with edges and visible step by step", () => {
     assert.equal(s[k], n ? (2 * e.a.length) / n : NaN);
   }
 });
+
+test("pairHistory counts close bins before the window", () => {
+  // Before bin 2 at -65: (0,1) in bins 0 and 1; (0,2) is -70, below.
+  const h = m.pairHistory(B, -65, 2);
+  assert.deepEqual([...h.entries()], [[1, 2]]);
+  assert.equal(m.pairHistory(B, -90, 1).get(2), 1); // (0,2) at bin 0
+  assert.equal(m.pairHistory(B, -65, 0).size, 0);
+});
+
+test("frame sorts ties by how long the pair was close before", () => {
+  // Window = bin 2 only: (0,1) at -55. Before: (0,1) close in 2 bins.
+  const e = m.edges(B, { endBin: 3, windowBins: 1, closeRssi: -65, minBins: 1 });
+  const vis = m.visible(B, 3, 1, N);
+  const h = m.pairHistory(B, -65, 2);
+  const at = (levels) => m.frame(e, h, levels, vis);
+  assert.deepEqual(at([3, 5]).counts, [1, 0, 0]); // 2 bins before < 3: new
+  assert.deepEqual(at([2, 5]).counts, [0, 1, 0]); // 2 >= 2, < 5: acquainted
+  assert.deepEqual(at([1, 2]).counts, [0, 0, 1]); // 2 >= 2: close
+  const f = at([2, 5]);
+  assert.deepEqual(f.ties.map((t) => [t.a, t.b, t.before, t.level]), [[0, 1, 2, 1]]);
+  assert.deepEqual(f.people, [{ node: 0, ties: 1, levels: [0, 1, 0] }, { node: 1, ties: 1, levels: [0, 1, 0] }]);
+});
+
+test("pressesIn and descriptionAt find a press and what was written for it", () => {
+  assert.deepEqual(m.pressesIn(B, 0, 101), [0, 1]);
+  assert.deepEqual(m.pressesIn(B, 101, 700), []);
+  const moments = [
+    { node: 0, sec: 15, day: 0, text: "a" }, { node: 0, sec: 400, day: 0, text: "c" },
+    { node: 0, sec: null, day: 1, text: "d" }, { node: 2, sec: 90, day: 0, text: "b" },
+  ];
+  assert.equal(m.descriptionAt(moments, 0, 10, 120).text, "a");
+  assert.equal(m.descriptionAt(moments, 1, 100, 120), null); // node 1 wrote nothing
+  assert.equal(m.descriptionAt(moments, 0, 300, 120).text, "c"); // 100 s away, within 120
+  assert.equal(m.descriptionAt(moments, 0, 250, 120), null); // 150 s from either of node 0's
+  assert.equal(m.descriptionAt(moments, 0, 250).text, "c"); // default tolerance is wide
+  assert.deepEqual(m.descriptionsOf(moments, { node: 0 }).map((x) => x.text), ["a", "c", "d"]);
+  assert.deepEqual(m.descriptionsOf(moments, { day: 0 }).map((x) => x.text), ["a", "c", "b"]);
+  assert.deepEqual(m.descriptionsOf(null, { day: 0 }), []);
+});
+
+test("programmeLanes keeps overlapping items apart and all-camp items on top", () => {
+  const ev = [
+    { start_bin: 0, end_bin: 4, all_camp: false },
+    { start_bin: 2, end_bin: 6, all_camp: true },
+    { start_bin: 4, end_bin: 5, all_camp: false },
+    { start_bin: 9, end_bin: 12, all_camp: false }, // outside [0, 8)
+  ];
+  const { items, lanes } = m.programmeLanes(ev, 0, 8);
+  assert.equal(lanes, 2);
+  assert.deepEqual(items.map((i) => [i.k, i.lane, i.start, i.end]), [[1, 0, 2, 6], [0, 1, 0, 4], [2, 1, 4, 5]]);
+  assert.deepEqual(m.programmeAt(ev, 3).map((e) => e.start_bin), [2, 0]);
+});

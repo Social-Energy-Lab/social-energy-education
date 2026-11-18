@@ -264,3 +264,98 @@ export function seenPerBin(b, nBins) {
 export function suppress(n, min) {
   return n < min ? `<${min}` : String(n);
 }
+
+/** Close bins per pair before startBin (from bin 0) at or above closeRssi: key a*65536+b -> bins.
+ *  "Already close before" in the paused frame: social familiarity, as against closeness now. */
+export function pairHistory(b, closeRssi, startBin) {
+  const p = b.pairs;
+  const hi = lowerBound(p.bin, startBin);
+  const out = new Map();
+  for (let i = 0; i < hi; i++) {
+    if (p.rssi[i] < closeRssi) continue;
+    const key = p.a[i] * 65536 + p.b[i];
+    out.set(key, (out.get(key) ?? 0) + 1);
+  }
+  return out;
+}
+
+/** The window's ties, each with its close bins before the window and its history level:
+ *  0 new (fewer than levels[0] bins before), 1 acquainted (fewer than levels[1]), 2 close.
+ *  Also the count of ties per level, and per visible node its ties and ties per level. */
+export function frame(e, history, levels, vis) {
+  const ties = [];
+  const counts = [0, 0, 0];
+  const per = new Map();
+  for (let i = 0; i < e.a.length; i++) {
+    const before = history.get(e.a[i] * 65536 + e.b[i]) ?? 0;
+    const level = before < levels[0] ? 0 : before < levels[1] ? 1 : 2;
+    ties.push({ a: e.a[i], b: e.b[i], bins: e.bins[i], maxRssi: e.maxRssi[i], before, level });
+    counts[level]++;
+    for (const n of [e.a[i], e.b[i]]) {
+      const row = per.get(n) ?? [0, 0, 0];
+      row[level]++;
+      per.set(n, row);
+    }
+  }
+  const people = [];
+  vis.forEach((v, n) => {
+    if (!v) return;
+    const row = per.get(n) ?? [0, 0, 0];
+    people.push({ node: n, ties: row[0] + row[1] + row[2], levels: row });
+  });
+  return { ties, counts, people };
+}
+
+/** Indices of presses with fromSec <= sec < toSec. */
+export function pressesIn(b, fromSec, toSec) {
+  const s = b.presses.sec;
+  const out = [];
+  for (let i = lowerBound(s, fromSec); i < s.length && s[i] < toSec; i++) out.push(i);
+  return out;
+}
+
+/** What node wrote about a press at sec: their description timed nearest to it within
+ *  toleranceSec, or null. `moments` is moments.json's list ({node, sec, day, when, text});
+ *  writers gave clock times to the hour at best, so the default tolerance is wide. */
+export function descriptionAt(moments, node, sec, toleranceSec = 45 * 60) {
+  let best = null;
+  for (const m of moments || []) {
+    if (m.node !== node || m.sec === null || Math.abs(m.sec - sec) > toleranceSec) continue;
+    if (best === null || Math.abs(m.sec - sec) < Math.abs(best.sec - sec)) best = m;
+  }
+  return best;
+}
+
+/** Descriptions written by node, or dated to camp day `day` (null: any), in file order. */
+export function descriptionsOf(moments, { node = null, day = null } = {}) {
+  return (moments || []).filter((m) => (node === null || m.node === node) &&
+    (day === null || m.day === day));
+}
+
+/** Programme items overlapping [fromBin, toBin) in lanes, so overlapping items never share one:
+ *  [{k, start, end, lane}] (k indexes `events`), with the number of lanes used. All-camp items
+ *  are placed first, so they take the top lanes. */
+export function programmeLanes(events, fromBin, toBin) {
+  const items = [];
+  events.forEach((e, k) => {
+    if (e.end_bin <= fromBin || e.start_bin >= toBin) return;
+    items.push({ k, start: Math.max(fromBin, e.start_bin), end: Math.min(toBin, e.end_bin),
+      all: e.all_camp ? 0 : 1 });
+  });
+  items.sort((x, y) => x.all - y.all || x.start - y.start || y.end - x.end);
+  const laneEnd = [];
+  for (const it of items) {
+    let lane = laneEnd.findIndex((end) => end <= it.start);
+    if (lane < 0) { lane = laneEnd.length; laneEnd.push(0); }
+    laneEnd[lane] = it.end;
+    it.lane = lane;
+    delete it.all;
+  }
+  return { items, lanes: laneEnd.length };
+}
+
+/** Programme items running at bin: all-camp ones, then the rest. */
+export function programmeAt(events, bin) {
+  const on = events.filter((e) => bin >= e.start_bin && bin < e.end_bin);
+  return [...on.filter((e) => e.all_camp), ...on.filter((e) => !e.all_camp)];
+}

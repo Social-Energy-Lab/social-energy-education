@@ -217,6 +217,32 @@ def synthetic_persons(inp: BundleInput, seed: int = 0) -> PersonData:
                 "all_camp": pl.Boolean, "locations": pl.List(pl.String)},
         orient="row",
     )  # fmt: skip
+    # Descriptions for about a third of the consented presses, from a fixed made-up list.
+    lines = [
+        "synthetic: the whole room sang the last chorus together",
+        "synthetic: a small talk on the stairs that went on for an hour",
+        "synthetic: my course finally solved the problem we were stuck on",
+        "synthetic: the view from the hill at sunset",
+        "synthetic: someone I barely knew asked how I was, and meant it",
+    ]
+    sr = inp.presses.filter(pl.col("entity").is_in(list(consent["self_report"])))
+    keep = rng.random(sr.height) < 0.33
+    descriptions = pl.DataFrame(
+        {
+            "entity": sr["entity"].filter(keep),
+            "t": sr["t"].filter(keep),
+            "day": [None] * int(keep.sum()),
+            "when": ["synthetic"] * int(keep.sum()),
+            "text": [lines[int(k)] for k in rng.integers(0, len(lines), int(keep.sum()))],
+        },
+        schema={
+            "entity": pl.String,
+            "t": pl.Datetime("us", "UTC"),
+            "day": pl.Date,
+            "when": pl.String,
+            "text": pl.String,
+        },
+    )
     del n
     return PersonData(
         consent=consent,
@@ -230,6 +256,7 @@ def synthetic_persons(inp: BundleInput, seed: int = 0) -> PersonData:
         eda=eda,
         events=events,
         notes={"waves": "Synthetic data: a single (pre) wave."},
+        descriptions=descriptions,
     )
 
 

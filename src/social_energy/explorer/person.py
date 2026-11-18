@@ -24,6 +24,11 @@ exclusion windows applied):
   minute, ``usable``, ``hr_ok``, ``clock_uncertain``).
 * ``events``: programme items (label, kind, start, end, ``end_known``, ``all_camp``,
   ``locations``), ends already filled the way the analyses fill them.
+* ``descriptions``: what participants wrote about a self-report moment (``entity``; ``t`` UTC
+  where they gave a clock time, else null; ``day``, the local date they gave, else null;
+  ``when`` as written; ``text``), for ``self_report`` consent only. The one place the bundle
+  carries free text, so it sits in its own file and only in the team bundle, which is served
+  behind the login (``docs/decisions/explorer-hosted.md``).
 
 Layout added to the bundle:
 
@@ -31,6 +36,8 @@ Layout added to the bundle:
                  (minutes since t0; rates x100, 65535 = none; hr 0 = none;
                   flags 1 usable, 2 hr_ok, 4 clock_uncertain; sorted by node, then minute)
     person.json  scales, waves, events, the moment rule, and one entry per node
+    moments.json {"moments": [{node, sec, day, when, text}]}  (sec: seconds since t0 or null;
+                 day: camp-day index or null; only with descriptions)
 """
 
 from __future__ import annotations
@@ -38,7 +45,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import numpy as np
@@ -101,6 +108,7 @@ class PersonData:
     moment_rule: dict = field(default_factory=lambda: dict(DEFAULT_MOMENT_RULE))
     #: Shown with the profile, e.g. that no post wave was fielded.
     notes: dict[str, str] = field(default_factory=dict)
+    descriptions: pl.DataFrame | None = None  # entity, t (UTC|null), day (date|null), when, text
 
 
 def check_codes(value: object, where: str = "membrane") -> None:
@@ -333,6 +341,62 @@ def person_json(
         "person_eda": sum(1 for p in people if p["eda"]),
     }
     return doc, qa
+
+
+#: The longest description kept; a longer one is cut and ends in an ellipsis.
+MAX_TEXT = 2000
+
+
+def moments_json(
+    descriptions: pl.DataFrame | None,
+    node_of: dict[str, int],
+    consented: set[str],
+    *,
+    t0: datetime,
+    span_s: int,
+    day_of_sec,
+    day_of_date: dict[date, int],
+) -> tuple[dict | None, dict[str, int]]:
+    """``moments.json``: the self-report descriptions per node, placed as well as they can be.
+
+    ``sec`` (seconds since t0) where the writer gave a clock time inside the bundle, ``day`` (the
+    camp-day index) where they gave at least a date, ``when`` as they wrote it.
+    """
+    qa = dict.fromkeys(
+        ("descriptions_no_node", "descriptions_without_consent", "descriptions_empty",
+         "descriptions_timed", "descriptions_dated"), 0,
+    )  # fmt: skip
+    if descriptions is None or descriptions.is_empty():
+        return None, qa
+    out = []
+    for r in descriptions.iter_rows(named=True):
+        e = r["entity"]
+        if e not in node_of:
+            qa["descriptions_no_node"] += 1
+            continue
+        if e not in consented:
+            qa["descriptions_without_consent"] += 1
+            continue
+        text = " ".join((r["text"] or "").split())
+        if not text:
+            qa["descriptions_empty"] += 1
+            continue
+        if len(text) > MAX_TEXT:
+            text = text[: MAX_TEXT - 1] + "…"
+        sec = None if r["t"] is None else int((r["t"] - t0).total_seconds())
+        if sec is not None and not 0 <= sec < span_s:
+            sec = None
+        day = day_of_sec(sec) if sec is not None else day_of_date.get(r["day"])
+        qa["descriptions_timed"] += sec is not None
+        qa["descriptions_dated"] += day is not None
+        when = " ".join((r["when"] or "").split())[:120] or None
+        out.append({"node": node_of[e], "sec": sec, "day": day, "when": when, "text": text})
+    # Per node: timed in time order, then dated by day, then the rest, each as given.
+    big = 1 << 62
+    out.sort(key=lambda m: (m["node"], big if m["sec"] is None else m["sec"],
+                            big if m["day"] is None else m["day"]))  # fmt: skip
+    qa["descriptions"] = len(out)
+    return {"version": 1, "moments": out}, qa
 
 
 def write_person_json(out_dir: Path, doc: dict) -> None:
