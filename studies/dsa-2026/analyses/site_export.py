@@ -25,6 +25,14 @@ Inputs and filters:
   printed. ``check_aggregates`` then drops every row under ``min_group`` people.
 - The team-meeting deck's rows and numbers (data state, gradients, EDA around presses, interview
   reasons): ``deck_export.py``, under the same small-cell rule.
+- The halls' sound, from ``acoustics-over-time/`` (``acoustics_over_time.py``): ``sound_day``
+  from ``per_day.parquet`` (recorded hours, median Leq, loudest tenth), bundle days only;
+  ``sound_kind`` from ``bins.parquet``, every bin no programme item covered (no kind, or a
+  ``no item (<slot>)`` label) folded into one ``no_item`` kind, median and quartiles of Leq over
+  its bins; the named kinds are checked against ``by_kind.parquet``. Recorders become
+  ``RECORDERS``' room keys; a kind outside ``SOUND_KINDS`` is dropped and logged without its
+  label. These rows describe rooms, so the hours rule (``SOUND_MIN_HOURS``) replaces the people
+  rule. dBFS are relative to each recorder's full scale. Without the folder both are empty.
 
 Output, outside the repository: ``$SOCIAL_ENERGY_DATA/dsa-2026/derived/site/data/`` and
 ``site-data.zip`` beside it, files at the zip's root. ``validate_site_data`` must accept it. It
@@ -59,6 +67,7 @@ from social_energy.explorer.bundle import _local_to_bin
 from social_energy.site.aggregates import (
     AGGREGATE_SECTIONS,
     NUMBERS,
+    SOUND_KINDS,
     check_aggregates,
     is_number,
 )
@@ -88,6 +97,11 @@ TESTS = {"C1": ("c1", "sd"), "C2": ("c2", "sd"), "C4_trust": ("c4_trust", "rr"),
          "C4_lust": ("c4_lust", "rr")}  # fmt: skip
 #: The cascades' headline: co-located presses at most 5 min apart, main null.
 HEADLINE = "co-located pairs <= 5 min"
+#: The sound recorders (``acoustics-over-time``) -> the copy's ``room_<key>``.
+RECORDERS = {"mensa": "dining_hall", "plenum": "main_hall"}
+SOUND_DIR = "acoustics-over-time"
+#: One bin's length in hours (``acoustics_over_time.BIN``, five minutes).
+SOUND_BIN_H = 5 / 60
 
 
 def _r(v: float | None, digits: int = 4) -> float | None:
@@ -246,6 +260,76 @@ def confirmatory_rows(df: pl.DataFrame, log: list[str]) -> list[dict]:
     return rows
 
 
+def sound_day_rows(df: pl.DataFrame, days: set[str], log: list[str]) -> list[dict]:
+    """Per hall and bundle day: recorded hours, median Leq and the loudest tenth's Leq (dBFS)."""
+    rows = []
+    for r in df.sort("recorder", "day").iter_rows(named=True):
+        room, day = RECORDERS.get(r["recorder"]), str(r["day"])
+        if room is None or day not in days:
+            log.append(f"sound_day {r['recorder']} {day}: unknown recorder or outside the bundle")
+            continue
+        rows.append(
+            {"day": day, "room": room, "hours": _r(r["recorded_h"], 2),
+             "leq": _r(r["leq_dbfs"], 1), "leq_p90": _r(r["leq_p90"], 1)}
+        )  # fmt: skip
+    return rows
+
+
+def sound_kind_rows(bins: pl.DataFrame, by_kind: pl.DataFrame, log: list[str]) -> list[dict]:
+    """Per hall and programme kind, from the bins: hours, median and quartiles of Leq.
+
+    Bins no item covered (no kind, or ``no item (<slot>)``) are one ``no_item`` kind, its median
+    over all of them. A named kind's median must equal ``by_kind``'s, so both come from one run.
+    """
+    folded = pl.when(pl.col("kind").is_null() | pl.col("kind").str.starts_with("no item"))
+    b = bins.with_columns(folded.then(pl.lit("no_item")).otherwise(pl.col("kind")).alias("k"))
+    known = pl.col("recorder").is_in(list(RECORDERS))
+    for rec in sorted(set(b.filter(~known)["recorder"])):
+        log.append(f"sound_kind {rec}: unknown recorder; left out")
+    stats = (
+        b.filter(known)
+        .group_by("recorder", "k")
+        .agg(
+            pl.len().alias("bins"),
+            pl.col("leq_dbfs").median().alias("leq"),
+            pl.col("leq_dbfs").quantile(0.25, "linear").alias("lo"),
+            pl.col("leq_dbfs").quantile(0.75, "linear").alias("hi"),
+        )
+        .sort("recorder", "k")
+    )
+    differ = stats.join(
+        by_kind.select("recorder", pl.col("kind").alias("k"), "leq_dbfs_median"),
+        on=["recorder", "k"],
+    ).filter((pl.col("leq") - pl.col("leq_dbfs_median")).abs() > 1e-9)
+    if differ.height:
+        raise SystemExit("sound_kind: bins.parquet and by_kind.parquet disagree; run the analysis")
+    rows = []
+    for r in stats.iter_rows(named=True):
+        if r["k"] not in SOUND_KINDS:
+            # The label may name a person or an event: log only that one was dropped.
+            log.append(f"sound_kind {r['recorder']}: an unknown kind ({r['bins']} bins) left out")
+            continue
+        rows.append(
+            {"room": RECORDERS[r["recorder"]], "programme": r["k"],
+             "hours": _r(r["bins"] * SOUND_BIN_H, 2), "leq": _r(r["leq"], 1),
+             "lo": _r(r["lo"], 1), "hi": _r(r["hi"], 1)}
+        )  # fmt: skip
+    return rows
+
+
+def read_sound(folder: Path, days: set[str], log: list[str]) -> dict:
+    """The sound sections from ``acoustics-over-time/``; empty (and logged) when it is missing."""
+    files = [folder / n for n in ("per_day.parquet", "bins.parquet", "by_kind.parquet")]
+    if not all(f.exists() for f in files):
+        log.append(f"sound: no {SOUND_DIR} outputs in {folder}; run acoustics_over_time.py")
+        return {"sound_day": [], "sound_kind": []}
+    per_day, bins, kinds = (pl.read_parquet(f) for f in files)
+    return {
+        "sound_day": sound_day_rows(per_day, days, log),
+        "sound_kind": sound_kind_rows(bins, kinds, log),
+    }
+
+
 # --- numbers: only from rows that survived the small-cell rule --------------------------------
 
 
@@ -372,6 +456,7 @@ def read_sections(analyses: Path, days: set[str], arrival: str, log: list[str]) 
         "confirmatory": confirmatory_rows(
             pl.read_csv(analyses / "confirmatory" / "results.csv"), log
         ),
+        **read_sound(analyses / SOUND_DIR, days, log),
     }
 
 

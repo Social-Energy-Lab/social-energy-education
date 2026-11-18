@@ -253,6 +253,7 @@ main { counter-reset: chapter 1; }
 /* --- charts (chapters 2-6): text in ink tokens, marks in the accent, recessive grid */
 .viz { margin: 0 0 22px; }
 .viz figcaption { font-size: 14px; font-weight: 600; color: var(--ink-1); margin: 0 0 4px; }
+.viz-subtitle { font-size: 13px; color: var(--ink-2); margin: 12px 0 2px; }
 .viz svg { display: block; overflow: visible; font: 13px/1 var(--sans); font-variant-numeric: tabular-nums; }
 .viz .grid line { stroke: var(--rule); stroke-width: 1; }
 .viz .axis text { fill: var(--ink-3); font-size: 12px; }

@@ -15,6 +15,7 @@ from social_energy.site import (
     validate_site_data,
     write_public_bundle,
 )
+from social_energy.site.aggregates import SOUND_MIN_HOURS
 
 
 def _site(tmp_path, agg=None):
@@ -53,7 +54,10 @@ def test_synthetic_fills_everything():
     agg = synthetic_aggregates(seed=2)
     assert set(agg) == set(AGGREGATE_SECTIONS) | {"numbers"}
     assert set(agg["numbers"]) == set(NUMBER_KEYS)
-    assert all(r["people"] >= 5 for s, rows in agg.items() if s != "numbers" for r in rows)
+    people = [s for s in agg if s != "numbers" and s not in SOUND_MIN_HOURS]
+    assert all(r["people"] >= 5 for s in people for r in agg[s])
+    # Sound rows describe a hall, not people: they carry hours instead (test_site_sound.py).
+    assert all("people" not in r for s in SOUND_MIN_HOURS for r in agg[s])
     assert check_aggregates(agg) == agg
 
 
