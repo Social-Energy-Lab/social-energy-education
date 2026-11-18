@@ -3,10 +3,13 @@
 import importlib.util
 import math
 import sys
+from datetime import date
 from pathlib import Path
 
 import polars as pl
 import pytest
+
+from social_energy.site import aggregates
 
 SCRIPT = (
     Path(__file__).resolve().parents[1] / "studies" / "dsa-2026" / "analyses" / "site_export.py"
@@ -209,7 +212,6 @@ def test_latency_bands_are_in_seconds(script):
 
 
 def test_copy_keys_are_inside_the_site_enumerations(script):
-    from social_energy.site import aggregates
 
     assert set(script.SETTINGS.values()) <= set(aggregates.SETTINGS)
     assert {key for key, _ in script.TESTS.values()} <= set(aggregates.TESTS)
@@ -234,3 +236,79 @@ def test_confirmatory_count_is_c1_when_the_tests_differ(script):
     df = df.with_columns(pl.Series("n", [4, 28, 26, 26]))
     _, numbers, _ = run(script, {"confirmatory": script.confirmatory_rows(df, [])})
     assert "n_confirmatory" not in numbers
+
+
+# --- the halls' sound ---------------------------------------------------------------------------
+
+
+def sound_bins():
+    """Invented bins. Dining hall: two meal bins (-40, -30) and four uncovered bins, two with no
+    kind and two labelled by their slot (-50, -48, -46, -20): no_item takes the median of all
+    four, -47 (quartiles -48.5 and -39.5), not the mean of per-label medians (-49 and -33 give
+    -41). One bin of a kind the site does not know, and one of a recorder it does not know."""
+    return pl.DataFrame(
+        {
+            "recorder": ["mensa"] * 7 + ["office"],
+            "day": [date(2026, 8, 2)] * 8,
+            "kind": ["meal", "meal", None, None, "no item (12:00-13:45)",
+                     "no item (12:00-13:45)", "Lesung mit X", "meal"],
+            "leq_dbfs": [-40.0, -30.0, -50.0, -48.0, -46.0, -20.0, -35.0, -10.0],
+        }
+    )  # fmt: skip
+
+
+def by_kind(meal_median=-35.0):
+    return pl.DataFrame({"recorder": ["mensa"], "kind": ["meal"], "leq_dbfs_median": [meal_median]})
+
+
+def test_sound_kinds_fold_every_uncovered_bin_into_one_no_item(script):
+    log = []
+    rows = script.sound_kind_rows(sound_bins(), by_kind(), log)
+    got = {r["programme"]: r for r in rows}
+    assert set(got) == {"meal", "no_item"}
+    assert got["no_item"]["room"] == "dining_hall"
+    assert got["no_item"]["leq"] == -47.0
+    assert (got["no_item"]["lo"], got["no_item"]["hi"]) == (-48.5, -39.5)
+    assert got["no_item"]["hours"] == round(4 * 5 / 60, 2)
+    assert got["meal"]["leq"] == -35.0
+    assert any("unknown kind" in line for line in log)
+    assert any("office" in line for line in log)
+    # The log is printed: it names no programme label, only that one was left out.
+    assert not any("Lesung" in line for line in log)
+
+
+def test_sound_kinds_refuse_bins_that_disagree_with_by_kind(script):
+    with pytest.raises(SystemExit, match="by_kind"):
+        script.sound_kind_rows(sound_bins(), by_kind(meal_median=-36.0), [])
+
+
+def test_sound_days_keep_the_bundle_days_with_the_hall_names(script):
+    df = pl.DataFrame(
+        {
+            "recorder": ["mensa", "plenum", "plenum"],
+            "day": [date(2026, 8, 2), date(2026, 8, 2), date(2026, 8, 9)],
+            "recorded_h": [6.5, 0.75, 4.0],
+            "leq_dbfs": [-40.04, -55.0, -45.0],
+            "leq_p90": [-32.0, -50.0, -38.0],
+        }
+    )
+    log = []
+    rows = script.sound_day_rows(df, DAYS, log)
+    assert rows == [
+        {"day": "2026-08-02", "room": "dining_hall", "hours": 6.5, "leq": -40.0, "leq_p90": -32.0},
+        {"day": "2026-08-02", "room": "main_hall", "hours": 0.75, "leq": -55.0, "leq_p90": -50.0},
+    ]
+    assert any("2026-08-09" in line for line in log)
+    # The hours rule then drops the main hall's short day.
+    checked, _, _ = run(script, {"sound_day": rows})
+    assert [r["room"] for r in checked["sound_day"]] == ["dining_hall"]
+
+
+def test_missing_sound_folder_leaves_the_sections_empty(script, tmp_path):
+    log = []
+    assert script.read_sound(tmp_path / "nowhere", DAYS, log) == {"sound_day": [], "sound_kind": []}
+    assert any("acoustics" in line for line in log)
+
+
+def test_sound_rooms_are_inside_the_site_enumeration(script):
+    assert set(script.RECORDERS.values()) == set(aggregates.ROOMS)
