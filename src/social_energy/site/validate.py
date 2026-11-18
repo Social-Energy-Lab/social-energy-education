@@ -193,7 +193,10 @@ def validate_site_data(data_dir: Path, min_group: int = 5) -> dict:
     except (OSError, ValueError) as err:
         raise SiteDataError(f"cannot read site data: {err}") from err
     _check_meta(meta)
-    stray = sorted(p.name for p in data_dir.glob("*.bin") if p.stem not in PUBLIC_COLUMNS)
+    # Only the public tables, meta and aggregates: a team file (person.json, moments.json,
+    # eda.bin) must never ride along.
+    expected = {"meta.json", "aggregates.json", *(f"{n}.bin" for n in PUBLIC_COLUMNS)}
+    stray = sorted(p.name for p in data_dir.iterdir() if p.name not in expected)
     if stray:
         raise SiteDataError(f"unexpected file {stray[0]}")
     try:

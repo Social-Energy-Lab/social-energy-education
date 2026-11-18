@@ -16,8 +16,9 @@ concatenated, little-endian, each ``count`` long; ``meta["files"]`` lists the co
     presses.bin  sec u32 · node u16                       (seconds since t0; sorted)
     bins.bin     phase u8 · day u8                        (one row per bin)
 
-With ``PersonData`` (team mode only) the bundle also carries the person view's ``eda.bin`` and
-``person.json``, described in ``person.py``, and ``meta["person"]`` names them.
+With ``PersonData`` (team mode only) the bundle also carries the person view's ``eda.bin``,
+``person.json`` and, when there are self-report descriptions, ``moments.json``, described in
+``person.py``; ``meta["person"]`` names them.
 """
 
 from __future__ import annotations
@@ -33,7 +34,15 @@ import polars as pl
 
 from .. import paths
 from ..study import ExplorerConfig
-from .person import EDA_COLUMNS, EDA_SCHEMA, PersonData, eda_frame, person_json, write_person_json
+from .person import (
+    EDA_COLUMNS,
+    EDA_SCHEMA,
+    PersonData,
+    eda_frame,
+    moments_json,
+    person_json,
+    write_person_json,
+)
 
 VERSION = 1
 DTYPES = {"u8": np.uint8, "i8": np.int8, "u16": np.uint16, "u32": np.uint32}
@@ -256,12 +265,25 @@ def write_bundle(
         cols, eqa = eda_frame(eda, node_of, set(inp.persons.consent.get("eda", ())), inp.t0, n_min)
         files["eda"] = _write(out_dir, "eda", cols, {"eda": EDA_COLUMNS})
         write_person_json(out_dir, doc)
-        qa |= pqa | eqa
+        moments, mqa = moments_json(
+            inp.persons.descriptions, node_of, set(inp.persons.consent.get("self_report", ())),
+            t0=inp.t0, span_s=inp.n_bins * inp.bin_seconds,
+            day_of_sec=lambda sec: day[min(sec // inp.bin_seconds, inp.n_bins - 1)],
+            day_of_date={first_day + timedelta(days=d["index"]): d["index"] for d in days},
+        )  # fmt: skip
+        qa |= pqa | eqa | mqa
         meta["person"] = {"file": "person.json"}
+        if moments is not None:
+            text = json.dumps(moments, separators=(",", ":"), ensure_ascii=False)
+            (out_dir / "moments.json").write_text(text, encoding="utf-8")
+            meta["person"]["moments"] = "moments.json"
+        else:
+            (out_dir / "moments.json").unlink(missing_ok=True)
     else:
         # A rewrite without person data must not leave an earlier export's person files behind.
         stale.unlink(missing_ok=True)
         (out_dir / "eda.bin").unlink(missing_ok=True)
+        (out_dir / "moments.json").unlink(missing_ok=True)
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     return meta
 

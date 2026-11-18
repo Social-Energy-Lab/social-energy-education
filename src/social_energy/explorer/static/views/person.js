@@ -6,6 +6,7 @@
 // the EDA around it → special moments per day against the camp. Clicking a close person opens
 // their view at the same moment, with a breadcrumb back.
 import * as pm from "../person-model.js";
+import { descriptionsOf } from "../model.js";
 
 const CASCADE_S = 5 * 60; // "pressed too": within 5 minutes, the cascade window of the analyses
 const AROUND_MIN = 15; // EDA shown this many minutes either side of a moment
@@ -506,6 +507,13 @@ export function create(root, ctx) {
       <h3>${title}</h3>
       <p class="moment-when"><b>${when(sec)}</b> · ${esc(ctx.phaseName(bin))} · ${place}</p>
       <p>Programme: ${evs.length ? evs.map((e) => `<b>${esc(e.label)}</b> <span class="muted">(${esc(e.kind)}${e.end_known ? "" : ", end inferred"})</span>`).join("; ") : "<span class='muted'>no programme item placed here</span>"}</p>
+      ${(() => {
+        if (!ctx.moments) return "";
+        const day = b.bins.day[bin];
+        const ids = [i, ...close.map((c) => c.node)];
+        const w = descriptionsOf(ctx.moments, { day }).filter((m) => ids.includes(m.node));
+        return w.length ? `<h4>Written about this day, by them or the people close</h4><ul class="press-list">${w.map((m) => `<li><b>${name(m.node)}</b> <span class="muted">${esc(m.when ?? "")}</span><span class="desc">${esc(m.text)}</span></li>`).join("")}</ul>` : "";
+      })()}
       <h4>Close in this 5-minute bin (≥ ${closeRssi} dBm)</h4>
       ${close.length ? `<table class="close"><tr><th>person</th><th>course</th><th>strongest signal</th><th>pressed within ±5 min</th><th>type</th><th>trust / lust (z)</th><th>D lenient</th></tr>${others}</table>` : "<p class='muted'>Nobody at close range in this bin.</p>"}
       <p class="caveat">Close means the strongest beacon signal between the two tags in the bin reached the threshold. Beacons cannot tell whether two people faced each other or talked: walls, pockets and bodies change the signal.</p>
@@ -638,6 +646,26 @@ export function create(root, ctx) {
       `Days with fewer worn hours have fewer chances for either.`);
   }
 
+  // ---- in their own words ---------------------------------------------------------------------
+  function words() {
+    const el = $("#person-words");
+    const panel = el.closest("section");
+    panel.hidden = !ctx.moments;
+    if (!ctx.moments) return;
+    const mine = descriptionsOf(ctx.moments, { node: st.node });
+    if (!mine.length) {
+      el.innerHTML = `<p class="muted">${people[st.node].self_report ? "No card from this person was transcribed with their study ID." : "No self-report consent."}</p>`;
+      return;
+    }
+    el.innerHTML = `<ul class="press-list">${mine.map((m) => `<li class="has-text" data-k="${ctx.moments.indexOf(m)}">
+      <span class="t">${m.sec !== null ? `${ctx.dayLabel(m.sec / binS).slice(0, 6)} ${ctx.clockLabel(m.sec / binS)}` : m.day !== null ? ctx.dayLabel(ctx.dayRange(m.day)[0]).slice(0, 6) : "no date"}</span>
+      <span class="muted">${esc(m.when ?? "")}</span>
+      <span class="desc">${esc(m.text)}</span></li>`).join("")}</ul>`;
+    for (const li of el.querySelectorAll("li[data-k]")) {
+      li.addEventListener("click", () => ctx.showMoment(ctx.moments[Number(li.dataset.k)]));
+    }
+  }
+
   // ---- render -------------------------------------------------------------------------------------
   function render() {
     rendered = true;
@@ -647,6 +675,7 @@ export function create(root, ctx) {
     header();
     profile();
     membrane();
+    words();
     timeline();
     momentPanel();
     distribution();

@@ -44,6 +44,26 @@ export function explanations(ctx) {
     <p>Bundle: ${meta.nodes.length} participants, ${meta.files.pairs.count.toLocaleString("en-GB")}
     pair readings at or above ${meta.rssi_floor} dBm; dropped at export: ${n("pairs_no_node")} pair
     readings without a participant at one end, ${n("rooms_dropped")} room readings.</p>`);
+  set("explain-programme", `
+    <p>The day's programme as the field log recorded it: dark items were for the whole camp,
+    light ones ran in some rooms only (electives, rehearsals, sport). A dashed edge means the end
+    was not recorded and is filled with the usual length of that kind of item. Overlapping items
+    get their own rows. Click an item to jump to its start.</p>`);
+  set("explain-frame", `
+    <p>Everyone whose tag was heard in the window before the playhead. <b>Close now</b> is the
+    network's line: close range for at least the <b>together</b> minutes in the window, which
+    is physical nearness, not proof of talking. Each tie is then sorted by how long the same two
+    people had been at close range before the window, from the start of the study: <b>new</b>
+    under 1 hour, <b>acquainted</b> 1 to 5 hours, <b>close</b> 5 hours or more. That is shared
+    time, a proxy for knowing each other, not a measure of the relationship. Early in the
+    academy most ties are new by construction; later, few are.</p>
+    <p>Click people in the network or the table to pick them (click again to drop). Picked
+    people are ringed and named in the network, and the table puts them side by side: minutes
+    close now and close time before. Double-click a dot to open the person view.</p>
+    <p>A self-report press shows what its presser wrote on their card when they gave a time
+    within 45 minutes of it. Most cards give only a day or a programme item, so they are listed
+    by day. ${n("descriptions")} written moments are in this bundle; cards without a study ID,
+    by staff, or by participants without a dot are not. The frame is only computed while paused.</p>`);
 }
 
 // The person view's definitions and caveats.

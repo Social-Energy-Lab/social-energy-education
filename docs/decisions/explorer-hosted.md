@@ -30,9 +30,15 @@ allows the pseudonymised data only to authorised research staff on access-restri
   (`explorer.deploy`), never in this repo. A one-time setup (`scripts/explorer-server-setup.sh`,
   run as root) gives the deploying account its folder and the web server its site, so later
   deploys need no admin rights.
-- **Not yet decided:** free text (self-report descriptions, interview passages) and real names.
-  Both make the data more identifying than study IDs; free text is planned behind the login, and
-  names wait for the project lead to confirm what the ethics approval and the consent allow.
+- **Self-report descriptions behind the login (added 2026-11-18).** What participants wrote on
+  paper about a moment they marked is shown in the team bundle only, for `self_report` consent
+  only, in its own file (`moments.json`) so the rest of the bundle stays codes-only. The public
+  site's checks refuse it. It is free text by minors and may name other people, which makes it
+  the most identifying thing in the bundle: it is shown in full to logged-in researchers and
+  goes nowhere else.
+- **Not yet decided:** interview passages and real names. Interview text needs a decision on
+  which passages and under what consent; names wait for the project lead to confirm what the
+  ethics approval and the consent allow.
 
 ## Consequences
 

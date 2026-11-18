@@ -31,6 +31,10 @@ who consented to its module (staff are never nodes):
   them (``event_windows``); which item applies to a person is decided in the view by the same
   rule as ``exploratory_presses.event_bins`` (all-camp, or placed in one of its rooms).
 - Age and gender from the spine.
+- Self-report descriptions (``self_report``): what participants wrote on paper about a moment
+  they marked, transcribed into ``raw/self-report-descriptions/*.xlsx`` (the newest file) and
+  read by ``social_energy.beacons.descriptions``. Rows without a study ID, or whose ID is not a
+  participant, are counted and left out. Free text, so team bundle only.
 
 Run after ``confirmatory.py``, ``exploratory_eda.py``'s inputs (``ingest-eda``,
 ``eda-heart-rate``) and the membrane coding.
@@ -62,6 +66,7 @@ import exploratory_presses as xp
 import self_report_context as sr
 
 from social_energy import paths
+from social_energy.beacons.descriptions import parse_descriptions
 from social_energy.explorer import BundleInput, write_bundle
 from social_energy.explorer.person import PersonData
 from social_energy.spine import Spine
@@ -221,6 +226,44 @@ def event_inputs(spine: Spine) -> pl.DataFrame:
     )  # fmt: skip
 
 
+def description_inputs(layout, spine: Spine, tz: ZoneInfo) -> tuple[pl.DataFrame | None, dict]:
+    """The transcribed cards: entity, t (UTC, where a clock time was given), day, when, text."""
+    files = sorted((layout.raw / "self-report-descriptions").glob("*.xlsx"))
+    if not files:
+        return None, {"description_files": 0}
+    import openpyxl  # the analysis extra
+
+    ws = openpyxl.load_workbook(files[-1], read_only=True).worksheets[0]
+    rows = [r[:3] for r in ws.iter_rows(min_row=2, values_only=True) if any(r[:3])]
+    raw = pl.DataFrame(
+        {"id": [None if r[0] is None else str(r[0]) for r in rows],
+         "when": [None if r[1] is None else str(r[1]) for r in rows],
+         "text": [None if r[2] is None else str(r[2]) for r in rows]},
+        schema={"id": pl.String, "when": pl.String, "text": pl.String},
+    )  # fmt: skip
+    df, qa = parse_descriptions(raw, year=cp.FIRST_DAY.year, first_day=cp.FIRST_DAY,
+                                last_day=cp.LAST_DAY)  # fmt: skip
+    participants = {p.ref for p in spine.people if p.role == "participant"}
+    df = df.with_columns(("person:" + pl.col("study_id")).alias("entity"))
+    qa = {f"description_{k}": v for k, v in qa.items()}
+    qa["description_not_participant"] = df.filter(
+        pl.col("ok") & ~pl.col("entity").is_in(list(participants))
+    ).height
+    df = df.filter(pl.col("ok") & pl.col("entity").is_in(list(participants)))
+    t = [
+        None if d is None or c is None
+        else datetime.combine(d, c).replace(tzinfo=tz).astimezone(ZoneInfo("UTC"))
+        for d, c in zip(df["day"], df["clock"], strict=True)
+    ]  # fmt: skip
+    out = pl.DataFrame(
+        {"entity": df["entity"], "t": t, "day": df["day"], "when": df["when"],
+         "text": df["text"]},
+        schema={"entity": pl.String, "t": pl.Datetime("us", "UTC"), "day": pl.Date,
+                "when": pl.String, "text": pl.String},
+    )  # fmt: skip
+    return out, qa
+
+
 def person_data(layout, study: StudyConfig, spine: Spine, nodes: list[str]) -> PersonData:
     participants = {p.ref for p in spine.people if p.role == "participant"}
     consent = {
@@ -230,6 +273,8 @@ def person_data(layout, study: StudyConfig, spine: Spine, nodes: list[str]) -> P
     attributes = {p.ref: {"age": p.age, "gender": p.gender} for p in spine.people
                   if p.ref in set(nodes)}  # fmt: skip
     membrane, interviews, coded = membrane_inputs(layout, spine, ZoneInfo(study.timezone))
+    descriptions, dqa = description_inputs(layout, spine, ZoneInfo(study.timezone))
+    print(dqa)
     return PersonData(
         consent=consent,
         attributes=attributes,
@@ -238,6 +283,7 @@ def person_data(layout, study: StudyConfig, spine: Spine, nodes: list[str]) -> P
         interviews=interviews,
         eda=eda_inputs(layout, spine),
         events=event_inputs(spine),
+        descriptions=descriptions,
         notes={
             "waves": "Baseline survey only: the post-academy wave is still running.",
             "membrane": (

@@ -60,6 +60,11 @@
   </nav>
 
   <main id="camp-view" class="grid">
+    <section id="programme-panel" class="panel programme-panel" hidden>
+      <h2>Programme today</h2>
+      <div id="programme"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-programme"></div></details>
+    </section>
     <section class="panel network-panel">
       <h2>Who is close to whom</h2>
       <div id="network" class="network"></div>
@@ -80,6 +85,11 @@
       <h2>Self-reports</h2>
       <div id="presses"></div>
       <details><summary>What am I looking at?</summary><div id="explain-presses"></div></details>
+    </section>
+    <section class="panel frame-panel">
+      <h2>Who is together in this frame</h2>
+      <div id="frame"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-frame"></div></details>
     </section>
     <section class="panel strips-panel">
       <h2>Across the whole study</h2>
@@ -110,6 +120,10 @@
         </div>
       </div>
     </section>
+    <section class="panel person-wide" hidden>
+      <h2>In their own words: self-report cards</h2>
+      <div id="person-words"></div>
+    </section>
     <section class="panel person-wide">
       <h2>Across the academy</h2>
       <div id="person-timeline"></div>
@@ -126,6 +140,10 @@
     </section>
   </main>
   <div id="tooltip" class="tooltip" role="status" hidden></div>
+  <div id="popup" class="popup" role="dialog" aria-label="Written description" hidden>
+    <button type="button" class="pop-close" aria-label="Close">×</button>
+    <div class="pop-body"></div>
+  </div>
   <div id="error" class="error" hidden></div>
 
   <script src="vendor/d3.min.js"></script>

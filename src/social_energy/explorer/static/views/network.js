@@ -72,8 +72,11 @@ export function create(el, ctx, legendEl) {
   }
 
   const group = (c) => (c < 0 ? nCourses : c);
+  let pickedSet = new Set();
+  let nearPicked = new Uint8Array(nNodes);
   function edgeLit(l) {
     if (!st) return true;
+    if (pickedSet.size) return pickedSet.has(l.source.i) || pickedSet.has(l.target.i);
     const ca = nodeCourse[l.source.i];
     const cb = nodeCourse[l.target.i];
     if (st.course !== null && ca !== st.course && cb !== st.course) return false;
@@ -90,6 +93,7 @@ export function create(el, ctx, legendEl) {
   }
   function nodeLit(i) {
     if (!st) return true;
+    if (pickedSet.size) return pickedSet.has(i) || nearPicked[i] === 1;
     if (st.course !== null && nodeCourse[i] !== st.course) return false;
     if (st.cell && !st.cell.includes(group(nodeCourse[i]))) return false;
     if (st.zone !== null && zoneOf[i] !== st.zone) return false;
@@ -164,6 +168,22 @@ export function create(el, ctx, legendEl) {
       g.stroke();
     }
     g.globalAlpha = 1;
+    // Picked people: a ring and their name.
+    g.font = "600 11px system-ui, sans-serif";
+    g.textAlign = "left";
+    for (const i of pickedSet) {
+      const n = nodes[i];
+      g.strokeStyle = c.ink1;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(X(n.x), Y(n.y), 9, 0, 2 * Math.PI);
+      g.stroke();
+      g.lineWidth = 3;
+      g.strokeStyle = c.surface;
+      g.strokeText(ctx.personName(i), X(n.x) + 11, Y(n.y) - 8);
+      g.fillStyle = c.ink1;
+      g.fillText(ctx.personName(i), X(n.x) + 11, Y(n.y) - 8);
+    }
   }
 
   function update(state, p, e, changed) {
@@ -188,6 +208,12 @@ export function create(el, ctx, legendEl) {
       degree = new Uint16Array(nNodes);
       for (let i = 0; i < e.a.length; i++) { degree[e.a[i]]++; degree[e.b[i]]++; }
       sim.alpha(Math.max(sim.alpha(), 0.15));
+    }
+    pickedSet = new Set(state.picked);
+    nearPicked = new Uint8Array(nNodes);
+    for (let k = 0; k < e.a.length; k++) {
+      if (pickedSet.has(e.a[k])) nearPicked[e.b[k]] = 1;
+      if (pickedSet.has(e.b[k])) nearPicked[e.a[k]] = 1;
     }
     sim.force("x").initialize(nodes);
     sim.force("y").initialize(nodes);
@@ -240,7 +266,9 @@ export function create(el, ctx, legendEl) {
         `<b>${ctx.courseName(nodeCourse[i])}</b><br>` +
         `${vis[i] ? `${degree[i]} close ties in the window` : "<span class='muted'>tag not heard in the window</span>"}<br>` +
         `place now: ${zone}<br>button presses today: ${today}` +
-        (ctx.openPerson ? "<br><span class='muted'>click to open this person</span>" : ""),
+        (ctx.moments ? `<br>wrote about ${ctx.moments.filter((m) => m.node === i).length} moments` : "") +
+        `<br><span class='muted'>click to ${st.picked.includes(i) ? "unpick" : "pick"}` +
+        (ctx.openPerson ? " · double-click to open this person" : "") + "</span>",
         ev.clientX, ev.clientY,
       );
       return;
@@ -263,9 +291,9 @@ export function create(el, ctx, legendEl) {
     ctx.tip.hide();
   });
   canvas.addEventListener("mouseleave", () => ctx.tip.hide());
-  // Click a dot: open that person in the person view at the playhead (team bundles with it).
-  canvas.addEventListener("click", (ev) => {
-    if (!ctx.openPerson || !st) return;
+  // Click a dot: pick or unpick it (several can be picked); double-click: open that person in
+  // the person view at the playhead (team bundles with it).
+  function nearest(ev) {
     const rect = canvas.getBoundingClientRect();
     const { s, ox, oy } = transform();
     const mx = ev.clientX - rect.left;
@@ -276,6 +304,22 @@ export function create(el, ctx, legendEl) {
       const d = Math.hypot(ox + n.x * s - mx, oy + n.y * s - my);
       if (d < bestD) { best = n; bestD = d; }
     }
+    return best;
+  }
+  let clickTimer = null;
+  canvas.addEventListener("click", (ev) => {
+    if (!st) return;
+    const best = nearest(ev);
+    if (!best) return;
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+      const has = st.picked.includes(best.i);
+      ctx.set({ picked: has ? st.picked.filter((x) => x !== best.i) : [...st.picked, best.i] });
+    }, 220);
+  });
+  canvas.addEventListener("dblclick", (ev) => {
+    clearTimeout(clickTimer);
+    const best = st && ctx.openPerson ? nearest(ev) : null;
     if (best) ctx.openPerson(best.i, Math.floor(st.bin));
   });
 
