@@ -52,6 +52,15 @@ social-energy explore studies/<id>/study.yaml [--port N] [--no-browser] [--demo]
     analyses/explorer_export.py). Local only; the bundle is pseudonymised data.
     With --demo, serve a synthetic camp instead (person view included): no data root needed.
 
+social-energy deploy-explorer studies/<id>/study.yaml
+    Send the app and the same bundle to the hosted team server named in the study's private
+    local.yaml (explorer.deploy.ssh_host and path) over SSH, and swap it in whole. The server
+    serves it behind the VPN and a login; see docs/decisions/explorer-hosted.md.
+
+social-energy explorer-user studies/<id>/study.yaml [--add NAME | --remove NAME]
+    List, add or remove the researchers who may log in to the hosted explorer. --add asks for
+    the password here and sends only its hash; adding an existing name changes its password.
+
 social-energy ingest-survey studies/<id>/study.yaml
     Parse raw/survey/zeitgeist/*/responses.jsonl into
     derived/survey/{items,respondents}.parquet plus qa.json.
@@ -515,7 +524,53 @@ def site_build(study: StudyConfig, out: Path | None, data: Path | None = None) -
     return 0
 
 
+def deploy_explorer(study: StudyConfig) -> int:
+    from .explorer import deploy
+
+    bundle = paths.study(study.study_id).derived / "explorer" / "bundle"
+    try:
+        target = deploy.target(study.local)
+        deploy.push(target, bundle)
+    except deploy.DeployError as err:
+        print(f"Refused: {err}")
+        return 1
+    print(f"Deployed {bundle} to {target.ssh_host}:{target.path}/current")
+    return 0
+
+
+def explorer_user(study: StudyConfig, add: str | None = None, remove: str | None = None) -> int:
+    import getpass
+
+    from .explorer import deploy
+
+    try:
+        target = deploy.target(study.local)
+        users = deploy.read_users(target)
+        if add:
+            password = getpass.getpass(f"New password for {add}: ")
+            if len(password) < 12 or password != getpass.getpass("Again: "):
+                print("Refused: the passwords differ or are shorter than 12 characters")
+                return 1
+            users = deploy.with_user(
+                users, deploy.password_line(add, deploy.hash_password(password))
+            )
+            deploy.write_users(target, users)
+        elif remove:
+            if remove not in deploy.user_names(users):
+                print(f"No user {remove!r}")
+                return 1
+            users = deploy.without_user(users, remove)
+            deploy.write_users(target, users)
+    except deploy.DeployError as err:
+        print(f"Refused: {err}")
+        return 1
+    print("Users: " + (", ".join(deploy.user_names(users)) or "none"))
+    return 0
+
+
 COMMANDS["explore"] = explore
+COMMANDS["deploy-explorer"] = deploy_explorer
+COMMANDS["explorer-user"] = explorer_user
 COMMANDS["site-build"] = site_build
 COMMANDS["purge-device"] = purge_device
 
@@ -535,6 +590,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--device", type=int, action="append", default=[], help="purge-device: device ID"
     )
+    users = parser.add_mutually_exclusive_group()
+    users.add_argument("--add", metavar="NAME", help="explorer-user: add a login, or reset it")
+    users.add_argument("--remove", metavar="NAME", help="explorer-user: remove a login")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--dry-run", action="store_true", help="purge-device: only count lines (the default)"
@@ -549,6 +607,8 @@ def main(argv: list[str] | None = None) -> int:
             return purge_device(study, args.device, apply=args.apply)
         if args.command == "explore":
             return explore(study, port=args.port, open_browser=not args.no_browser, demo=args.demo)
+        if args.command == "explorer-user":
+            return explorer_user(study, add=args.add, remove=args.remove)
         if args.command == "site-build":
             return site_build(study, args.out, args.data)
         return COMMANDS[args.command](study)

@@ -1,7 +1,8 @@
 # The explorer runs locally, on an ID-free bundle
 
-**Date:** 2026-10-01 · **Status:** adopted · amended 2026-10-21 by [public-site.md](public-site.md)
-and on 2026-10-29 (study IDs in the person view, below)
+**Date:** 2026-10-01 · **Status:** adopted · amended 2026-10-21 by [public-site.md](public-site.md),
+on 2026-10-29 (study IDs in the person view, below) and on 2026-11-18 by
+[explorer-hosted.md](explorer-hosted.md) (a hosted team copy behind the VPN and a login)
 
 ## Context
 
@@ -49,3 +50,7 @@ anonymised data in publications.
 
 The amendment changes nothing here: team mode stays local. The public route is the site, built
 from the public bundle and a release asset ([public-site.md](public-site.md)).
+
+Since 2026-11-18 the same team mode also runs on an access-restricted institute server, behind the
+VPN and a login per researcher ([explorer-hosted.md](explorer-hosted.md)). The local `explore` is
+unchanged.
