@@ -2,7 +2,7 @@
 
 **Priority:** high — the project lead's ask: the team explorer without a data root on every machine
 **Gate:** none
-**Next:** run the server setup once, deploy, add the first logins, and check it with the project lead
+**Next:** add logins for the researchers the project lead names, and check it with them
 
 **Goal:** the research team opens the team explorer in a browser on the institute VPN, with its
 own login, and sees the same data as `social-energy explore` shows locally
@@ -13,8 +13,9 @@ own login, and sees the same data as `social-energy explore` shows locally
 - [x] `social-energy deploy-explorer` and `explorer-user`, reading the target from `local.yaml`
       (`social_energy.explorer.deploy`) (2026-11-18).
 - [x] One-time server setup script (`scripts/explorer-server-setup.sh`) (2026-11-18).
-- [ ] Run the setup on the server (needs the deploying account's admin password).
-- [ ] First deploy; first logins for the researchers the project lead names.
+- [x] Run the setup on the server (2026-11-18).
+- [x] First deploy and first login (2026-11-18).
+- [ ] Logins for the researchers the project lead names.
 - [ ] Check with the project lead in the browser.
 - [ ] Ask the institute for a proper certificate, so browsers stop warning.
 
