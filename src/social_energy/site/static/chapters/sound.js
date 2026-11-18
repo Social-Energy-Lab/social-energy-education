@@ -110,9 +110,12 @@ function dayChart(host, series, days, { meta, lang, t, room }) {
     .attr("height", height - bottom - top);
   sg.append("text")
     .attr("class", "special-label")
-    .attr("x", (s) => x(s.d))
+    // On a phone the labels of nearby special days would run into each other: alternate them
+    // to the left and right of their band.
+    .attr("x", (s, i) => x(s.d) + (narrow ? (i % 2 ? -step / 2 : step / 2) : 0))
     .attr("y", top - 7)
-    .attr("text-anchor", (s) => (x(s.d) > width * 0.75 ? "end" : x(s.d) < width * 0.25 ? "start" : "middle"))
+    .attr("text-anchor", (s, i) => (narrow ? (i % 2 ? "start" : "end")
+      : x(s.d) > width * 0.75 ? "end" : x(s.d) < width * 0.25 ? "start" : "middle"))
     .text((s) => named(t, "label", s.label));
 
   svg
