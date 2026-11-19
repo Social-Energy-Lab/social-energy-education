@@ -1,6 +1,10 @@
-// Self-reports: presses per hour across the study (shared moments marked), and how many close
-// others a person had at a press compared with their ordinary 5-minute bins, by phase.
+// Self-reports: presses per hour across the study (shared moments marked), the picked people one
+// row each (their presses and EDA moments across the study), and how many close others a person
+// had at a press compared with their ordinary 5-minute bins, by phase.
 import { companyByPhase, perHour, sharedMoments, suppress } from "../model.js";
+import { pressesOf } from "../person-model.js";
+
+const ROW_H = 22;
 
 const SHARED_S = 5 * 60;
 
@@ -9,6 +13,10 @@ export function create(el, ctx) {
   const nHours = Math.ceil(nBins / ctx.binsPerHour);
   const hourly = perHour(ctx.b, meta.bin_seconds, nHours);
   const top = d3.select(el).append("svg").attr("width", "100%");
+  const groupHint = document.createElement("p");
+  groupHint.className = "hint muted small";
+  el.append(groupHint);
+  const group = d3.select(el).append("svg").attr("width", "100%");
   const bottom = d3.select(el).append("svg").attr("width", "100%");
   let rssiKey = null;
   let sharedHourly = new Uint16Array(nHours);
@@ -72,6 +80,8 @@ export function create(el, ctx) {
       })
       .on("mouseleave", () => ctx.tip.hide());
 
+    picked(state, width);
+
     // Company at a press vs ordinary time, by phase.
     const h2 = 150;
     bottom.attr("height", h2);
@@ -107,6 +117,66 @@ export function create(el, ctx) {
       lg.append("rect").attr("x", i * 110).attr("y", 0).attr("width", 10).attr("height", 10).attr("rx", 2).attr("fill", f);
       lg.append("text").attr("x", i * 110 + 15).attr("y", 9).text(t);
     });
+  }
+
+  // The picked people, one row each: presses (blue ticks) and EDA moments (yellow dots).
+  function picked(state, width) {
+    const c = ctx.colors;
+    const ids = state.picked;
+    group.selectAll("*").remove();
+    if (!ids.length) {
+      group.attr("height", 0);
+      groupHint.hidden = false;
+      groupHint.textContent = "Pick people (in the network, the frame, or “their people” in a person's page) to see their presses and EDA moments here, one row each.";
+      return;
+    }
+    groupHint.hidden = true;
+    const left = 96;
+    const right = 150;
+    const h = 18 + ids.length * ROW_H + 18;
+    group.attr("height", h);
+    const x = d3.scaleLinear().domain([0, nBins]).range([left, width - right]);
+    group.append("text").attr("x", 4).attr("y", 11)
+      .text(`picked people: presses${ctx.edaMomentsOf ? " (blue) and EDA moments (yellow, exploratory)" : ""}, one row each`);
+    for (const d of meta.days) {
+      group.append("line").attr("x1", x(d.start_bin)).attr("x2", x(d.start_bin))
+        .attr("y1", 16).attr("y2", h - 16).attr("stroke", c.rule);
+      group.append("text").attr("x", x(d.start_bin) + 2).attr("y", h - 4)
+        .style("fill", c.ink3).style("font-size", "10px").text(d.label.slice(4, 6));
+    }
+    const binS = meta.bin_seconds;
+    ids.forEach((i, r) => {
+      const y = 18 + r * ROW_H;
+      const row = group.append("g");
+      row.append("text").attr("x", 4).attr("y", y + 14).style("font-weight", 600)
+        .style("cursor", ctx.openPerson ? "pointer" : null).text(ctx.personName(i))
+        .on("click", () => ctx.openPerson?.(i, Math.floor(state.bin)));
+      row.append("line").attr("x1", left).attr("x2", width - right).attr("y1", y + ROW_H - 2)
+        .attr("y2", y + ROW_H - 2).attr("stroke", c.rule);
+      const consent = ctx.person ? ctx.person.people[i]?.self_report : true;
+      const secs = consent ? pressesOf(ctx.b, i) : [];
+      const eda = ctx.edaMomentsOf?.(i) ?? null;
+      for (const s of secs) {
+        row.append("line").attr("x1", x(s / binS)).attr("x2", x(s / binS)).attr("y1", y + 3)
+          .attr("y2", y + ROW_H - 4).attr("stroke", c.accent).attr("stroke-width", 1.6)
+          .on("mousemove", (ev) => ctx.tip.show(`<b>${ctx.personName(i)}</b> pressed<br>${ctx.dayLabel(s / binS)} ${ctx.clockLabel(s / binS)}<br><span class='muted'>click to jump here</span>`, ev.clientX, ev.clientY))
+          .on("mouseleave", () => ctx.tip.hide())
+          .style("cursor", "pointer").on("click", () => ctx.set({ bin: Math.floor(s / binS), playing: false }));
+      }
+      for (const m of eda ?? []) {
+        const b = (m.min * 60) / binS;
+        row.append("circle").attr("cx", x(b)).attr("cy", y + ROW_H / 2).attr("r", 2.6)
+          .attr("fill", c.glow).attr("stroke", c.ink3).attr("stroke-width", 0.5)
+          .on("mousemove", (ev) => ctx.tip.show(`<b>${ctx.personName(i)}</b>: EDA moment (exploratory)<br>${ctx.dayLabel(b)} ${ctx.clockLabel(b)}`, ev.clientX, ev.clientY))
+          .on("mouseleave", () => ctx.tip.hide())
+          .style("cursor", "pointer").on("click", () => ctx.set({ bin: Math.floor(b), playing: false }));
+      }
+      const what = !consent ? "no self-report consent"
+        : `${secs.length} presses${ctx.edaMomentsOf ? ` · ${eda ? `${eda.length} EDA` : "no EDA"}` : ""}`;
+      row.append("text").attr("x", width - right + 8).attr("y", y + 14).style("fill", c.ink2).text(what);
+    });
+    const bx = x(Math.floor(state.bin));
+    group.append("line").attr("class", "cursor").attr("x1", bx).attr("x2", bx).attr("y1", 16).attr("y2", h - 16);
   }
 
   return { update };

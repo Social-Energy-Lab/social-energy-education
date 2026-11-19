@@ -37,6 +37,12 @@ own login, and sees the same data as `social-energy explore` shows locally
   The network stops moving when paused, so dots can be clicked.
 - The halls' sound (2026-11-18): a "How the halls sounded" tab and a "Sound now" line in the
   frame, each hall against its own recorded time.
+- The project lead's first questions (2026-11-19): click a room item of the programme to see
+  only the people at it (placed in its rooms by their room tag for most of the item); "Their
+  people across the academy" in the person view (everyone close to the person, hours per day,
+  room items shared, open to dive in); the picked people one row each in Self-reports (presses
+  and EDA moments); the sound over the whole camp with the frequency mix (below 300 Hz, voice
+  range, above 4000 Hz) under the loudness.
 - **Remove the classic view** (`classic.html`, `classic.js`, `classic.css`) after the next field
   phase, once nobody asks for it.
 - Not yet: ready-made starting points (a question that sets day, time and view), presentation

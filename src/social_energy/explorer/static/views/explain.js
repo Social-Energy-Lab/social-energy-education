@@ -30,7 +30,10 @@ export function explanations(ctx) {
   set("explain-presses", `
     <p>Top: self-report presses per hour (holding the button repeats the report, so presses
     seconds apart count once). A dot marks hours with a <b>shared moment</b>: two people at close
-    range pressing within 5 minutes of each other. Click to jump.</p>
+    range pressing within 5 minutes of each other. Click to jump. This is everyone.</p>
+    <p>Middle, when people are picked: one row per picked person across the academy, their
+    presses as blue ticks and, in the team view, their EDA moments as yellow dots (the person
+    view's working rule, exploratory). Click a mark to jump to it, a name to open the person.</p>
     <p>Bottom: how many people were at close range at a press, against the same participants'
     ordinary 5-minute bins, per phase of the day. It follows the close-range slider.
     Phases with fewer than ${meta.min_group} presses are not shown.</p>
@@ -45,21 +48,36 @@ export function explanations(ctx) {
     pair readings at or above ${meta.rssi_floor} dBm; dropped at export: ${n("pairs_no_node")} pair
     readings without a participant at one end, ${n("rooms_dropped")} room readings.</p>`);
   if (document.getElementById("explain-sound")) set("explain-sound", `
-    <p>Each hall's sound level (Leq, the average loudness of a 5-minute bin) from the room's
-    AudioMoth recorder, inside its recording slots; a gap is not recorded. Levels are dBFS,
-    relative to that recorder's full scale, not calibrated decibels: each hall is drawn on its
-    own scale and compared only with itself, never with the other hall. "Louder than 70%" means
-    louder than 70% of all 5-minute bins that hall was recorded over the study.</p>
-    <p>No people are in this: it is the room. A quiet stretch can be the hall not being used.
-    Exploratory: the team's sound analysis (acoustics_over_time) has the figures by day and by
-    programme kind.</p>`);
+    <p>Each hall's AudioMoth recorder across the whole camp (or the playhead's day, with "This
+    day"), inside its recording slots; a gap is not recorded. The shaded band is the playhead's
+    day. <b>Top line: loudness</b>, the Leq (average level) of each 5-minute bin, in dBFS: relative
+    to that recorder's full scale, not calibrated decibels. "Louder than 70%" means louder than 70%
+    of all 5-minute bins that hall was recorded over the study.</p>
+    <p><b>Below: the frequency mix</b>, how the bin's sound power splits between low sound below
+    300 Hz (rumble, footsteps, ventilation), the voice range 300–4000 Hz (speech, singing) and high
+    sound above 4000 Hz (clatter, hiss). A taller voice band means more of what the recorder heard
+    was in the range of voices; it is not a count of speakers.</p>
+    <p>Days can be compared within one hall: it is the same recorder. The two halls are drawn on
+    their own scales and compared only by their shape over time, never by level, since the
+    recorders are not calibrated against each other. No people are in this: it is the room. A
+    quiet stretch can be the hall not being used. Exploratory: the team's sound analysis
+    (acoustics_over_time) has the figures by day and by programme kind.</p>`);
   set("explain-programme", `
     <p>The day's programme as the field log recorded it: dark items were for the whole camp,
     light ones ran in some rooms only (electives, rehearsals, sport). A dashed edge means the end
     was not recorded and is filled with the usual length of that kind of item. Overlapping items
-    get their own rows. Click an item to jump to its start.</p>`);
+    get their own rows.</p>
+    <p><b>Click a room item to see only its people</b> (click it again, or "Show everyone", to
+    go back). Someone counts as at the item when their room tag placed them in one of its rooms
+    for more than half of the 5-minute bins they were placed in, from the item's start to the
+    playhead. The network, the frame and the views below then show only them and the lines
+    between them, counted from the item's start. People whose room tag was not heard cannot be
+    placed and drop out. Whole-camp items and items with no room in the log only jump to their
+    time. The filter ends when the playhead leaves the item.</p>`);
   set("explain-frame", `
-    <p>Everyone whose tag was heard in the window before the playhead. <b>Close now</b> is the
+    <p>Everyone whose tag was heard anywhere in the camp in the window before the playhead,
+    whatever they were at; click a programme item (in the strip above or under "Programme now")
+    to see only the people at it. <b>Close now</b> is the
     network's line: close range for at least the <b>together</b> minutes in the window, which
     is physical nearness, not proof of talking. Each tie is then sorted by how long the same two
     people had been at close range before the window, from the start of the study: <b>new</b>
@@ -119,8 +137,22 @@ export function personExplanations(ctx) {
     not validated: the camp-wide analysis found no arousal peak at presses.</p>
     <p>Click a tick, a dot or any time to look at that moment below.</p>`);
   set("explain-dist", `
-    <p>The person's presses and EDA moments per camp day and per phase of the day (bars), against
-    the camp's mean per person (lines): participants with a self-report dot for presses,
-    participants with worn EDA for EDA moments. The bars follow the SCR rule chosen above.</p>`);
+    <p><b>Bars: this person only</b>, their presses and EDA moments per camp day and per phase of
+    the day. <b>Black lines: the camp</b>, the mean per person, for comparison: over the
+    participants with a self-report dot for presses and those with worn EDA for EDA moments. The
+    bars follow the SCR rule chosen above. To see several people's presses and EDA moments side
+    by side, pick them (or use "Pick … and their top 5" above) and open the camp's
+    "Self-reports" view.</p>`);
+  set("explain-ties", `
+    <p>Everyone who was ever at close range of this person (the close-range setting of the camp
+    view), most time together first. <b>Together</b>: the hours of 5-minute bins in which the two
+    were at close range, over the whole academy; the small bars split it per camp day, so a tie
+    that grew late or faded shows. <b>Shared items</b>: the room items of the programme
+    (electives, rehearsals, sport…) both were placed at by their room tag, for most of the
+    item; whole-camp items are left out, since everyone was at them. Close range is physical
+    nearness, a proxy for shared time, not proof of talking or of a friendship.</p>
+    <p>"open" goes to that person, with their membranes, and the breadcrumb at the top comes back.
+    "Pick … in the camp" picks this person and their five closest, for the network, the frame and
+    the Self-reports view.</p>`);
   void meta;
 }

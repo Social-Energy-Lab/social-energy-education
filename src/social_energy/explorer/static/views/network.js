@@ -146,7 +146,7 @@ export function create(el, ctx, legendEl) {
 
     // Glows, then nodes with a surface ring.
     for (const n of nodes) {
-      if (glow[n.i] <= 0) continue;
+      if (glow[n.i] <= 0 || (ctx.members && !ctx.members[n.i])) continue;
       const r = 6 + 16 * glow[n.i];
       const grad = g.createRadialGradient(X(n.x), Y(n.y), 2, X(n.x), Y(n.y), r);
       grad.addColorStop(0, c.glow);
@@ -194,6 +194,8 @@ export function create(el, ctx, legendEl) {
     vis = new Uint8Array(nNodes);
     const [slo, shi] = windowRange(b.seen.bin, p.endBin, p.windowBins);
     for (let i = slo; i < shi; i++) vis[b.seen.node[i]] = 1;
+    // One programme item's people only (app.js): the others fade like people not heard.
+    if (ctx.members) for (let i = 0; i < nNodes; i++) vis[i] &= ctx.members[i];
 
     const key = e.a.map((a, i) => `${a}-${e.b[i]}-${e.bins[i]}`).join(",");
     if (key !== linkKeys) {

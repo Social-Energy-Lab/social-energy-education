@@ -243,6 +243,9 @@ test("a view goes into the address and comes back, defaults left out", () => {
   assert.deepEqual(m.hashToView(hash), { bin: 300, picked: ["62", "80"], closeRssi: -70, course: 2 });
   assert.equal(m.viewToHash({ ...view, picked: [], closeRssi: -65, course: null, person: "31" }, defaults),
     "t=300&person=31");
+  const withItem = m.viewToHash({ ...view, item: 7 }, defaults);
+  assert.equal(withItem, "t=300&pick=62,80&close=-70&course=2&item=7");
+  assert.equal(m.hashToView(withItem).item, 7);
 });
 
 test("an address from before keeps working, and junk is ignored", () => {
@@ -257,4 +260,55 @@ test("a level's place among a room's recorded levels, gaps ignored", () => {
   assert.equal(m.louderThan(sorted, -61), 0);
   assert.equal(m.louderThan(sorted, -40), 75);
   assert.equal(m.louderThan(new Float32Array(0), -40), null);
+});
+
+test("itemMembers counts people placed in the item's rooms for most of their placed bins", () => {
+  // Item in loc0 over bins 0-2: node 0 placed in loc0 twice, node 1 once in loc1.
+  const ev = { start_bin: 0, end_bin: 2, all_camp: false, locs: [0] };
+  assert.deepEqual([...m.itemMembers(B, ev, 0, 6, N)], [1, 0, 0, 0]);
+  // In loc1, node 1 is in for its one placed bin; node 0 is in loc0 the whole time.
+  assert.deepEqual([...m.itemMembers(B, { ...ev, locs: [1] }, 0, 6, N)], [0, 1, 0, 0]);
+  // Up to a playhead in bin 0 only that bin counts.
+  assert.deepEqual([...m.itemMembers(B, ev, 0, 1, N)], [1, 0, 0, 0]);
+  // A playhead before the item uses the whole item.
+  assert.deepEqual([...m.itemMembers(B, { ...ev, start_bin: 1, end_bin: 3 }, 0, 1, N)], [1, 0, 0, 0]);
+  assert.equal(m.itemMembers(B, { ...ev, all_camp: true }, 0, 6, N), null);
+  assert.equal(m.itemMembers(B, { ...ev, locs: [] }, 0, 6, N), null);
+});
+
+test("itemMembers needs more than half: a tie is out", () => {
+  const b = { rooms: { bin: Uint16Array.from([0, 1]), node: Uint16Array.from([0, 0]), loc: Uint16Array.from([0, 1]) } };
+  const ev = { start_bin: 0, end_bin: 2, all_camp: false, locs: [0] };
+  assert.deepEqual([...m.itemMembers(b, ev, 0, 2, 1)], [0]);
+});
+
+test("filterEdges keeps ties between two members", () => {
+  const e = { a: [0, 0, 2], b: [1, 2, 3], bins: [3, 1, 1], maxRssi: [-55, -70, -80] };
+  assert.deepEqual(m.filterEdges(e, Uint8Array.from([1, 1, 0, 1])), { a: [0], b: [1], bins: [3], maxRssi: [-55] });
+});
+
+test("tiesOf ranks a person's close others over the study, per day", () => {
+  const day = Uint8Array.from([0, 0, 1, 1, 1, 1]);
+  const t = m.tiesOf(B, 0, -65, day, 2);
+  assert.deepEqual(t.map((x) => [x.node, x.bins, [...x.perDay]]), [[1, 3, [2, 1]]]);
+  const loose = m.tiesOf(B, 0, -75, day, 2);
+  assert.deepEqual(loose.map((x) => [x.node, x.bins]), [[1, 3], [2, 1]]);
+  assert.deepEqual(m.tiesOf(B, 3, -65, day, 2), []);
+});
+
+test("sharedItems lists room items both were at", () => {
+  const mem = [Uint8Array.from([1, 1, 0]), null, Uint8Array.from([1, 0, 1]), Uint8Array.from([1, 1, 1])];
+  assert.deepEqual(m.sharedItems(mem, 0, 1), [0, 3]);
+  assert.deepEqual(m.sharedItems(mem, 1, 2), [3]);
+});
+
+test("soundMix splits the power into low, voice and high", () => {
+  // Equal power in every band: 1/6 low, 3/6 voice, 2/6 high.
+  const mix = m.soundMix([10, 10, 10, 10, 10, 10]);
+  assert.deepEqual(mix.map((v) => v.toFixed(4)), [1 / 6, 3 / 6, 2 / 6].map((v) => v.toFixed(4)));
+  // 10 dB more in the lowest band is ten times the power.
+  const low = m.soundMix([20, 10, 10, 10, 10, 10]);
+  assert.equal(low[0].toFixed(4), (10 / 15).toFixed(4));
+  assert.equal(m.soundMix(null), null);
+  assert.equal(m.soundMix([1, 2, null, 4, 5, 6]), null);
 });

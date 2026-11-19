@@ -97,13 +97,18 @@ def synthetic_sound(inp: BundleInput, seed: int = 0) -> pl.DataFrame:
         if not 7 <= hour < 23:
             continue
         for room, peak in (("synthetic hall A", 13.0), ("synthetic hall B", 20.0)):
-            day_curve = -62 + 12 * np.exp(-(((hour - peak) / 2.5) ** 2))
-            rows.append((room, t, float(day_curve + rng.normal(0, 2))))
+            busy = np.exp(-(((hour - peak) / 2.5) ** 2))
+            day_curve = -62 + 12 * busy
+            # Band levels: voices (300-4000 Hz) rise when the hall is busy.
+            bands = [30 - 2 * k + (8 * busy if 1 <= k <= 3 else 0) + rng.normal(0, 1)
+                     for k in range(6)]  # fmt: skip
+            rows.append((room, t, float(day_curve + rng.normal(0, 2)), *map(float, bands)))
     return pl.DataFrame(
         rows,
-        schema={"room": pl.String, "bin": pl.Datetime("us", "UTC"), "leq": pl.Float64},
+        schema={"room": pl.String, "bin": pl.Datetime("us", "UTC"), "leq": pl.Float64,
+                **{f"band_{k}": pl.Float64 for k in range(6)}},
         orient="row",
-    )
+    )  # fmt: skip
 
 
 #: Made-up survey scales: (key, label, block, in the composite), four items each, range 1-4.
