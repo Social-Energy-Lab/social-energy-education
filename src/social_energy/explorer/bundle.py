@@ -23,7 +23,9 @@ With ``PersonData`` (team mode only) the bundle also carries the person view's `
 With ``sound`` the bundle carries ``sound.json``: ``{"rooms": [label, ...], "leq": [[dBFS or
 null per bin], ...]}``, one row per room in ``rooms`` order, levels rounded to 0.1 dB.
 ``meta["sound"]`` names it. Levels are relative to each recorder's full scale: a room is
-compared with itself, not with another room.
+compared with itself, not with another room. When ``sound`` has the six band columns
+``band_0`` … ``band_5`` (dB in the bands of ``SOUND_BANDS``), the file also carries ``"bands":
+{"hz": [label, ...], "db": [[[six dB] or null per bin], ...]}``, rooms in the same order.
 """
 
 from __future__ import annotations
@@ -73,7 +75,8 @@ class BundleInput:
     presses: pl.DataFrame  # entity, t (UTC)
     rssi_floor: int  # weakest RSSI kept in pairs
     persons: PersonData | None = None  # the person view's data; team mode only
-    sound: pl.DataFrame | None = None  # room (label), bin (UTC, a bin start), leq (dBFS)
+    # room (label), bin (UTC, a bin start), leq (dBFS); optionally band_0 … band_5 (dB)
+    sound: pl.DataFrame | None = None
 
 
 def _bin_index(col: str, inp: BundleInput) -> pl.Expr:
@@ -301,19 +304,33 @@ def write_bundle(
     return meta
 
 
+#: The frequency bands of the band columns, in Hz.
+SOUND_BANDS = ("0-300", "300-1000", "1000-2000", "2000-4000", "4000-8000", "8000-24000")
+
+
 def _sound_json(inp: BundleInput) -> tuple[dict, int]:
-    """Each room's level per bin; rows outside the bins or off the bin grid are dropped."""
+    """Each room's level (and band levels) per bin; rows off the bins or the grid are dropped."""
     rooms = sorted(inp.sound["room"].unique().to_list())
+    band_cols = [f"band_{k}" for k in range(len(SOUND_BANDS))]
+    has_bands = all(c in inp.sound.columns for c in band_cols)
     leq: list[list[float | None]] = [[None] * inp.n_bins for _ in rooms]
+    bands: list[list[list[float] | None]] = [[None] * inp.n_bins for _ in rooms]
     dropped = 0
-    for room, t, v in inp.sound.select("room", "bin", "leq").iter_rows():
+    cols = ["room", "bin", "leq", *(band_cols if has_bands else [])]
+    for room, t, v, *db in inp.sound.select(cols).iter_rows():
         sec = (t - inp.t0).total_seconds()
         k, rest = divmod(sec, inp.bin_seconds)
         if rest or not 0 <= k < inp.n_bins or v is None:
             dropped += 1
             continue
-        leq[rooms.index(room)][int(k)] = round(v, 1)
-    return {"rooms": rooms, "leq": leq}, dropped
+        r = rooms.index(room)
+        leq[r][int(k)] = round(v, 1)
+        if has_bands and all(x is not None for x in db):
+            bands[r][int(k)] = [round(x, 1) for x in db]
+    doc: dict = {"rooms": rooms, "leq": leq}
+    if has_bands:
+        doc["bands"] = {"hz": list(SOUND_BANDS), "db": bands}
+    return doc, dropped
 
 
 def read_bundle(bundle_dir: Path) -> tuple[dict, dict[str, dict[str, np.ndarray]]]:

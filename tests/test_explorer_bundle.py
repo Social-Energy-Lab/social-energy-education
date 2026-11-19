@@ -200,6 +200,23 @@ def test_sound_per_room_and_bin_with_gaps(tmp_path):
     ]
     # Outside the bins and off the bin grid are dropped and counted.
     assert meta["qa"]["sound_dropped"] == 2
+    assert "bands" not in doc
+
+
+def test_sound_band_levels_per_room_and_bin(tmp_path):
+    import json
+
+    sound = pl.DataFrame({
+        "room": ["hall", "hall"], "bin": [_bin(0), _bin(3)], "leq": [-50.0, -40.0],
+        **{f"band_{k}": [10.04 + k, None if k == 2 else 20.0] for k in range(6)},
+    })  # fmt: skip
+    meta = write_bundle(_with_sound(sound), tmp_path / "b", CONFIG, timezone="UTC")
+    doc = json.loads((tmp_path / "b" / meta["sound"]).read_text())
+    assert doc["bands"]["hz"][0] == "0-300" and len(doc["bands"]["hz"]) == 6
+    # A bin with all six bands keeps them; one with a missing band has none.
+    six = [10.0, 11.0, 12.0, 13.0, 14.0, 15.0]
+    assert doc["bands"]["db"] == [[six, None, None, None, None, None]]
+    assert doc["leq"] == [[-50.0, None, None, -40.0, None, None]]
 
 
 def test_no_sound_leaves_no_sound_file(tmp_path):

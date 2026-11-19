@@ -79,7 +79,7 @@
     </div>
     <input id="scrub" class="scrub" type="range" min="0" step="1" aria-label="Time across the whole study" title="Drag through the whole study">
     <div id="programme-panel" class="programme-bar" hidden>
-      <p class="bar-label">Programme of this day · dark: whole camp, light: some rooms · click an item to jump to it</p>
+      <p class="bar-label">Programme of this day · dark: whole camp, light: some rooms · click a room item to see only its people</p>
       <div id="programme"></div>
     </div>
   </nav>
@@ -160,6 +160,11 @@
         </div>
       </div>
     </section>
+    <section class="panel person-wide">
+      <h2>Their people across the academy</h2>
+      <div id="person-ties"></div>
+      <details><summary>What am I looking at?</summary><div id="explain-ties"></div></details>
+    </section>
     <section class="panel person-wide" hidden>
       <h2>In their own words: self-report cards</h2>
       <div id="person-words"></div>
@@ -174,7 +179,7 @@
       <div id="person-moment"></div>
     </section>
     <section class="panel person-wide">
-      <h2>Special moments over time</h2>
+      <h2>Special moments over time: this person against the camp</h2>
       <div id="person-dist"></div>
       <details><summary>What am I looking at?</summary><div id="explain-dist"></div></details>
     </section>

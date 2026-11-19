@@ -72,6 +72,7 @@ import self_report_context as sr
 from social_energy import paths
 from social_energy.beacons.descriptions import parse_descriptions
 from social_energy.explorer import BundleInput, write_bundle
+from social_energy.explorer.bundle import SOUND_BANDS
 from social_energy.explorer.person import PersonData
 from social_energy.spine import Spine
 from social_energy.study import StudyConfig
@@ -307,7 +308,7 @@ SOUND_ROOMS = {"mensa": "dining hall", "plenum": "main hall"}
 
 
 def sound_inputs(layout) -> pl.DataFrame | None:
-    """Each hall's level per 5-minute bin, from ``acoustics_over_time.py``'s ``bins.parquet``."""
+    """Each hall's level and band levels per 5-minute bin, from ``acoustics_over_time.py``."""
     f = layout.derived / "analyses" / "acoustics-over-time" / "bins.parquet"
     if not f.exists():
         print(f"no sound: {f} missing (run acoustics_over_time.py first)")
@@ -316,7 +317,9 @@ def sound_inputs(layout) -> pl.DataFrame | None:
         pl.col("recorder").replace_strict(SOUND_ROOMS).alias("room"),
         "bin",
         pl.col("leq_dbfs").alias("leq"),
-    )
+        *(pl.col(f"band_{band.replace('-', '_')}_db").alias(f"band_{k}")
+          for k, band in enumerate(SOUND_BANDS)),
+    )  # fmt: skip
 
 
 def main() -> None:

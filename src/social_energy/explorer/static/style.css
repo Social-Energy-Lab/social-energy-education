@@ -326,3 +326,22 @@ table.pairs td.diag { color: var(--ink-3); }
 /* The smaller views were drawn for a side column: keep them at that width. */
 .more-pane[data-pane="matrix"], .more-pane[data-pane="zones"], .more-pane[data-pane="presses"] { max-width: 640px; }
 svg text.sound-title { fill: var(--ink-1); font-size: 12px; font-weight: 600; }
+
+/* One programme item's people (programme strip, frame). */
+.item-filter { margin: 4px 0 2px; padding: 4px 10px; border: 1px solid var(--accent); border-radius: 8px; font-size: 13px; background: var(--surface-1); }
+.item-filter button { margin-left: 6px; font: inherit; font-size: 12px; color: var(--ink-1); background: var(--surface-0); border: 1px solid var(--rule); border-radius: 999px; padding: 0 10px; cursor: pointer; }
+button.linkish { font: inherit; font-weight: 600; color: var(--ink-1); background: none; border: 0; border-bottom: 1px dashed var(--ink-3); padding: 0; cursor: pointer; }
+button.linkish:hover, button.linkish.on { color: var(--accent); border-bottom-color: var(--accent); }
+.seg { display: inline-flex; gap: 0; margin: 0 0 6px; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12.5px; color: var(--ink-2); background: var(--surface-0); border: 0; padding: 2px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { color: var(--surface-0); background: var(--ink-1); }
+svg text.small-svg { font-size: 10.5px; fill: var(--ink-3); }
+
+/* Their people (person view). */
+table.ties { border-collapse: collapse; font-size: 13px; width: 100%; }
+table.ties th, table.ties td { padding: 3px 8px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: middle; }
+table.ties th { font-weight: 600; color: var(--ink-2); font-size: 12px; }
+table.ties td.num { text-align: right; white-space: nowrap; }
+.hbar { display: inline-block; height: 8px; background: var(--accent); border-radius: 2px; vertical-align: middle; }
+.dbars { display: inline-flex; align-items: flex-end; gap: 1px; height: 18px; }
+.dbar { display: inline-block; width: 5px; min-height: 1px; background: var(--ink-2); border-radius: 1px; }

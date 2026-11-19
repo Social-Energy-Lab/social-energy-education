@@ -6,10 +6,11 @@
 // the EDA around it → special moments per day against the camp. Clicking a close person opens
 // their view at the same moment, with a breadcrumb back.
 import * as pm from "../person-model.js";
-import { descriptionsOf } from "../model.js";
+import { descriptionsOf, sharedItems, tiesOf } from "../model.js";
 
 const CASCADE_S = 5 * 60; // "pressed too": within 5 minutes, the cascade window of the analyses
 const AROUND_MIN = 15; // EDA shown this many minutes either side of a moment
+const TOP_TIES = 15; // people listed under "their people" before "show all"
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const fmt = (x, d = 2) => (x === null || x === undefined ? "–" : Number(x).toFixed(d));
 const signed = (x, d = 2) => (x === null || x === undefined ? "–" : `${x > 0 ? "+" : ""}${Number(x).toFixed(d)}`);
@@ -37,6 +38,7 @@ export function create(root, ctx) {
     type: "",
     q: "",
     open: new Set(), // expanded scales
+    allTies: false, // "their people": everyone, not the top TOP_TIES
   };
   const momentsCache = new Map();
   const moments = (node) => {
@@ -630,17 +632,17 @@ export function create(root, ctx) {
           }
         });
       });
-      const lg = svg.append("g").attr("transform", `translate(${Math.max(200, width - 380)}, 4)`);
+      const lg = svg.append("g").attr("transform", `translate(${Math.max(200, width - 430)}, 4)`);
       [...series.map((s) => [s.name, s.fill]), ["camp mean per person", c.ink1]].forEach(([t, f], k) => {
-        lg.append("rect").attr("x", k * 125).attr("y", 0).attr("width", 10).attr("height", k === series.length ? 2 : 10).attr("fill", f);
-        lg.append("text").attr("x", k * 125 + 14).attr("y", 9).text(t);
+        lg.append("rect").attr("x", k * 140).attr("y", 0).attr("width", 10).attr("height", k === series.length ? 2 : 10).attr("fill", f);
+        lg.append("text").attr("x", k * 140 + 14).attr("y", 9).text(t);
       });
     };
     const series = (a, b2) => [
-      { name: "presses", own: own[a], camp: camp[a], fill: c.accent },
-      ...(people[i].eda ? [{ name: "EDA moments", own: own[b2], camp: camp[b2], fill: c.glow }] : []),
+      { name: "their presses", own: own[a], camp: camp[a], fill: c.accent },
+      ...(people[i].eda ? [{ name: "their EDA moments", own: own[b2], camp: camp[b2], fill: c.glow }] : []),
     ];
-    chart("special moments per camp day", meta.days.map((d) => d.label.slice(4, 6)), series("press", "eda"));
+    chart("this person's special moments per camp day", meta.days.map((d) => d.label.slice(4, 6)), series("press", "eda"));
     chart("by phase of the day", meta.phases, series("pressPh", "edaPh"));
     d3.select(el).append("p").attr("class", "muted").text(
       `Camp mean per person: over the ${camp.nPress} participants with a self-report dot and, for EDA moments, the ${camp.nEda} with worn EDA. ` +
@@ -667,6 +669,53 @@ export function create(root, ctx) {
     }
   }
 
+  // ---- their people --------------------------------------------------------------------------------
+  // Everyone at close range of the person over the academy (the close-range setting), most time
+  // first, with the time per camp day and the room items both were at.
+  function theirPeople() {
+    const el = $("#person-ties");
+    const i = st.node;
+    const rssi = closeRssi ?? ctx.meta.defaults.close_rssi;
+    const ties = tiesOf(b, i, rssi, b.bins.day, nDays);
+    if (!ties.length) {
+      el.innerHTML = "<p class='muted'>Nobody at close range of this person at this setting.</p>";
+      return;
+    }
+    const shown = st.allTies ? ties : ties.slice(0, TOP_TIES);
+    const maxDay = Math.max(1, ...ties.flatMap((t) => [...t.perDay]));
+    const maxBins = ties[0].bins;
+    const hours = (bins) => (bins * binS) / 3600;
+    const dayLabels = meta.days.map((d) => d.label);
+    const rows = shown.map((t, r) => {
+      const o = t.node;
+      const items = sharedItems(ctx.itemsFull, i, o).map((k) => ctx.events[k]);
+      const kinds = [...new Set(items.map((e) => e.label))];
+      const days = [...t.perDay].map((v, d) => `<span class="dbar" style="height:${Math.round((18 * v) / maxDay)}px" title="${esc(dayLabels[d] ?? "")}: ${hours(v).toFixed(1)} h"></span>`).join("");
+      const sv = people[o].survey?.[wave];
+      return `<tr>
+        <td class="num muted">${r + 1}</td>
+        <td><span class="swatch" style="background:${ctx.nodeCourse[o] < 0 ? ctx.colors.unknown : ctx.colors.course[ctx.nodeCourse[o] % 6]}"></span><b>${name(o)}</b></td>
+        <td>${esc(ctx.courseName(ctx.nodeCourse[o]))}${ctx.nodeCourse[o] === ctx.nodeCourse[i] && ctx.nodeCourse[i] >= 0 ? " <span class='muted'>(same)</span>" : ""}</td>
+        <td class="num"><span class="hbar" style="width:${Math.round((60 * t.bins) / maxBins)}px"></span> ${hours(t.bins).toFixed(1)} h</td>
+        <td><span class="dbars">${days}</span></td>
+        <td title="${esc(kinds.join(" · "))}">${items.length ? `<b>${items.length}</b> <span class="muted">${esc(kinds.slice(0, 2).map((t) => (t.length > 24 ? `${t.slice(0, 23)}…` : t)).join(" · "))}${kinds.length > 2 ? " · …" : ""}</span>` : "<span class='muted'>–</span>"}</td>
+        <td>${esc(typeOf(o))}${sv ? ` <span class="muted">${signed(sv.trust?.[1], 1)} / ${signed(sv.lust?.[1], 1)}</span>` : ""}</td>
+        <td><button type="button" data-open="${o}">open</button></td></tr>`;
+    }).join("");
+    el.innerHTML = `
+      <p class="muted small">${ties.length} people were at close range of ${esc(name(i))} at some point. Hours together: 5-minute bins at close range over the academy. Bars: the hours per camp day (${esc(dayLabels[0] ?? "")} first).</p>
+      <div class="scroll"><table class="ties"><tr><th></th><th>person</th><th>course</th><th>together</th><th>per day</th><th title="Room items (electives, rehearsals, sport…) both were placed at">shared items</th><th>membrane type (trust / lust z)</th><th></th></tr>${rows}</table></div>
+      <p>${ties.length > TOP_TIES ? `<button type="button" data-all>${st.allTies ? `Show the top ${TOP_TIES}` : `Show all ${ties.length}`}</button>` : ""}
+      <button type="button" data-pick>Pick ${esc(name(i))} and their top ${Math.min(5, ties.length)} in the camp</button></p>`;
+    for (const btn of el.querySelectorAll("[data-open]")) {
+      btn.addEventListener("click", () => jumpTo(Number(btn.dataset.open)));
+    }
+    el.querySelector("[data-all]")?.addEventListener("click", () => { st.allTies = !st.allTies; theirPeople(); });
+    el.querySelector("[data-pick]").addEventListener("click", () => {
+      ctx.set({ picked: [i, ...ties.slice(0, 5).map((t) => t.node)] });
+    });
+  }
+
   // ---- render -------------------------------------------------------------------------------------
   function render() {
     rendered = true;
@@ -676,11 +725,15 @@ export function create(root, ctx) {
     header();
     profile();
     membrane();
+    theirPeople();
     words();
     timeline();
     momentPanel();
     distribution();
   }
+
+  // A person's EDA moments (the self-reports view lists them for picked people); null without EDA.
+  ctx.edaMomentsOf = (node) => (people[node].eda && edaIx.hi[node] > edaIx.lo[node] ? moments(node) : null);
 
   // Who the person view shows, for the link to this view.
   ctx.currentPerson = () => st.node;
@@ -699,7 +752,7 @@ export function create(root, ctx) {
     const rssiChanged = closeRssi !== state.closeRssi;
     closeRssi = state.closeRssi;
     if (!rendered || changed.has("tab") || changed.has("theme")) render();
-    else if (rssiChanged) { timeline(); momentPanel(); }
+    else if (rssiChanged) { timeline(); momentPanel(); theirPeople(); }
   }
 
   return { update };

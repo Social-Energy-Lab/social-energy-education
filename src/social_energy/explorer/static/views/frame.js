@@ -35,7 +35,7 @@ export function create(el, ctx) {
       return;
     }
     const key = [Math.floor(state.bin), p.closeRssi, p.minBins, p.windowBins, state.picked.join(","),
-      changed.has("theme")].join("|");
+      state.item, changed.has("theme")].join("|");
     if (key === lastKey) return;
     lastKey = key;
 
@@ -53,6 +53,8 @@ export function create(el, ctx) {
     const vis = new Uint8Array(ctx.nNodes);
     const [slo, shi] = windowRange(b.seen.bin, p.endBin, p.windowBins);
     for (let i = slo; i < shi; i++) vis[b.seen.node[i]] = 1;
+    // One programme item's people only (app.js).
+    if (ctx.members) for (let i = 0; i < ctx.nNodes; i++) vis[i] &= ctx.members[i];
     const f = frame(e, history, LEVEL_MIN.map((m) => m / binMin), vis);
 
     // Place at the playhead.
@@ -62,7 +64,8 @@ export function create(el, ctx) {
     const place = (i) => (locOf[i] >= 0 ? esc(meta.locations[locOf[i]].label) : "<span class='muted'>not placed</span>");
 
     // Presses in the window.
-    const pIdx = pressesIn(b, startBin * meta.bin_seconds, p.endBin * meta.bin_seconds);
+    const pIdx = pressesIn(b, startBin * meta.bin_seconds, p.endBin * meta.bin_seconds)
+      .filter((k) => !ctx.members || ctx.members[b.presses.node[k]]);
     const pressCount = new Uint16Array(ctx.nNodes);
     for (const k of pIdx) pressCount[b.presses.node[k]]++;
 
@@ -74,13 +77,19 @@ export function create(el, ctx) {
 
     const parts = [];
     parts.push(`<p class="frame-sum"><b>${ctx.dayLabel(bin)} ${ctx.clockLabel(bin)}</b>, the ${win} before:
-      <b>${f.people.length}</b> people heard, <b>${nTies}</b> ties. By how long the two had been close
+      <b>${f.people.length}</b> people heard${state.item !== null ? ` at <b>${esc(ctx.events[state.item].label)}</b>` : ""}, <b>${nTies}</b> ties. By how long the two had been close
       before this window: <span class="lv lv0"></span><b>${f.counts[0]}</b>${pct(f.counts[0])} <i>new</i> (under 1 h),
       <span class="lv lv1"></span><b>${f.counts[1]}</b>${pct(f.counts[1])} <i>acquainted</i> (1–5 h),
       <span class="lv lv2"></span><b>${f.counts[2]}</b>${pct(f.counts[2])} <i>close</i> (5 h or more).</p>`);
     if (ctx.events.length) {
       parts.push(`<p class="frame-prog">Programme now: ${prog.length
-        ? prog.slice(0, 8).map((ev) => `<b>${esc(ev.label)}</b>${ev.all_camp ? "" : " <span class='muted'>(rooms)</span>"}`).join(" · ") +
+        ? prog.slice(0, 8).map((ev) => {
+          const k = ctx.events.indexOf(ev);
+          const can = ctx.itemsFull[k] !== null;
+          return can
+            ? `<button type="button" class="linkish${state.item === k ? " on" : ""}" data-item="${k}" title="${state.item === k ? "Show everyone again" : "Show only the people at this item"}">${esc(ev.label)}</button>`
+            : `<b>${esc(ev.label)}</b>${ev.all_camp ? "" : " <span class='muted'>(no room logged)</span>"}`;
+        }).join(" · ") +
           (prog.length > 8 ? ` · <span class="muted">+${prog.length - 8} more</span>` : "")
         : "<span class='muted'>nothing recorded</span>"}</p>`);
     }
@@ -176,6 +185,9 @@ export function create(el, ctx) {
     }
     for (const btn of el.querySelectorAll("[data-open]")) {
       btn.addEventListener("click", () => ctx.openPerson(Number(btn.dataset.open), bin));
+    }
+    for (const btn of el.querySelectorAll("[data-item]")) {
+      btn.addEventListener("click", () => ctx.pickItem(Number(btn.dataset.item)));
     }
     el.querySelector(".clear")?.addEventListener("click", () => ctx.set({ picked: [] }));
     for (const li of el.querySelectorAll("li[data-press]")) {

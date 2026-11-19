@@ -395,6 +395,7 @@ export function viewToHash(view, defaults) {
   if (view.windowMinutes !== defaults.windowMinutes) q.push(`win=${view.windowMinutes}`);
   if (view.course !== null && view.course !== undefined) q.push(`course=${view.course}`);
   if (view.person !== null && view.person !== undefined) q.push(`person=${view.person}`);
+  if (view.item !== null && view.item !== undefined) q.push(`item=${view.item}`);
   return q.join("&");
 }
 
@@ -408,7 +409,7 @@ export function hashToView(hash) {
   if (bin !== null) out.bin = bin;
   const picked = (h.get("pick") ?? "").split(",").filter(Boolean);
   if (picked.length) out.picked = picked;
-  for (const [k, name] of [["close", "closeRssi"], ["min", "minMinutes"], ["win", "windowMinutes"], ["course", "course"]]) {
+  for (const [k, name] of [["close", "closeRssi"], ["min", "minMinutes"], ["win", "windowMinutes"], ["course", "course"], ["item", "item"]]) {
     const v = int(k);
     if (v !== null) out[name] = v;
   }
@@ -425,4 +426,81 @@ export function sortedLevels(levels) {
 export function louderThan(sorted, value) {
   if (!sorted.length) return null;
   return Math.round((100 * lowerBound(sorted, value)) / sorted.length);
+}
+
+// ---- one programme item ---------------------------------------------------------------------------
+
+// Who was at a programme item: placed by their room tag in one of the item's rooms for more than
+// half of the 5-minute bins they were placed in, over the item's bins in [fromBin, toBin) (the
+// whole item when that is empty, as when the playhead is before it). 1 per member; null for an
+// all-camp item (everyone) or one without a room in the log (cannot tell).
+export function itemMembers(b, event, fromBin, toBin, nNodes) {
+  if (event.all_camp || !event.locs?.length) return null;
+  let a = Math.max(fromBin, event.start_bin);
+  let z = Math.min(toBin, event.end_bin);
+  if (z <= a) { a = event.start_bin; z = event.end_bin; }
+  const locs = new Set(event.locs);
+  const placed = new Uint16Array(nNodes);
+  const inside = new Uint16Array(nNodes);
+  const r = b.rooms;
+  for (let i = lowerBound(r.bin, a), hi = lowerBound(r.bin, z); i < hi; i++) {
+    placed[r.node[i]]++;
+    if (locs.has(r.loc[i])) inside[r.node[i]]++;
+  }
+  const out = new Uint8Array(nNodes);
+  for (let n = 0; n < nNodes; n++) out[n] = inside[n] * 2 > placed[n] ? 1 : 0;
+  return out;
+}
+
+// The ties whose two people are both members.
+export function filterEdges(e, members) {
+  const out = { a: [], b: [], bins: [], maxRssi: [] };
+  for (let i = 0; i < e.a.length; i++) {
+    if (!members[e.a[i]] || !members[e.b[i]]) continue;
+    out.a.push(e.a[i]);
+    out.b.push(e.b[i]);
+    out.bins.push(e.bins[i]);
+    out.maxRssi.push(e.maxRssi[i]);
+  }
+  return out;
+}
+
+// ---- one person's people --------------------------------------------------------------------------
+
+// Everyone who was at close range of `node` over the study: {node, bins, perDay}, most close
+// bins first (ties by node).
+export function tiesOf(b, node, closeRssi, dayOfBin, nDays) {
+  const p = b.pairs;
+  const acc = new Map();
+  for (let i = 0; i < p.bin.length; i++) {
+    if (p.rssi[i] < closeRssi) continue;
+    const other = p.a[i] === node ? p.b[i] : p.b[i] === node ? p.a[i] : -1;
+    if (other < 0) continue;
+    let t = acc.get(other);
+    if (!t) { t = { node: other, bins: 0, perDay: new Uint16Array(nDays) }; acc.set(other, t); }
+    t.bins++;
+    const d = dayOfBin[p.bin[i]];
+    if (d !== undefined && d < nDays) t.perDay[d]++;
+  }
+  return [...acc.values()].sort((x, y) => y.bins - x.bins || x.node - y.node);
+}
+
+// Indices of the room items (members not null) that both `i` and `j` were at.
+export function sharedItems(memberships, i, j) {
+  const out = [];
+  memberships.forEach((m, k) => { if (m && m[i] && m[j]) out.push(k); });
+  return out;
+}
+
+// ---- sound ----------------------------------------------------------------------------------------
+
+// A bin's frequency mix from its six band levels (dB, bands 0-300, 300-1000, 1000-2000,
+// 2000-4000, 4000-8000, 8000-24000 Hz): the share of the sound's power below 300 Hz, in the
+// voice range 300-4000 Hz, and above 4000 Hz. Null without levels.
+export function soundMix(bands) {
+  if (!bands || bands.some((v) => v === null || v === undefined)) return null;
+  const pw = bands.map((v) => 10 ** (v / 10));
+  const total = pw.reduce((s, v) => s + v, 0);
+  if (!(total > 0)) return null;
+  return [pw[0] / total, (pw[1] + pw[2] + pw[3]) / total, (pw[4] + pw[5]) / total];
 }

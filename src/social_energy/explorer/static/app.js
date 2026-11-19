@@ -108,6 +108,7 @@ function initialState(meta) {
     zone: null, // highlighted zone index
     cell: null, // [ci, cj] highlighted matrix cell
     picked: [], // nodes picked in the network or the frame, highlighted everywhere
+    item: null, // programme item (index into ctx.events) whose people alone are shown
     tab: "camp", // "camp" or "person"
   };
 }
@@ -222,7 +223,7 @@ function setupControls(ctx, state, set) {
   $("reset").addEventListener("click", () => {
     const d = initialState(meta);
     set({ closeRssi: d.closeRssi, minMinutes: d.minMinutes, windowMinutes: d.windowMinutes,
-      course: null, zone: null, cell: null, picked: [] });
+      course: null, zone: null, cell: null, picked: [], item: null });
   });
   $("theme").addEventListener("click", () => {
     const root = document.documentElement;
@@ -378,6 +379,43 @@ async function main() {
   pop.querySelector(".pop-close").addEventListener("click", () => { pop.hidden = true; });
   document.addEventListener("keydown", (e) => { if (e.code === "Escape") pop.hidden = true; });
 
+  // One programme item's people: the window starts no earlier than the item, and only people
+  // placed in its rooms (model.itemMembers) and the ties between them are shown. The filter
+  // ends when the playhead leaves the item.
+  let memberKey = "";
+  ctx.members = null;
+  const itemFilter = (st, p) => {
+    const ev = st.item === null ? null : ctx.events[st.item];
+    const bin = Math.floor(st.bin);
+    if (ev && (bin < ev.start_bin || bin >= ev.end_bin)) st.item = null;
+    if (st.item === null) {
+      ctx.members = null;
+      memberKey = "";
+      return model.edges(ctx.b, p);
+    }
+    p.windowBins = Math.max(1, Math.min(p.windowBins, p.endBin - ev.start_bin));
+    const key = `${st.item}|${p.endBin}`;
+    if (key !== memberKey) {
+      memberKey = key;
+      ctx.members = model.itemMembers(ctx.b, ev, ev.start_bin, p.endBin, ctx.nNodes);
+    }
+    const e = model.edges(ctx.b, p);
+    return ctx.members ? model.filterEdges(e, ctx.members) : e;
+  };
+  // Click an item (programme strip, frame): show only its people, or jump to an all-camp item
+  // or one without a room. A second click shows everyone again.
+  ctx.pickItem = (k) => {
+    const ev = ctx.events[k];
+    if (state.item === k) return set({ item: null });
+    const bin = Math.floor(state.bin);
+    const inside = bin >= ev.start_bin && bin < ev.end_bin;
+    const winBins = Math.round(state.windowMinutes / (ctx.meta.bin_seconds / 60));
+    const to = inside ? bin : Math.min(ev.end_bin - 1, ev.start_bin + winBins - 1);
+    const filterable = ctx.itemsFull[k] !== null;
+    set({ bin: to, playing: false, item: filterable ? k : null });
+  };
+  ctx.itemsFull = ctx.events.map((ev) => model.itemMembers(ctx.b, ev, 0, ctx.nBins, ctx.nNodes));
+
   const views = [
     network.create($("network"), ctx, $("legend")),
     matrix.create($("matrix"), ctx),
@@ -413,7 +451,7 @@ async function main() {
     }
     if (dirty) {
       const p = params(state, ctx);
-      const e = model.edges(ctx.b, p);
+      const e = itemFilter(state, p);
       // Controls first: they show the active tab, so views measure their real width.
       syncControls(ctx, state);
       for (const v of views) v.update(state, p, e, changed);
@@ -426,7 +464,7 @@ async function main() {
   // The address keeps the view (model.viewToHash), so a link or a bookmark reopens it: the time,
   // the picked people, the person open and any changed setting. #person=12&bin=300 still works.
   const defaults = initialState(ctx.meta);
-  const LINKED = new Set(["bin", "playing", "picked", "tab", "closeRssi", "minMinutes", "windowMinutes", "course", "person"]);
+  const LINKED = new Set(["bin", "playing", "picked", "tab", "closeRssi", "minMinutes", "windowMinutes", "course", "person", "item"]);
   const saveLink = () => {
     const open = state.tab === "person" && ctx.currentPerson ? ctx.currentPerson() : null;
     const hash = model.viewToHash({
@@ -444,6 +482,7 @@ async function main() {
   if (want.bin !== undefined) patch.bin = Math.max(0, Math.min(ctx.nBins - 1, want.bin));
   for (const k of ["closeRssi", "minMinutes", "windowMinutes"]) if (want[k] !== undefined) patch[k] = want[k];
   if (want.course !== undefined && want.course >= 0 && want.course < ctx.meta.courses.length) patch.course = want.course;
+  if (want.item !== undefined && ctx.itemsFull[want.item]) patch.item = want.item;
   if (want.picked) patch.picked = want.picked.map((id) => linkNode(ctx, id)).filter((n) => n !== null);
   set(patch);
   if (ctx.openPerson && want.person) {
