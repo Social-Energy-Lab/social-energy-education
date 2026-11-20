@@ -1,7 +1,7 @@
 # DSA 2026: networks around moments, and whether shared moments last
 
 **Priority:** high — the research team asked for descriptive network analyses to run beside the theory work
-**Gate:** decision:the research team reads the private notes, corrects the rival-mechanisms table and says what size of gradient effect would matter (recheck 2026-11-18)
+**Gate:** blocked:the research team reads the private notes, corrects the rival-mechanisms table and says what size of gradient effect would matter (recheck 2026-11-27)
 **Next:** with the team's answers in hand, decide on the two proposed experiments (gatherings; the same question over days), then retire this plan
 
 **Goal:** describe how a person's company changes in the hour around a self-report, and whether pairs who shared a moment spend more time together on later days than pairs who were equally close and did not share it. Everything here is **exploratory** under the frozen analysis plan (`studies/dsa-2026/research/analysis-plan.md`); leads that hold become candidates for the next-phase preregistration (`../ideas/next-phase-preregistration.md`).

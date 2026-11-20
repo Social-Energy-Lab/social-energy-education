@@ -1,7 +1,7 @@
 # Explorer: the hosted team copy
 
 **Priority:** high — the project lead's ask: the team explorer without a data root on every machine
-**Gate:** none
+**Gate:** blocked:the project lead signs in to the hosted explorer and invites the researchers he names (recheck 2026-11-27)
 **Next:** the project lead signs in and invites the researchers he names
 
 **Goal:** the research team opens the team explorer in a browser on the institute VPN, with its

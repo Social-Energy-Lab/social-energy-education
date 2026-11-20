@@ -1,8 +1,8 @@
 # DSA 2026: first analyses of co-presence, self-reports and beacon health
 
 **Priority:** high
-**Gate:** none
-**Next:** take the next-phase preregistration (`../ideas/next-phase-preregistration.md`) to the research team, with numbers from the fitted beacon dating (the 3 Nov talk used the old dating)
+**Gate:** blocked:Social-Energy-Lab/social-energy-education:eda-second-pass
+**Next:** once eda-second-pass has carried its replicated leads into `../ideas/next-phase-preregistration.md`, Álvaro and Mahdi take the preregistration to the research team, with numbers from the fitted beacon dating (the 3 Nov talk used the old dating)
 
 **Goal:** first descriptive results from the beacon data for the research team, and a clear account of every setting and instrument behaviour they rest on, so that each number can be traced and each choice revisited.
 
