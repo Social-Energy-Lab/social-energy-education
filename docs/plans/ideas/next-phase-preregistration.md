@@ -136,7 +136,9 @@ Agreed with the beacon team through [`next-field-phase-beacon-practice.md`](next
 
 ## Open questions
 
-- `[unknown: what are the dates and programme of START-Stiftung and SUPER YOU, and which days suspend the main group?]`
+- START-Stiftung: the academy runs 19–22 March 2027 (Álvaro, 2026-11-25), so this plan must be frozen before then. Four days, against DSA's sixteen.
+- `[unknown: what is the START-Stiftung academy's programme, and does any of its days suspend the main group?]`
+- `[unknown: what are the dates and programme of SUPER YOU, and which days suspend the main group?]`
 - `[unknown: will both phases use the same beacon firmware and the same press instruction as DSA 2026?]`
 - `[unknown: which survey scales are kept or adapted for the SUPER YOU age group?]`
 - `[unknown: does the research team want family A and family B as separate Holm families, or one?]`

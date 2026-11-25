@@ -33,7 +33,7 @@ Research questions:
 |---|---|---|---|
 | Deutsche SchülerAkademie (Bildung & Begabung) | selected, highly motivated upper-secondary pupils; 16-day residential academy | first field phase: [`studies/dsa-2026`](../../studies/dsa-2026/) | collected Aug 2026 |
 | SUPER YOU (Bildung & Begabung) | disadvantaged lower-secondary pupils | contrast setting (RQ4) | planned |
-| START-Stiftung | young people with a migration background | contrast setting (RQ4) | planned |
+| START-Stiftung | young people with a migration background | contrast setting (RQ4) | planned: academy 19–22 Mar 2027 |
 
 Plan: two to three field phases of about 100 people each, about 250–300 people in total. Alumni can join qualitative pre/post rounds.
 

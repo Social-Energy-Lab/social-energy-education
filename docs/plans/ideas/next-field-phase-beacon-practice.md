@@ -4,6 +4,8 @@
 
 **Goal:** a checklist to agree with the beacon team before START-Stiftung or SUPER YOU, so that the losses and ambiguities met at DSA 2026 are designed out rather than repaired afterwards. Rules only; the evidence is in [`../../context/instruments/beacons.md`](../../context/instruments/beacons.md) and the private notes.
 
+The next phase is the START-Stiftung academy, 19–22 March 2027, so the checklist is due with the beacon team well before then.
+
 The hypotheses planned for those phases, and which of the points below each one depends on, are in [`next-phase-preregistration.md`](next-phase-preregistration.md) (section "Instrument and procedure changes that would help").
 
 ## Firmware and logging
